@@ -1,0 +1,65 @@
+# `.dogfood.toml` — what the organizers' checker needs to know
+#
+# This file is read by `run.py`, the acceptance program the panel runs. It is
+# six-to-fifteen lines by design: forty teams built forty different portals, and
+# the answer to "how do we check a Django app and a Go app identically" is to
+# let each one name its own routes.
+#
+# **The checker never logs in.** Logging in is the one thing no two stacks do
+# alike — form posts, JSON posts, cookies, bearer tokens, OAuth — so instead of
+# forcing a convention we hand over a header that proves the role and the
+# checker attaches it. Our login page can work however it likes.
+#
+# Run it with:  python run.py .dogfood.toml
+# Read the result with:  just accept
+
+[portal]
+base_url = "http://localhost:8080"
+
+[tiers]
+# Honest claims only, and they are checked against what the program can verify.
+#
+# `claimed = []` right now, and that is the accurate statement: at the skeleton
+# milestone the container, the healthcheck and the offline guarantee are real,
+# but the gallery, the deadline guard and the judge surface are not built, so no
+# tier is complete. Claiming T1 here would mean claiming a gallery that does not
+# exist.
+#
+# The claim is made at a scheduled verification break, against what is actually
+# green — not in advance, and not in a README.
+claimed = []
+pitch = "Self-hostable hackathon submission and judging platform. One command, offline, no cloud."
+
+[auth]
+# Session cookies the seeded identities print on boot.
+#
+# These are empty until the seed command lands in FEAT-03. An empty header makes
+# the checker's request unauthenticated, which is the correct answer for "the
+# portal has not seeded identities yet" — the report says FAIL with a real
+# reason instead of erroring out.
+#
+# When seeding lands, the container prints the real values and they are pasted
+# here verbatim. Nothing is invented to make a check pass.
+organizer   = ""
+judge_a     = ""
+judge_b     = ""
+participant = ""
+
+[routes]
+# Our route names. Whatever we call them, we write them down.
+#
+# The gallery and submit routes are declared now and resolve in FEAT-03. The
+# judge and export routes resolve in FEAT-05. Declaring a route before it
+# exists is honest — the checker gets a 404 and reports FAIL with that URL in
+# the message, which is more informative than a route the file does not mention.
+#
+# `peer_scores` is the URL that WOULD return judge_a's scores. The checker
+# visits it as judge_b, who must be refused. In this portal it is a query
+# parameter on the judge scores endpoint, and the refusal is a 403 from the
+# permission layer — never a redirect, because the checker follows redirects
+# and a 302 would come back as a 200.
+gallery      = "/"
+submit       = "/projects/new"
+judge_scores = "/api/v1/judge/scores"
+peer_scores  = "/api/v1/judge/scores?judge=judge_a"
+csv_export   = "/api/v1/export.csv"

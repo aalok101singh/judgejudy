@@ -1,0 +1,116 @@
+/* Judge Judy — the whole stylesheet, deliberately.
+ *
+ * One file, no framework, no build step, no CDN. A static asset that is
+ * fetched from somewhere else stops working the moment the network is off,
+ * and "works with the network off" is acceptance criterion 1 of 5. A build
+ * step would also mean a build artefact in the repository, which is not what
+ * this submission ships.
+ */
+
+:root {
+  --ink: #16161a;
+  --ink-soft: #5a5a66;
+  --paper: #fbfbf9;
+  --rule: #e2e2dc;
+  --accent: #2f4f8f;
+  --card: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ececed;
+    --ink-soft: #a0a0ac;
+    --paper: #14141a;
+    --rule: #2c2c36;
+    --accent: #8fb0ea;
+    --card: #1c1c24;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 3rem 1.25rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 40rem; margin: 0 auto; }
+
+.eyebrow {
+  margin: 0;
+  font-size: .75rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+h1 {
+  margin: .35rem 0 1rem;
+  font-size: clamp(2.25rem, 7vw, 3.25rem);
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  font-weight: 680;
+}
+
+.lede {
+  margin: 0 0 2.25rem;
+  font-size: 1.125rem;
+  color: var(--ink-soft);
+  max-width: 32rem;
+}
+
+.card {
+  padding: 1.25rem 1.4rem;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: .6rem;
+}
+
+.card-label {
+  margin: 0 0 .4rem;
+  font-size: .7rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.card-value {
+  margin: 0 0 .6rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.card-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: .925rem;
+}
+
+.links {
+  margin: 1.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: .5rem;
+  font-size: .95rem;
+}
+
+a { color: var(--accent); }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: .9em;
+}
+
+.foot {
+  margin: 2.5rem 0 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-size: .875rem;
+}

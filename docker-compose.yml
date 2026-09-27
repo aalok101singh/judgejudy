@@ -1,0 +1,71 @@
+# Judge Judy — one service, one image, one volume.
+#
+# `docker compose up` must produce a working, seeded portal with the network
+# off. Everything in this file exists to make that true from a clean volume:
+#
+#   - one service, because a second service is a disqualification (no redis,
+#     no separate worker, no managed database)
+#   - one named volume, so `down -v` is a real reset and the acceptance run
+#     can start from nothing
+#   - a healthcheck, so "up" has a definition of finished that is not "the
+#     container exists"
+#   - no build-time secrets, no env_file, no required environment variables
+#
+# Note what is absent: no `version:` key (obsolete in Compose v2 and it emits
+# a warning), no `container_name` (it makes parallel checkouts collide), and
+# no port mapping for anything but the one HTTP port.
+
+services:
+  portal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: judgejudy:local
+    # Recreate rather than restart on a config change. `restart: always` is
+    # also avoided deliberately: a portal that restart-loops forever turns one
+    # bad migration into a container that looks healthy to `docker ps` and is
+    # not, which is harder to debug than a container that is plainly stopped.
+    ports:
+      - "${JJ_PORT:-8080}:8080"
+    volumes:
+      # Named volume, not a bind mount. A bind mount would put the SQLite file
+      # on the Windows host's filesystem, where WAL's locking behaviour is
+      # different and where the file's ownership is a uid the container cannot
+      # be. The volume is seeded from the image's /app/data on first use, so
+      # it arrives owned by uid 10001 and writable.
+      - judgejudy-data:/app/data
+    environment:
+      DJUDGE_DATA_DIR: /app/data
+      DJANGO_SETTINGS_MODULE: judge_judy.settings
+      PORT: "8080"
+      # Unset rather than given a value. The settings module generates and
+      # persists a key on first boot; hardcoding one here would put the same
+      # key in every fork of this repository, and a signed judge record is
+      # only as trustworthy as the key that signed it.
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-}"
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py"]
+      interval: 5s
+      timeout: 4s
+      # Generous, because the first boot runs migrations, collectstatic and
+      # seeding before gunicorn binds, and on a cold Docker cache that is tens
+      # of seconds. The acceptance budget is a serving page inside 60s; a
+      # start-period shorter than the real cold start would report the portal
+      # unhealthy during normal operation.
+      start_period: 45s
+      retries: 12
+    restart: "no"
+    # No `network_mode: none`. The service makes no outbound calls, but
+    # Compose's default bridge is what lets the host reach the published port,
+    # and cutting it would break `docker compose up` itself.
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  judgejudy-data:
+    name: judgejudy-data

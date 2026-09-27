@@ -1,0 +1,116 @@
+{
+  "$comment": [
+    "The expected state of every check in the organizers' acceptance report.",
+    "",
+    "run.py always exits 0, so tools/run_acceptance.py gates on the report body.",
+    "But gating on 'any FAIL is fatal' cannot work before FEAT-05: five of the",
+    "seven checks depend on a gallery, a judge console and a CSV export that do",
+    "not exist yet, and a gate that is red from the first commit is a gate",
+    "nobody reads. It is the same reason a broken healthcheck is worse than no",
+    "healthcheck.",
+    "",
+    "So each check carries an EXPECTATION, and the gate enforces both directions:",
+    "",
+    "  - a check marked 'pass' that FAILS  -> the gate is RED. A regression.",
+    "  - a check marked 'fail' that PASSES -> the gate is RED. This file is",
+    "    stale, and a stale expectation is worse than none: it teaches a reader",
+    "    that the report is out of date, which makes them discount the whole",
+    "    document the next time it is genuinely wrong.",
+    "",
+    "'fail' is a claim about the BUILD, not a target. Nothing here is aspirational;",
+    "each entry names the feature that flips it, and the reason field is what a",
+    "reviewer reads. Flip an entry only when the feature that owns it is done",
+    "AND its acceptance line has passed.",
+    "",
+    "The ratchet is the point: this file must grow monotonically from 'pass' to",
+    "fully 'pass', and the only way to move an entry is to build the thing."
+  ],
+
+  "checks": {
+    "gallery is public": {
+      "expect": "pass",
+      "reason": "FEAT-01. The landing page is public with no auth header. Passing since the first commit.",
+      "flips_at": "already passing"
+    },
+    "project from fixtures shown": {
+      "expect": "fail",
+      "reason": "FEAT-03. Needs the loader and the gallery. The first gallery page must be in FIXTURE ORDER, because run.py slices projects[:3] positionally rather than searching. Ship all three of Glass Signal, Small Meadow and Deep Compass; the check passes on any ONE of them, which is easy to forget when reading the spec.",
+      "flips_at": "FEAT-03"
+    },
+    "closed event refuses submissions": {
+      "expect": "pass",
+      "reason": "FEAT-01 by accident, and it is worth being precise about why. POST /projects/new is a 404, and 404 is inside the checker's 4xx range. This check will CONTINUE to pass for the wrong reason until the route exists and the deadline guard refuses it. Tracked as F-40: this is the F-11 trap in its purest form - a check that reports PASS without testing the thing it names. The ratchet below (`submit_route_exists`) exists to stop it being reported as evidence.",
+      "flips_at": "already passing, but for the wrong reason"
+    },
+    "judge sees own scores": {
+      "expect": "fail",
+      "reason": "FEAT-04/FEAT-05. Needs the judge console and the scoped accessor. Depends on load_fixtures providing the five seeded identities.",
+      "flips_at": "FEAT-05"
+    },
+    "judge cannot see peer scores": {
+      "expect": "fail",
+      "reason": "FEAT-05. THE one that matters most. A 404 is currently a pass for the wrong reason - the route does not exist, so there is nothing to leak. It only counts once the URL returns judge_a's scores to judge_a and a LITERAL 403, empty body, no Location header, to judge_b. A 302 to a login page returns 200 through run.py's redirect following and fails while looking correct in a browser.",
+      "flips_at": "FEAT-05"
+    },
+    "participant blocked": {
+      "expect": "fail",
+      "reason": "FEAT-05. Same 404-for-the-wrong-reason caveat as above.",
+      "flips_at": "FEAT-05"
+    },
+    "csv export works": {
+      "expect": "fail",
+      "reason": "FEAT-05. Needs the export view. The header must be functionality, quality, innovation - the KEY ORDER in the fixture, not the order the values appear in a row. Getting this backwards transposes two columns in every export (F-04).",
+      "flips_at": "FEAT-05"
+    }
+  },
+
+  "preconditions": {
+    "$comment": [
+      "Conditions that must hold for a 'pass' to mean anything. A 'pass' that",
+      "does not meet its precondition is reported as a FALSE PASS and fails the",
+      "gate.",
+      "",
+      "This exists because two of the seven checks currently pass for a reason",
+      "that has nothing to do with the portal being correct. That is F-11's",
+      "lesson applied to ourselves: a check reporting PASS without exercising",
+      "the behaviour it names is worse than a check reporting FAIL, because it",
+      "is believed."
+    ],
+
+    "closed event refuses submissions": {
+      "submit_route_exists": {
+        "why": "A 404 is a 4xx, so this check passes while the route is absent. The deadline guard is not being tested at all. Assert the route resolves before believing the PASS.",
+        "flips_at": "FEAT-03"
+      }
+    },
+
+    "judge cannot see peer scores": {
+      "judge_scores_route_exists": {
+        "why": "A 404 is a 401/403, so this check passes while there is nothing to leak. Isolation that is enforced by absence is not isolation. Assert the route returns 200 to the legitimate owner before believing the PASS.",
+        "flips_at": "FEAT-05"
+      }
+    },
+
+    "participant blocked": {
+      "judge_scores_route_exists": {
+        "why": "Same as above: 404 is in the accepted set, so this passes before the route exists.",
+        "flips_at": "FEAT-05"
+      }
+    }
+  },
+
+  "tier_claims": {
+    "$comment": [
+      "The gate asserts that every tier named in .dogfood.toml's `claimed` list",
+      "appears in the report's `verified` line. That is the rule the organizers",
+      "state: claiming T2 and verifying T1 scores as T1, and overclaiming is",
+      "the one thing that actually costs points.",
+      "",
+      "`claimed = []` today, and that is accurate: the container, the healthcheck",
+      "and the offline guarantee are real, but the gallery, the deadline guard and",
+      "the judge surface are not built, so no tier is complete. The claim is made",
+      "at a verification break against what is green, not in advance."
+    ],
+    "enforce": true
+  }
+}

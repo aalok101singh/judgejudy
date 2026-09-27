@@ -1,0 +1,98 @@
+{
+  "$comment": [
+    "Judge Judy — deterministic workflow policy.",
+    "Conforms to the AI Blueprint file layout and entry format (ai-blueprint.dev/docs).",
+    "Hand-authored: the Blueprint CLI is NOT installed and is not a dependency.",
+    "This file is the policy a new agent session reads before touching anything."
+  ],
+
+  "project": {
+    "name": "judge-judy",
+    "event": "DOGFOOD 2026",
+    "tagline": "Build the platform that will judge you.",
+    "license": "MIT",
+    "window_hours": 69,
+    "freeze": "H+69"
+  },
+
+  "context": {
+    "entry_point": "AGENTS.md",
+    "overview": "blueprint/context/project-overview.md",
+    "overview_max_bytes": 20000,
+    "plans": ["blueprint/project-plan.md", "blueprint/build-plan.md"],
+    "standards": "blueprint/context/coding-standards.md",
+    "interaction": "blueprint/context/ai-interaction.md",
+    "findings": "blueprint/context/findings.md",
+    "current_feature": "blueprint/context/current-feature.md",
+    "deep_reference": "bible/",
+    "deep_reference_note": "330KB. Not loaded by default. Read the section named in the overview, never the whole folder."
+  },
+
+  "verify": {
+    "$comment": "Two gates at different times. spec runs now, before any app code exists. app runs at every break.",
+    "spec": {
+      "command": "python tools/verify_spec.py",
+      "checks": 67,
+      "needs": "stdlib only - no venv, no Docker, no network",
+      "exits_nonzero": true,
+      "expectations": {
+        "given_inputs": "fixtures.json SHA-256 == 252896BC...; spec.md, run.py, context.txt, example.dogfood.toml present",
+        "run_py": "7 checks (3 T1, 4 T2), TIMEOUT=10, fixture_titles n=3, always returns 0",
+        "census": "every count in project-overview.md re-derived from fixtures.json: 8/30/21/9/40/41/126, histogram 8@2 26@3 3@4 4@5, mass 126, criteria order, jdg_07, n=1 judges, 1 component / 71 nodes",
+        "build_clock": "window == 69h, BREAK-1..4 on the cumulative clock at H+14/H+30/H+40/H+54, freeze at H+65, tier hours agree with the features, phase headers agree with checklist items",
+        "spec_integrity": "all bible section citations resolve, findings tallies match the ledger, overview < 20000 bytes, questions closed, exactly one in-flight feature"
+      },
+      "run_it": "after ANY edit to blueprint/ or AGENTS.md, and before trusting a number quoted in a document"
+    },
+    "app": {
+      "$comment": "Not runnable until FEAT-01. run.py always exits 0, so parse its report body rather than gating on status.",
+      "command": "just check",
+      "steps": [
+        "docker compose down -v && docker compose up -d",
+        "python run.py .dogfood.toml  ->  all 7 checks PASS",
+        "python manage.py isolation_proof -> exit 0",
+        "python manage.py verify_census",
+        "python -m pytest -q"
+      ]
+    }
+  },
+
+  "gates": {
+    "tier_breaks": [
+      {"id": "BREAK-1", "at": "H+14", "decides": "T1 green?", "tag": "v-t1-verified"},
+      {"id": "BREAK-2", "at": "H+30", "decides": "T2 green, all 4 T2 checks passing?", "tag": "v-t2-verified"},
+      {"id": "BREAK-3", "at": "H+40", "decides": "T3 green?", "tag": "v-t3-verified"},
+      {"id": "BREAK-4", "at": "H+54", "decides": "how much of T4 is green?", "tag": "v-t4-verified"}
+    ],
+    "break_protocol": [
+      "docker compose down -v && up, network off",
+      "python run.py .dogfood.toml — real output, never edited",
+      "python manage.py isolation_proof — must exit 0",
+      "full extended suite",
+      "update the slippage ledger in bible/08 §1c with actual vs planned",
+      "decide the tier claim and write it down, naming any gap in plain words",
+      "tag"
+    ],
+    "block_completion_on_findings": ["P0", "P1"],
+    "freeze": {
+      "starts_at": "H+65",
+      "protected_hours": 4,
+      "$comment": "Verification, acceptance report, video, commit. No features. A claim of T4 with half-working endpoints scores worse than an honest T3."
+    }
+  },
+
+  "review": {
+    "style": "efficient",
+    "step_review": "on",
+    "checkpoint_commits": "enabled",
+    "$comment": "Solo build, 69 hours. Review gates on because the brief scores defensibility, and a solo AI-assisted build is exactly where a wrong assumption survives longest."
+  },
+
+  "rules": {
+    "new_code_only": "No application code was authored before the window. The bible and this blueprint layer are planning documents. Dependencies and environment setup are explicitly permitted by the spec.",
+    "denials_are_403": "A denied request returns a literal 401/403 with an empty body and no Location header. Never a 302. run.py follows redirects.",
+    "generated_not_transcribed": "Every number in a shipped document is produced by code. A hand-typed census table is how six of our twelve findings happened.",
+    "verify_against_the_installation": "Every claim about library behaviour is executed, not recalled. F-11 was a documented default that was backwards.",
+    "no_tuning_to_a_target": "Published targets are context, not an objective. Constants chosen a priori stay chosen; the full sensitivity curve ships beside any single number."
+  }
+}

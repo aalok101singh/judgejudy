@@ -1,0 +1,59 @@
+# The build context is the whole repo, so everything that is not needed to
+# produce a running image has to be excluded by name. `docker build` sends the
+# context before it reads the Dockerfile, so a missing line here is a slow
+# upload, not a slow build.
+
+.git/
+.github/
+.venv/
+venv/
+
+# Planning layer. 330KB of bible and the blueprint that summarises it. It is
+# research, not application code, and none of it is imported by the image.
+bible/
+blueprint/
+
+# Local tooling that must not run inside the container.
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+tools/
+
+# Test and dev material. requirements-dev.txt is not installed in the image, so
+# neither are the tests it needs to run.
+tests/
+requirements-dev.txt
+pyproject.toml
+
+# Generated state. The instance volume is a named Docker volume, not a build
+# artefact, but a local run leaves files here that must never be baked in.
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+staticfiles/
+media/
+
+# Never bake key material into a layer. Layers are readable by anyone who pulls
+# the image, and a key that has been in one layer cannot be un-written.
+*.pem
+*.key
+keys/
+
+# Editor and OS noise.
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Documents. They are committed to the repo for the judges; they are not
+# needed to serve a request.
+README.md
+ARCHITECTURE.md
+DATA-MODEL.md
+JUDGING.md
+LICENSE
+acceptance-report.txt
+.dogfood.toml

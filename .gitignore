@@ -1,0 +1,52 @@
+# --- Python -------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+
+# --- virtualenvs --------------------------------------------------------------
+# `.venv` is 17 runtime packages plus 11 dev packages. It is rebuilt from
+# requirements*.txt in about 30 seconds and it pins nothing the pins do not
+# already pin, so it has no business in the history. F-15: gunicorn is marked
+# `sys_platform != "win32"`, so a Windows venv is NOT the container's
+# dependency set. Never debug against it instead of the image.
+.venv/
+venv/
+
+# --- runtime state ------------------------------------------------------------
+# The instance volume is a named Docker volume, but a local run (tests,
+# manage.py) leaves a file behind. SQLite databases are generated.
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+data/instance/
+data/media/
+src/media/
+staticfiles/
+
+# --- secret material ----------------------------------------------------------
+# Keys live on their own volume and must never enter the repository. If a key
+# is ever committed the signed records it produced are forgeable and every
+# record has to be reissued. There is no recovery path; do not add an exception
+# to this line.
+*.pem
+*.key
+keys/
+
+# --- local acceptance ---------------------------------------------------------
+# `.dogfood.toml` holds the seed session cookies, which are printed by the
+# container on boot. They are already public in spec.md, so this is habit
+# rather than secrecy -- but a config that names our own base_url does not
+# belong in history either.
+.env
+.env.*
+
+# --- editors and OS -----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
