@@ -1,13 +1,18 @@
 # Data Model
 
-> **Status: not yet built.** This document is written in FEAT-02, alongside the
-> migration, and it is here now so the repository is never in a state where a
-> required document is missing. Everything below is a *decision*, not a
-> description of shipped code, and the migration that implements it lands in
-> the next feature.
+> **Status: as built in FEAT-02.** The migration that implements this document
+> is `src/reviewer/*/migrations/0001_initial_schema.py` — 12 apps, 24 models,
+> twelve initial migrations, each with a docstring naming the requirement or
+> decision it serves. The model and app counts below are **checked against the
+> Django app registry** by `tests/test_schema_contract.py`, which reads the
+> number out of `blueprint/build-plan.md` and compares. They are not typed here
+> and transcribed: the plan is the claim, the registry is the check, and F-44
+> records the two stale counts this document used to carry.
 >
-> The plan for it: `bible/05` (domain model, full depth) · `blueprint/build-plan.md`
-> Phase B (FEAT-02, 5h) · `blueprint/context/current-feature.md`.
+> The plan for the depth behind each decision: `bible/05` (domain model, full
+> depth) · `blueprint/build-plan.md` Phase B (FEAT-02, 5h) ·
+> `blueprint/history/features/02-schema-and-isolation.md` (what was actually
+> built, and what was left out).
 
 ---
 
@@ -68,23 +73,47 @@ review target of 3. Not the total, which would be circular.
 
 ## 2. Shape of the schema
 
-Decided, documented in `bible/05`, implemented in FEAT-02.
+Implemented in FEAT-02, as `src/reviewer/`. Decided in `bible/05`.
 
 ```
-Event ──┬── Track
-        ├── Team ──── Membership ──── User
-        ├── Project ── Submission (the supersedes chain)
-        │       ├── Assignment ──── Judge
-        │       └── Review ──── Score ──── Comment
+Event ──┬── Track ──── Prize
+        ├── Team ──── Membership ──── User ──── RoleBinding
+        ├── Project ── (the supersedes chain; BOTH rows kept)
+        │       ├── Assignment ──── Review ──── Score
+        │       └── Rubric ──── Criterion        (rubric_version on every Review)
         ├── Ballot ──── Vote
-        └── AuditEntry   (hash-chained)
+        ├── Comment
+        ├── AuditEntry   (hash-chained) ──── ResultPublication
+        ├── JudgeCredential ──── SignedRecord
+        ├── WebhookEndpoint ──── WebhookDelivery   (models only; D-14)
+        └── RunSnapshot   (export/import manifest)
 
-crypto.SignedRecord      Ed25519 / in-toto Statement v1 / DSSE
-io.RunSnapshot           bulk export + import
+reviewer/isolation/     the primitive: Actor, Scope, ScopeReason, ScopedQuerySet
+reviewer/normalization/ the estimator. No model. FEAT-08.
 ```
 
-**20 tables across 8 apps.** Apps are named for the domain (`reviewer.reviews`),
-not for the layer.
+**24 tables across 12 apps.** Apps are named for the domain (`reviewer.reviews`),
+not for the layer, and none holds more than three models — both asserted by
+`tests/test_schema_contract.py`.
+
+| App | Tables | |
+|---|---|---|
+| `accounts` | User, RoleBinding | authority lives here, not in Django permissions |
+| `events` | Event, Track, Prize | the tenant boundary |
+| `teams` | Team, TeamMembership, TeamInvite | |
+| `projects` | Project | the `prj_07` / `prj_41` chain |
+| `rubrics` | Rubric, Criterion | versioned |
+| `reviews` | Assignment, Review, Score | the isolation surface |
+| `ballots` | Ballot, Vote | randomised order, hashed identifiers |
+| `comments` | Comment | |
+| `audit` | AuditEntry, ResultPublication | hash chain + content hash |
+| `credentials` | JudgeCredential, SignedRecord | Ed25519 / DSSE / in-toto |
+| `webhooks` | WebhookEndpoint, WebhookDelivery | schema only, D-14 |
+| `io` | RunSnapshot | the escape hatch manifest |
+
+`reviewer/isolation/` and `reviewer/normalization/` are **packages, not apps**.
+They define no model, and listing an app with no models would add a `models`
+module that does not exist and a migration that creates nothing.
 
 ### Four rules that apply to every table
 

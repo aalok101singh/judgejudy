@@ -87,8 +87,7 @@ class TestHealthcheckContract:
         compose = (REPO / "docker-compose.yml").read_text(encoding="utf-8")
 
         assert "/app/healthcheck.py" in dockerfile, (
-            "The Dockerfile HEALTHCHECK should call the shared script, not an "
-            "inline command."
+            "The Dockerfile HEALTHCHECK should call the shared script, not an inline command."
         )
         assert "healthcheck.py" in compose, (
             "compose should call the same script the Dockerfile does."

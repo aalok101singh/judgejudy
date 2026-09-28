@@ -40,8 +40,8 @@
 
 ## Phase B — Schema and isolation primitive (FEAT-02, 5h)
 
-- [ ] **FEAT-02 Schema and the isolation primitive** — 5h
-  - 20 models, 12 apps; SQLite WAL; **Postgres-portable** — no SQLite-only types
+- [x] **FEAT-02 Schema and the isolation primitive** — 5h
+  - 24 models, 12 apps; SQLite WAL; **Postgres-portable** — no SQLite-only types
   - Indexes for the three hot paths: judge-on-track, judge-on-project, event gallery
   - `Review.objects.for_actor(actor)` → scoped queryset **+ scope receipt**
   - `isolation_proof` management command skeleton, exiting 0 on pass
@@ -50,6 +50,10 @@
     fires on a deliberately unscoped view and passes when scoped
   - **Depends on:** F-22 (Hypothesis model strategies need pytest-django, so the
     four invariants land in FEAT-03, not here)
+  - **Note (F-44):** the model count was 20 here and 8 in `DATA-MODEL.md`, while
+    `bible/05` names 24. All 24 ship; `tests/test_schema_contract.py` now reads
+    this line and compares it to the app registry, so the number cannot be
+    retyped.
 
 ## Phase C — Import, gallery, seed (FEAT-03, 5h)
 

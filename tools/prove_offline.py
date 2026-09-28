@@ -119,8 +119,10 @@ def main() -> int:
     while time.perf_counter() - started < READY_TIMEOUT:
         probe = run(["exec", NAME, "python", "/app/healthcheck.py"])
         if probe.returncode == 0:
-            print(f"  healthy after {time.perf_counter() - started:.1f}s: "
-                  f"{(probe.stdout or '').strip()}")
+            print(
+                f"  healthy after {time.perf_counter() - started:.1f}s: "
+                f"{(probe.stdout or '').strip()}"
+            )
             ready = True
             break
         time.sleep(1.0)

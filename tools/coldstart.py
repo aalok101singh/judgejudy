@@ -54,8 +54,11 @@ def docker() -> str:
         return str(DOCKER_FALLBACK)
     found = shutil.which("docker")
     if not found:
-        print("FAIL: docker not found. It IS installed (per-user, F-34) — this "
-              "is a PATH problem. Do not reinstall.", file=sys.stderr)
+        print(
+            "FAIL: docker not found. It IS installed (per-user, F-34) — this "
+            "is a PATH problem. Do not reinstall.",
+            file=sys.stderr,
+        )
         raise SystemExit(2)
     return found
 
@@ -103,8 +106,9 @@ def fetch(url: str, timeout: float = 5.0) -> tuple[int, str]:
         return 0, f"{type(exc).__name__}: {exc}"
 
 
-def verdict(status: int, body: str, elapsed: float,
-            budget: float = BUDGET_SECONDS) -> tuple[bool, str]:
+def verdict(
+    status: int, body: str, elapsed: float, budget: float = BUDGET_SECONDS
+) -> tuple[bool, str]:
     """Decide pass/fail from a measurement. Pure — no I/O, no clock.
 
     Extracted so the decision can be tested without a container, a network or a
@@ -120,8 +124,7 @@ def verdict(status: int, body: str, elapsed: float,
     """
     if status != 200:
         return False, (
-            f" FAIL  the portal did not return 200 (got {status})\n"
-            f"       body: {body[:200]!r}"
+            f" FAIL  the portal did not return 200 (got {status})\n       body: {body[:200]!r}"
         )
     if EXPECTED_TITLE not in body:
         return False, (
@@ -131,18 +134,21 @@ def verdict(status: int, body: str, elapsed: float,
         )
     if elapsed >= budget:
         return False, f" FAIL  {elapsed:.1f}s exceeds the {budget:.0f}s budget"
-    return True, (
-        f" PASS  serving page in {elapsed:.1f}s, budget {budget:.0f}s"
-    )
+    return True, (f" PASS  serving page in {elapsed:.1f}s, budget {budget:.0f}s")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Measure a cold start.")
     parser.add_argument("--url", default=None, help="portal URL (default from JJ_PORT)")
-    parser.add_argument("--budget", type=float, default=BUDGET_SECONDS,
-                        help=f"budget in seconds (default {BUDGET_SECONDS:.0f})")
-    parser.add_argument("--skip-build", action="store_true",
-                        help="reuse the existing image; measures boot only")
+    parser.add_argument(
+        "--budget",
+        type=float,
+        default=BUDGET_SECONDS,
+        help=f"budget in seconds (default {BUDGET_SECONDS:.0f})",
+    )
+    parser.add_argument(
+        "--skip-build", action="store_true", help="reuse the existing image; measures boot only"
+    )
     args = parser.parse_args()
 
     port = os.environ.get("JJ_PORT", "8080")
@@ -204,8 +210,10 @@ def main() -> int:
 
     # Print the measured number in a copy-pasteable form, because the README
     # quotes it and transcribing it by hand is how it goes stale.
-    print(f"\n cold start: {elapsed:.1f}s to a serving page "
-          f"(healthcheck {healthy_at:.1f}s), measured by tools/coldstart.py")
+    print(
+        f"\n cold start: {elapsed:.1f}s to a serving page "
+        f"(healthcheck {healthy_at:.1f}s), measured by tools/coldstart.py"
+    )
     print("=" * 62)
 
     return 0 if ok else 1

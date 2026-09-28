@@ -12,7 +12,7 @@ order. It is short on purpose.
 
 | # | File | Bytes | When |
 |---|---|---|---|
-| 1 | **`blueprint/context/project-overview.md`** | **17,086** | **Always. This is the whole project in one load.** |
+| 1 | **`blueprint/context/project-overview.md`** | **17,577** | **Always. This is the whole project in one load.** |
 | 2 | `blueprint/context/current-feature.md` | — | Find the in-flight scope. Exactly one. |
 | 3 | `blueprint/context/findings.md` | — | What is known broken, and what was chosen not to fix. Check anything touching the files you are about to touch. |
 | 4 | `blueprint/context/ai-interaction.md` | — | How to work here. Read once per session. |
@@ -146,7 +146,7 @@ unblocked — Docker verified working, `just` installed, base image pre-pulled.
 
 | | |
 |---|---|
-| Findings | **42** — **0 open blocking**, 1 open (F-42), 1 unverified (F-27), 10 accepted by decision, 18 closed |
+| Findings | **47** — **0 open blocking**, 1 open (F-42), 1 unverified (F-27), 10 accepted by decision, 35 closed |
 | Open questions | **0** |
 | Contributions upstream | 5, including a corrected figure in the spec itself |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |

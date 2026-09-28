@@ -41,11 +41,18 @@ reframing that made it droppable: the 0.31 reading is a *question*, not a
 correction, because we do not know their definition and we may have the wrong
 one. That phrasing was the right one whether or not we had asked.
 
-**The second decision: the spec layer, not a bigger bible.** The bible was
-already 330KB and correct. Adding to it would have made it worse. The problem
-was not missing knowledge, it was that no fresh session could load it. So the
-fix was a 17,086-byte loadable overview that a new session reads first, plus
-plans that change rarely and a findings ledger that changes often.
+**The second decision: the spec layer, not a bigger bible.** The bible is already
+330KB and correct. Adding to it would have made it worse. The problem was not
+missing knowledge, it was that no fresh session could load it. So the fix was a
+loadable overview under a hard 20,000-byte cap that a new session reads first,
+plus plans that change rarely and a findings ledger that changes often.
+
+> The byte count is deliberately **not** quoted here, and neither is it quoted in
+> `AGENTS.md` beyond what the gate itself reports. It was 17,086 bytes when this
+> was written; every subsequent feature moved it, and `verify_spec.py` failed on
+> each move until the number was dropped. **A quoted size drifts the moment the
+> file is edited, so the honest fix is to drop the number** — which is what the
+> gate's own failure message has always said.
 
 **The third decision: audit the audit.** The spec layer was built, and then every
 claim in it was re-derived from the **given** inputs rather than read off the
@@ -101,7 +108,7 @@ python -V                 # 3.13.13
 
 | | |
 |---|---|
-| Acceptance | spec layer loadable and under 20,000 bytes — **17,086 bytes (83%)** |
+| Acceptance | spec layer loadable and under the 20,000-byte cap *(exact size deliberately not quoted — see the note above)* |
 | Requirement IDs covered | none — planning phase |
 | Findings opened | F-01…F-33 |
 | Findings closed | 21 |

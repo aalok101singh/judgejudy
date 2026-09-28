@@ -104,9 +104,7 @@ def check_interpreter() -> list[str]:
     print(f"   cwd:      {os.getcwd()}")
 
     if sys.version_info[:2] != (3, 13):
-        problems.append(
-            f"interpreter is {sys.version.split()[0]}, expected the 3.13 line (F-38)"
-        )
+        problems.append(f"interpreter is {sys.version.split()[0]}, expected the 3.13 line (F-38)")
         print("   FAIL      not the 3.13 line — Django 5.2's Requires-Python has no")
         print("             upper bound, so the pin cannot catch this for you (F-38)")
     else:
@@ -166,8 +164,11 @@ def check_docker() -> list[str]:
         try:
             result = subprocess.run(
                 [binary, *args],
-                capture_output=True, text=True, timeout=30,
-                encoding="utf-8", errors="replace",
+                capture_output=True,
+                text=True,
+                timeout=30,
+                encoding="utf-8",
+                errors="replace",
             )
         except (OSError, subprocess.SubprocessError) as exc:
             problems.append(f"`docker {label}` failed: {exc}")
@@ -188,8 +189,11 @@ def check_docker() -> list[str]:
     try:
         result = subprocess.run(
             [binary, "info", "--format", "{{.ServerVersion}}"],
-            capture_output=True, text=True, timeout=30,
-            encoding="utf-8", errors="replace",
+            capture_output=True,
+            text=True,
+            timeout=30,
+            encoding="utf-8",
+            errors="replace",
         )
         if result.returncode == 0:
             print(f"   ok        daemon up, server {result.stdout.strip()}")
@@ -211,8 +215,12 @@ def check_just() -> list[str]:
     if found:
         try:
             result = subprocess.run(
-                [found, "--version"], capture_output=True, text=True,
-                timeout=15, encoding="utf-8", errors="replace",
+                [found, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                encoding="utf-8",
+                errors="replace",
             )
             print(f"   ok        {result.stdout.strip()}")
         except (OSError, subprocess.SubprocessError) as exc:
@@ -222,9 +230,16 @@ def check_just() -> list[str]:
         print("             winget install --id Casey.Just")
         problems.append("just not installed (F-35)")
 
-    for path in ("docker-compose.yml", "Dockerfile", ".dogfood.toml",
-                 "docker/entrypoint.sh", "docker/healthcheck.py",
-                 "justfile", "LICENSE", "README.md"):
+    for path in (
+        "docker-compose.yml",
+        "Dockerfile",
+        ".dogfood.toml",
+        "docker/entrypoint.sh",
+        "docker/healthcheck.py",
+        "justfile",
+        "LICENSE",
+        "README.md",
+    ):
         exists = (REPO / path).exists()
         print(f"   {'ok       ' if exists else 'MISSING  '} {path}")
         if not exists and path not in (".dogfood.toml",):

@@ -50,8 +50,7 @@ def fake_checker(body: str) -> str:
     path = REPO / "tools" / "_tmp_fake_run.py"
     lines = "\n".join(f"    print({line!r})" for line in body.splitlines())
     path.write_text(
-        "import sys\n\n\ndef main():\n" + lines + "\n    return 0\n\n\n"
-        "sys.exit(main())\n",
+        "import sys\n\n\ndef main():\n" + lines + "\n    return 0\n\n\nsys.exit(main())\n",
         encoding="utf-8",
     )
     return str(path)
@@ -133,8 +132,9 @@ class TestAcceptanceWrapper:
             "claimed nothing, verified nothing"
         )
         try:
-            result = run_tool("run_acceptance.py", ".dogfood.toml",
-                              "--runner", fake, "--skip-preconditions")
+            result = run_tool(
+                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+            )
         finally:
             Path(fake).unlink(missing_ok=True)
 
@@ -173,8 +173,9 @@ class TestAcceptanceWrapper:
             "T2  csv export works .................. FAIL"
         )
         try:
-            result = run_tool("run_acceptance.py", ".dogfood.toml",
-                              "--runner", fake, "--skip-preconditions")
+            result = run_tool(
+                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+            )
         finally:
             Path(fake).unlink(missing_ok=True)
 
@@ -204,8 +205,9 @@ class TestAcceptanceWrapper:
             "T2  csv export works .................. FAIL"
         )
         try:
-            result = run_tool("run_acceptance.py", ".dogfood.toml",
-                              "--runner", fake, "--skip-preconditions")
+            result = run_tool(
+                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+            )
         finally:
             Path(fake).unlink(missing_ok=True)
 
@@ -230,8 +232,9 @@ class TestAcceptanceWrapper:
             "claimed T1 T2, verified T1"
         )
         try:
-            result = run_tool("run_acceptance.py", ".dogfood.toml",
-                              "--runner", fake, "--skip-preconditions")
+            result = run_tool(
+                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+            )
         finally:
             Path(fake).unlink(missing_ok=True)
 
@@ -302,15 +305,16 @@ class TestAcceptanceWrapper:
         )
 
     def test_an_unreachable_portal_fails_differently(self) -> None:
-        """"The portal is down" and "this route is missing" are different bugs.
+        """ "The portal is down" and "this route is missing" are different bugs.
 
         Collapsing them into one message teaches a reader to skim past it. And
         the difference is operationally real: one means start the container, the
         other means build the feature. So the gate names the reachable case
         first, and only then looks for false passes.
         """
-        unreachable = run_tool("run_acceptance.py", ".dogfood.toml",
-                               "--url-override", "http://localhost:9")
+        unreachable = run_tool(
+            "run_acceptance.py", ".dogfood.toml", "--url-override", "http://localhost:9"
+        )
 
         assert unreachable.returncode == 1
         assert "nothing is listening" in unreachable.stdout
@@ -354,9 +358,14 @@ class TestAcceptanceWrapper:
             "T2  csv export works .................. FAIL"
         )
         try:
-            result = run_tool("run_acceptance.py", ".dogfood.toml",
-                              "--runner", fake, "--skip-preconditions",
-                              "--allow-false-passes")
+            result = run_tool(
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--skip-preconditions",
+                "--allow-false-passes",
+            )
         finally:
             Path(fake).unlink(missing_ok=True)
 
@@ -389,8 +398,9 @@ class TestAcceptanceWrapper:
             "T2  csv export works .................. FAIL"
         )
         try:
-            result = run_tool("run_acceptance.py", ".dogfood.toml",
-                              "--runner", fake, "--skip-preconditions")
+            result = run_tool(
+                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+            )
         finally:
             Path(fake).unlink(missing_ok=True)
 
@@ -422,9 +432,14 @@ class TestAcceptanceWrapper:
             "claimed T1 T2 T3 T4, verified T1"
         )
         try:
-            result = run_tool("run_acceptance.py", ".dogfood.toml",
-                              "--runner", fake, "--skip-preconditions",
-                              "--allow-false-passes")
+            result = run_tool(
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--skip-preconditions",
+                "--allow-false-passes",
+            )
         finally:
             Path(fake).unlink(missing_ok=True)
 
@@ -445,8 +460,9 @@ class TestAcceptanceWrapper:
         """
         fake = fake_checker("DOGFOOD 2026 acceptance report")
         try:
-            result = run_tool("run_acceptance.py", ".dogfood.toml",
-                              "--runner", fake, "--skip-preconditions")
+            result = run_tool(
+                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+            )
         finally:
             Path(fake).unlink(missing_ok=True)
 
@@ -471,8 +487,9 @@ class TestAcceptanceWrapper:
             "T2  csv export works .................. FAIL"
         )
         try:
-            result = run_tool("run_acceptance.py", ".dogfood.toml",
-                              "--runner", fake, "--skip-preconditions")
+            result = run_tool(
+                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+            )
         finally:
             Path(fake).unlink(missing_ok=True)
 
@@ -541,8 +558,7 @@ class TestExpectationsFile:
                 f"the deadline guard works. It does not exist yet."
             )
             assert "wrong reason" in entry["reason"] or "by accident" in entry["reason"], (
-                f"{label!r} must record in its reason that the current PASS is "
-                f"not evidence."
+                f"{label!r} must record in its reason that the current PASS is not evidence."
             )
 
     def test_false_pass_preconditions_exist_for_the_404_checks(self) -> None:
@@ -554,8 +570,11 @@ class TestExpectationsFile:
         """
         preconditions = self._preconditions()
 
-        for label in ("closed event refuses submissions", "judge cannot see peer scores",
-                      "participant blocked"):
+        for label in (
+            "closed event refuses submissions",
+            "judge cannot see peer scores",
+            "participant blocked",
+        ):
             assert label in preconditions, (
                 f"{label!r} passes on a 404 and therefore has no precondition. "
                 f"Add one, or the gate will treat a false pass as evidence."
@@ -616,8 +635,10 @@ class TestExpectationsFile:
         runner = importlib.import_module("run_acceptance")
         config = (REPO / ".dogfood.toml").read_text(encoding="utf-8")
 
-        for route_key, expected in (("submit", '"/projects/new"'),
-                                    ("judge_scores", '"/api/v1/judge/scores"')):
+        for route_key, expected in (
+            ("submit", '"/projects/new"'),
+            ("judge_scores", '"/api/v1/judge/scores"'),
+        ):
             path = runner.ROUTES[route_key]
             assert path in config, (
                 f"the gate probes {path!r} for {route_key!r}, but that path is "
@@ -842,17 +863,22 @@ class TestDockerResolver:
         )
         resolved = subprocess.run(
             [sys.executable, "-c", probe],
-            capture_output=True, text=True, cwd=REPO,
-            encoding="utf-8", errors="replace",
+            capture_output=True,
+            text=True,
+            cwd=REPO,
+            encoding="utf-8",
+            errors="replace",
         )
         if resolved.returncode != 0:
             pytest.skip("docker is not resolvable on this machine")
 
         failing = subprocess.run(
-            [sys.executable, str(TOOLS / "docker.py"), "run", "--rm",
-             "alpine:3", "false"],
-            capture_output=True, text=True, cwd=REPO,
-            encoding="utf-8", errors="replace",
+            [sys.executable, str(TOOLS / "docker.py"), "run", "--rm", "alpine:3", "false"],
+            capture_output=True,
+            text=True,
+            cwd=REPO,
+            encoding="utf-8",
+            errors="replace",
         )
         if "not found" in (failing.stderr or "").lower() and failing.returncode == 0:
             pytest.skip("no container image available to run the probe")

@@ -152,43 +152,54 @@ def main() -> int:
         description="Run run.py, then gate on its body plus an expectation ratchet."
     )
     parser.add_argument("config", nargs="?", default=".dogfood.toml")
-    parser.add_argument("--runner", default="run.py",
-                        help="the organizers' checker (default: run.py)")
-    parser.add_argument("--expectations", default=str(EXPECTED),
-                        help="the expectation file")
-    parser.add_argument("--quiet", action="store_true",
-                        help="only print the report when something is wrong")
-    parser.add_argument("--skip-preconditions", action="store_true",
-                        help="do not probe the running portal for the false-pass "
-                             "preconditions. Only for testing this wrapper "
-                             "against a synthetic report: the preconditions "
-                             "exist to interrogate a LIVE portal, and with a "
-                             "fake report there is nothing to interrogate.")
-    parser.add_argument("--allow-false-passes", action="store_true",
-                        help="report false passes loudly but do not fail on "
-                             "them. Used by `just check` while the features "
-                             "that own those routes are unbuilt. Everything "
-                             "else — regressions, stale expectations, an "
-                             "overclaimed tier — still fails the gate.")
-    parser.add_argument("--url-override", default=None,
-                        help="probe THIS base_url instead of the one in the "
-                             "report. Only for testing that an unreachable "
-                             "portal is reported as unreachable rather than "
-                             "as a false pass; the report's own portal line "
-                             "is what the real gate uses.")
+    parser.add_argument(
+        "--runner", default="run.py", help="the organizers' checker (default: run.py)"
+    )
+    parser.add_argument("--expectations", default=str(EXPECTED), help="the expectation file")
+    parser.add_argument(
+        "--quiet", action="store_true", help="only print the report when something is wrong"
+    )
+    parser.add_argument(
+        "--skip-preconditions",
+        action="store_true",
+        help="do not probe the running portal for the false-pass "
+        "preconditions. Only for testing this wrapper "
+        "against a synthetic report: the preconditions "
+        "exist to interrogate a LIVE portal, and with a "
+        "fake report there is nothing to interrogate.",
+    )
+    parser.add_argument(
+        "--allow-false-passes",
+        action="store_true",
+        help="report false passes loudly but do not fail on "
+        "them. Used by `just check` while the features "
+        "that own those routes are unbuilt. Everything "
+        "else — regressions, stale expectations, an "
+        "overclaimed tier — still fails the gate.",
+    )
+    parser.add_argument(
+        "--url-override",
+        default=None,
+        help="probe THIS base_url instead of the one in the "
+        "report. Only for testing that an unreachable "
+        "portal is reported as unreachable rather than "
+        "as a false pass; the report's own portal line "
+        "is what the real gate uses.",
+    )
     args = parser.parse_args()
 
     runner = pathlib.Path(args.runner)
     if not runner.is_absolute():
         runner = REPO / runner
     if not runner.exists():
-        print(f"FAIL: {args.runner} not found. It ships with the organizers "
-              f"and must not be edited.", file=sys.stderr)
+        print(
+            f"FAIL: {args.runner} not found. It ships with the organizers and must not be edited.",
+            file=sys.stderr,
+        )
         return 2
 
     if not pathlib.Path(args.expectations).exists():
-        print(f"FAIL: expectations file {args.expectations} not found.",
-              file=sys.stderr)
+        print(f"FAIL: expectations file {args.expectations} not found.", file=sys.stderr)
         return 2
 
     spec = json.loads(pathlib.Path(args.expectations).read_text(encoding="utf-8"))
@@ -197,18 +208,21 @@ def main() -> int:
     # the expectations file cannot accidentally make the gate start treating it
     # as a check. A tool that requires its own documentation to be absent from
     # the file it documents is a tool that discourages documentation.
-    expected = {k: v for k, v in spec.get("checks", {}).items()
-                if not k.startswith("$")}
-    preconditions = {k: v for k, v in spec.get("preconditions", {}).items()
-                     if not k.startswith("$")}
+    expected = {k: v for k, v in spec.get("checks", {}).items() if not k.startswith("$")}
+    preconditions = {
+        k: v for k, v in spec.get("preconditions", {}).items() if not k.startswith("$")
+    }
 
     # `run.py` is stdlib-only, so the ambient interpreter is the correct one to
     # run it with. F-38 is about that interpreter having no Django, not about
     # it being unable to run the organizers' program.
     completed = subprocess.run(
         [sys.executable, str(runner), args.config],
-        capture_output=True, text=True, cwd=REPO,
-        encoding="utf-8", errors="replace",
+        capture_output=True,
+        text=True,
+        cwd=REPO,
+        encoding="utf-8",
+        errors="replace",
     )
 
     body = completed.stdout or ""
@@ -235,7 +249,8 @@ def main() -> int:
         base_url = args.url_override
 
     route_status = (
-        {} if (args.skip_preconditions or not any(preconditions.values()))
+        {}
+        if (args.skip_preconditions or not any(preconditions.values()))
         else probe_routes(base_url)
     )
 
@@ -247,9 +262,7 @@ def main() -> int:
             continue
 
         if want["expect"] == "pass" and got == "FAIL":
-            problems.append(
-                f"REGRESSION: {label!r} is expected to pass and FAILED"
-            )
+            problems.append(f"REGRESSION: {label!r} is expected to pass and FAILED")
         elif want["expect"] == "fail" and got == "PASS":
             # A stale expectation. The gate goes red so the file gets updated,
             # because a stale expectation teaches a reader to discount it.
@@ -294,9 +307,12 @@ def main() -> int:
             if status in (0, 404, 410):
                 observed = "no HTTP response" if status == 0 else f"HTTP {status}"
                 false_passes.append(
-                    (label, f"{route_name} ({ROUTES[route_name]}) answered "
-                            f"{observed}, so this PASS is not testing the "
-                            f"behaviour it names — {rule['why']}")
+                    (
+                        label,
+                        f"{route_name} ({ROUTES[route_name]}) answered "
+                        f"{observed}, so this PASS is not testing the "
+                        f"behaviour it names — {rule['why']}",
+                    )
                 )
                 break
 
@@ -346,12 +362,16 @@ def main() -> int:
         for problem in problems:
             print(f"   - {problem}")
         if portal_down and not args.skip_preconditions:
-            print("   - the portal is not answering on "
-                  f"{base_url}. The checks above are being reported against "
-                  "nothing; run `just up` first.")
+            print(
+                "   - the portal is not answering on "
+                f"{base_url}. The checks above are being reported against "
+                "nothing; run `just up` first."
+            )
         if false_passes:
-            print(f"   - {len(false_passes)} FALSE PASS(es): a check reporting "
-                  f"PASS without exercising the behaviour it names")
+            print(
+                f"   - {len(false_passes)} FALSE PASS(es): a check reporting "
+                f"PASS without exercising the behaviour it names"
+            )
         print("-" * 62)
         return 1
 

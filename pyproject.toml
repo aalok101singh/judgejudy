@@ -15,6 +15,32 @@ src = ["src", "tests", "tools"]
 line-length = 100
 target-version = "py313"
 
+# Django writes the migration files. `ruff format` would rewrite them on every
+# run, which means the next `makemigrations` produces a diff, which means the
+# migration history stops being a clean record of what the schema did and
+# becomes a record of what a formatter felt like that week. A migration is
+# generated, it is read by `migrate` and never by a human, and it is *not* to
+# be hand-edited (coding-standards.md §4) -- so it is not to be machine-edited
+# either.
+#
+# This exclusion is for STYLE ONLY, and that distinction is load-bearing:
+#   * ruff does not see these files at all, so they get no E501/UP031/I001 pass.
+#   * `tools/check_isolation.py` does NOT consult this file, so JJ01 still
+#     scans migrations and would still catch an unscoped Review read written
+#     into one.
+# The real gate on migrations is `just lint-migrations`, which asserts
+# `makemigrations --check` is clean: the schema and the migration cannot drift.
+extend-exclude = [
+    "src/reviewer/*/migrations",
+    # The same reasoning as the per-file-ignores entry below, extended to the
+    # FORMATTER. `ruff format` rewrites a file wholesale, which is a bigger
+    # intervention than suppressing a lint code: the decision recorded against
+    # tools/verify_spec.py is "do not machine-edit the gate that polices the
+    # spec layer", and honouring it for `ruff check` while letting `ruff format`
+    # rewrite the same file would be honouring it in name only.
+    "tools/verify_spec.py",
+]
+
 [tool.ruff.lint]
 # E   pycodestyle errors            — the boring correctness rules
 # F   pyflakes                      — undefined names, unused imports
@@ -68,7 +94,6 @@ ignore = [
 # it cannot become a dumping ground — if a new file wants to be exempt it has to
 # be added here explicitly, in a diff a reviewer will see.
 "tools/verify_spec.py" = ["E501", "UP031", "RUF005", "S603", "S607", "C401", "B007", "RUF059", "F841", "RUF001"]
-
 [tool.ruff.lint.flake8-tidy-imports]
 # The Django 5.2 + DRF idiom. `django.utils.timezone.utc` was removed and
 # `timezone.utc` is not a public API; importing the documented replacement keeps

@@ -11,7 +11,9 @@
 | # | Feature | Completed | Planned | Actual | Gate |
 |---|---|---|---|---|---|
 | 00 | [Specification and environment](00-specification.md) | 2026-09-27 | pre-window | pre-window | — |
-| 01 | | | | | |
+| 01 | [Skeleton and container](01-skeleton-and-container.md) | 2026-09-28 | 4h | ~4h | — |
+| 02 | [Schema and the isolation primitive](02-schema-and-isolation.md) | 2026-09-28 | 5h | ~5h | — |
+| 03 | *in flight* — loader, identities, gallery, deadline guard | | 5h | | **BREAK-1** |
 
 **A note on the ledger.** These archives record *what shipped*. What broke, what
 we chose not to fix, and what is still open lives in

@@ -53,8 +53,7 @@ def venv_python() -> str:
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("usage: run_in_container.py <management-command> [args...]",
-              file=sys.stderr)
+        print("usage: run_in_container.py <management-command> [args...]", file=sys.stderr)
         return 2
 
     command = sys.argv[1:]
@@ -81,8 +80,11 @@ def main() -> int:
     # "not built yet" from "built and broken" without a try/except on stderr.
     listing = subprocess.run(  # noqa: S603
         in_container("python", "src/manage.py", "help"),
-        cwd=REPO, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
     if listing.returncode != 0:
@@ -100,8 +102,10 @@ def main() -> int:
 
     result = subprocess.run(  # noqa: S603
         in_container("python", "src/manage.py", *command),
-        cwd=REPO, text=True,
-        encoding="utf-8", errors="replace",
+        cwd=REPO,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     return result.returncode
 

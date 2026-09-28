@@ -57,9 +57,7 @@ import sys
 
 # The per-user Docker Desktop location, recorded from this machine. F-34.
 CANDIDATES = [
-    pathlib.Path(
-        r"C:\Users\Aalok\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe"
-    ),
+    pathlib.Path(r"C:\Users\Aalok\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe"),
     pathlib.Path("/usr/local/bin/docker"),
     pathlib.Path("/usr/bin/docker"),
     pathlib.Path("/Applications/Docker.app/Contents/Resources/bin/docker"),

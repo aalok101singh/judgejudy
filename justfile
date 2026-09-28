@@ -228,10 +228,33 @@ test *args:
     @{{pyq}} -m pytest {{args}}
 
 # Lint. The unscoped-`Review.objects.all()` rule is a deliverable, not
-# hygiene, and it is configured in pyproject.toml.
+# hygiene, and it is a separate program (`tools/check_isolation.py`) rather
+# than a ruff plugin: ruff's plugin API is Rust, and a banned-API string in
+# pyproject.toml can only ban an exact dotted path -- which would allow
+# `Review.objects.filter(...)`, the same leak by another name. JJ01 is also a
+# separate step rather than a ruff rule so that `just lint-isolation` can be run
+# on its own, and so the rule's own tests can invoke it.
 lint:
     @{{pyq}} -m ruff check src tests tools
     @{{pyq}} -m ruff format --check src tests tools
+    @{{pyq}} tools/check_isolation.py
+
+# The real gate on migrations: the models and the migration must not have
+# drifted. Migrations are excluded from ruff's style pass (see pyproject.toml,
+# and the reason there), so this is the check that stands in for it.
+lint-migrations:
+    @{{pyq}} src/manage.py makemigrations --check --dry-run
+    @echo "migrations are in step with the models"
+
+# Just the isolation rule. Cheap enough to run on every save once the primitive
+# exists, which is the point of a syntactic rule.
+lint-isolation:
+    @{{pyq}} tools/check_isolation.py
+
+# Prove the isolation primitive, against the local database. The container
+# equivalent is step 5 of `just check`, which runs the same command.
+proof:
+    @{{pyq}} src/manage.py isolation_proof
 
 # Generate the OpenAPI 3.1 document. Additive, non-zero on failure.
 schema:
@@ -241,3 +264,26 @@ schema:
 reset-local:
     @powershell -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue data"
     @{{pyq}} src/manage.py migrate --noinput
+
+# --- the two gates `check` cannot hold ------------------------------------------------
+#
+# Both need a clean volume, which is why they are not in `check`: `check` must
+# stay one command a reviewer runs, and these two add three more minutes of
+# container lifecycle. They are run at every verification break and both are
+# named in AGENTS.md, so they have to be runnable by name.
+#
+# Neither recipe existed until FEAT-02, while the two tools behind them did --
+# the F-35 shape exactly: a command named in three documents that could not be
+# typed. The archive for FEAT-01 recorded "proved" for an offline boot, and the
+# way to produce that evidence did not exist as a command. Finding F-44.
+
+# Boot the portal under `--network none` and probe it. Requirement 1 of 5 in the
+# spec, and the first numbered disqualification.
+prove-offline:
+    @{{pyq}} tools/prove_offline.py
+
+# Deliberately corrupt fifteen things and assert every one is caught. A checker
+# that has only ever passed is not evidence of anything (F-33), so this proves
+# the gates can fail before we trust them at a break.
+mutation-test:
+    @{{pyq}} tools/mutation_test.py

@@ -7,37 +7,48 @@
 
 ---
 
-## In flight: FEAT-02 — Schema and the isolation primitive
+## In flight: FEAT-03 — Loader, identities, gallery, deadline guard
 
-**Planned:** 5 hours · **Phase B** · **No gate of its own** (first gate is
-BREAK-1)
+**Planned:** 5h · **Phase C** · **Gate:** BREAK-1 (H+14), the T1 claim
 
 ### Scope
 
-- [ ] 20 models, 12 apps; SQLite WAL; **Postgres-portable** — no SQLite-only types
-- [ ] `source_key` on every importable table (D-11) — free now, 3 h if retrofitted
-- [ ] `AuditEntry` chain columns: `seq` / `prev_hash` / `entry_hash` /
-      `omitted_since_prev` (D-08)
-- [ ] Indexes for the three hot paths: judge-on-track, judge-on-project, event gallery
-- [ ] `Review.objects.for_actor(actor)` → scoped queryset **+ scope receipt** (D-01)
-- [ ] `isolation_proof` management command skeleton, exiting 0 on pass
-- [ ] The lint rule forbidding the unscoped `Review.objects.all()` form
+- [ ] Idempotent loader from `fixtures.json` — **run it twice, get the same
+      database.** `docker compose up` is run many times against one volume and
+      a loader that only works once makes the portal non-reproducible
+- [ ] **5 test identities get real password hashes; the other ~116 get
+      `UNUSABLE_PASSWORD`.** Hashing all 121 costs ~48 s against `run.py`'s 10 s
+      timeout (F-12)
+- [ ] Gallery, **first page in fixture order**, ~24 per page. `run.py` reads
+      `fixture_titles(fixture, n=3)` → `projects[:3]` **positionally**, so the
+      slice is a page slice, not a search (overview §6 trap 1)
+- [ ] Deadline guard `assert_open_for_submission(event)` — a **service
+      function**, called by every write path, because a `save()` override is
+      bypassed by `bulk_create` and a view decorator by the admin
+- [ ] The four Hypothesis isolation invariants P1–P4 (`bible/05` §6b.2) — they
+      finally can run: F-22 is resolved, FEAT-01 created the project, and
+      FEAT-02 created the models
+- [ ] `verify_census` command — every census table prints its own row count on
+      boot, and a count that disagrees with its stated population is a boot
+      failure. `tools/run_in_container.py` already has an entry for it
 
 ### Acceptance
 
-`manage.py isolation_proof` exits 0 on the empty DB; the lint rule fires on a
-deliberately unscoped view and passes when scoped.
+Gallery serves the first three fixture projects in fixture order; the loader is
+idempotent; the four invariants pass; `verify_census` exits 0.
 
 ### Depends on
 
-- **F-22** — the Hypothesis model strategies need `pytest-django` with a
-  configured `DJANGO_SETTINGS_MODULE`. They now *can* run, because FEAT-01
-  created the Django project — but the four invariants still need routes, so
-  they land in FEAT-03, not here. The ordering in `bible/08` is unchanged.
-- **F-40** (new, found at FEAT-01) — the `submit` route does not exist, so
-  `run.py`'s "closed event refuses submissions" passes on a 404. Flip
-  `tools/expected_checks.json` when the route lands, and the gate goes green on
-  that check for the right reason. Do not treat the current PASS as evidence.
+- **F-40** — "closed event refuses submissions" currently passes on a **404**.
+  When `/projects/new` starts existing it passes for the *right* reason and
+  `tools/expected_checks.json` goes stale, so `just check` **goes red**. That red
+  is the design working. Flip the entry with a reason naming the route.
+- **F-44** — the model count is 24, not 20, and
+  `tests/test_schema_contract.py` reads the number out of `build-plan.md`. If
+  the loader needs a new table, add it to the plan first or that test fails.
+- The isolation primitive is **done**, so the loader has something to seed
+  `RoleBinding` rows *for*. The 9 dual-track judges are two binding rows each —
+  the model is the fixture's shape, not a special case.
 
 ### Environment
 
@@ -50,27 +61,33 @@ Working and verified. `just doctor` is the one command that checks it.
 | Container | `python:3.13-slim` pinned by digest; Python 3.13.15 |
 | `just` | 1.58.0 |
 
+**One new local trap:** swapping `AUTH_USER_MODEL` (done in FEAT-02) makes a
+**pre-existing local database** fail with `InconsistentMigrationHistory`, because
+`accounts.0001` is a dependency of `admin.0001` and the old database has
+`admin.0001` applied without it. `just reset-local` fixes it. The container is
+unaffected because `just check` starts from a clean volume.
+
 ### Not in this feature
 
-The loader, the gallery, the deadline guard and the four Hypothesis invariants —
-those are FEAT-03. Do not start them here; the primitive is only cheap to build
-before any feature exists to leak.
+The judge console, the CSV export, the audit view and the denial properties.
+Those are FEAT-04/FEAT-05, and **`isolation_proof` cannot print the published
+matrix without the loader** — which is why FEAT-03 is where that proof becomes
+real.
 
 ### State
 
 | | |
 |---|---|
-| **Status** | **ready** — FEAT-01 verified green |
+| **Status** | **ready** — FEAT-02 verified green |
 | **Started** | — |
 | **Elapsed** | 0h of 5h |
-| **Last touched** | FEAT-01 verified; `just check` green end to end (`../history/features/01-skeleton-and-container.md`) |
-| **Next action** | write the initial migration, all of it, while nothing depends on it |
+| **Last touched** | FEAT-02 verified; `just check` green end to end, `prove-offline` 5.8 s, `mutation-test` 15/15, spec 67/67, 160 tests (`../history/features/02-schema-and-isolation.md`) |
+| **Next action** | write `load_fixtures`, run it twice, and prove the second run changed nothing |
 
 ---
 
 ## Next up
 
-- **FEAT-03** Loader, identities, gallery, deadline guard, 4 Hypothesis
-  invariants — 5h
+- **FEAT-04** Rubric, assignment + min-cut, judge console, reviews — 7h
 - **BREAK-1** at H+14 — **☕ T1.** Hard gate. `just check` plus
   `just prove-offline` plus `just mutation-test`, against a clean volume.

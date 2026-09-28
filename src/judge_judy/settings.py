@@ -97,6 +97,18 @@ ALLOWED_HOSTS = ["*"]
 # ---------------------------------------------------------------------------
 # Applications
 # ---------------------------------------------------------------------------
+#
+# The twelve project apps are named for the domain, not for the layer
+# (coding-standards.md §3): `reviewer.reviews`, not `reviewer.models`. They are
+# listed alphabetically so the ordering here carries no meaning -- Django's own
+# apps come first because contenttypes and auth have to be registered before
+# anything can have a foreign key to a user.
+#
+# `reviewer.isolation` and `reviewer.normalization` are deliberately NOT here.
+# They are packages, not apps: `isolation` holds the access-control primitive
+# and defines no model, and `normalization` is the estimator. Listing a package
+# with no model would add a `models` module that does not exist and a migration
+# that creates nothing.
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -107,6 +119,18 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "whitenoise.runserver_nostatic",
+    "reviewer.accounts",
+    "reviewer.audit",
+    "reviewer.ballots",
+    "reviewer.comments",
+    "reviewer.credentials",
+    "reviewer.events",
+    "reviewer.io",
+    "reviewer.projects",
+    "reviewer.reviews",
+    "reviewer.rubrics",
+    "reviewer.teams",
+    "reviewer.webhooks",
 ]
 
 MIDDLEWARE = [
@@ -164,9 +188,7 @@ DATABASES = {
         "NAME": INSTANCE_DIR / "db.sqlite3",
         "OPTIONS": {
             "init_command": (
-                "PRAGMA journal_mode = WAL;"
-                "PRAGMA synchronous = NORMAL;"
-                "PRAGMA foreign_keys = ON"
+                "PRAGMA journal_mode = WAL;PRAGMA synchronous = NORMAL;PRAGMA foreign_keys = ON"
             ),
             "transaction_mode": "IMMEDIATE",
             "timeout": 20,
@@ -188,6 +210,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # other person in fixtures.json is synthetic and gets an unusable password. The
 # alternative -- hashing all 121 of them -- costs about 48 seconds inside the
 # process gunicorn is waiting on, against a 10 second checker timeout.
+AUTH_USER_MODEL = "accounts.User"
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},

@@ -45,6 +45,179 @@ settling before the build relies on a bare `python`.
 
 ## Open — non-blocking
 
+### F-47 [P2] closed - `just prove-offline` and `just mutation-test` were named in four documents and did not exist as commands
+
+**File:** `justfile`
+**Found:** 2026-09-28, at FEAT-02, while running the break protocol
+**Why it matters:** This is **F-35 again, one layer up.** F-35 was `just` itself
+being absent while three files named it as the gate command. Here the *tools*
+existed — `tools/prove_offline.py` and `tools/mutation_test.py` were both written
+and working in FEAT-01 — but the justfile recipes that invoke them were never
+written, so:
+
+```console
+$ just prove-offline
+error: justfile does not contain recipe `prove-offline'
+```
+
+The FEAT-01 archive's verification table records *"Boots with `--network none` |
+**proved** — 4.0 s, 4 content-asserting probes"*, which is a true statement about
+a run someone did. But **there was no command that could produce it**, so at
+BREAK-1 the break protocol would have stalled on a step nobody could type, or
+worse, a session would have run the underlying script by hand and reported the
+recipe as covered. A verification table row that no command can reproduce is an
+unreproducible claim wearing the costume of a passing one.
+
+**Suggested fix:** Write the two recipes.
+**Resolution:** **Closed 2026-09-28 by FEAT-02.** Both added, with the reason
+they are not inside `just check` written beside them (they each need a clean
+volume, and `check` must stay the one command a reviewer runs). Both were then
+run: offline boot **5.8 s**, four content-asserting probes, **15/15** mutations
+caught. The lesson generalises past `just`: *a verification claim is only worth
+recording if there is a command that reproduces it*, and the archive is the
+place to say which command that was.
+
+### F-46 [P2] closed - Running `ruff format` across the tree broke two of the fifteen mutation targets
+
+**File:** `tools/mutation_test.py`
+**Found:** 2026-09-28, by `just mutation-test` immediately after the reformat
+**Why it matters:** F-43's repair was to run `ruff format` over 22 files. Two of
+the mutation harness's targets are **exact source strings**, and the formatter
+rewrote both of them — joining an f-string onto its call, and putting a
+`pathlib.Path(...)` on one line. So two deliberate corruptions became
+`[pattern not found]`:
+
+```
+13/15 mutations caught
+ NOT CAUGHT
+   - tools/run_acceptance.py: the regression branch never fires  [pattern not found]
+   - tools/docker.py: the per-user Docker path is removed  [pattern not found]
+```
+
+**This is the cost of an exact-string mutation harness, and it fails in the worst
+direction.** A mutation the harness cannot find is indistinguishable from a
+mutation the gate survives, and the report says so in the same words for both
+(`pattern not found` is printed as a *miss*, not as a *harness defect*). We were
+one `ruff format` away from a green 13/15 that read as "two gates pass while
+broken" — and the two in question are the F-32 class and the F-34 regression.
+
+It is also the ledger's own rule firing against us: **a repair is not done when
+the code changes**, and the review of the reformat was "the 160 tests still
+pass", which was true and not sufficient.
+
+**Suggested fix:** Re-point the two mutations at the reformatted text, and make
+the harness distinguish the two failure modes.
+**Resolution:** **Closed 2026-09-28 by FEAT-02.** Both patterns re-pointed and
+verified against the *loaded* `MUTATIONS` value rather than by eye — the second
+attempt still had doubled backslashes from a shell-quoting layer, and only
+importing the module and testing `old in source` settled it. `15/15` again.
+The durable change: `pattern not found` is now reported in its own line rather
+than in the miss list, so a harness defect and a surviving gate cannot be
+confused. **The general lesson: a gate that asserts by matching a string needs a
+test that the string is still there**, and the cheapest version of that is to run
+the gate after touching the file it matches.
+
+### F-45 [P1] closed - `isolation_proof` could populate the "judge" row with an organizer and print an impossible number
+
+**File:** `src/reviewer/reviews/management/commands/isolation_proof.py`
+**Found:** 2026-09-28, by `tests/test_isolation_proof.py`
+**Why it matters:** The matrix loops over the five roles and resolves an actor
+per role from the `RoleBinding` table. It then printed each row labelled by
+`actor.label`, which returns the actor's **strongest** role. A user can
+legitimately hold two — a judge who is also a participant is the ordinary case at
+a hackathon, not a misconfiguration — so the table printed:
+
+```
+  visitor       0/2    0/2    0/2   ?  ?  ?
+  judge         1/2    0/2    0/2   ?  ?  ?
+  judge         1/2    0/2    0/2   ?  ?  ?      <- the participant row
+  admin         2/2    2/2    2/2   ?  ?  ?
+  admin         2/2    2/2    2/2   ?  ?  ?      <- the organizer row
+```
+
+Three distinct things wrong, and the middle one is the serious one. The
+**participant row showed a review visible to a participant** — a number the
+design says is impossible, in the published matrix, printed by the file whose
+entire purpose is to be the evidence a judge checks the portal against. Nobody
+reading that output could tell it was wrong, because the layout is exactly what a
+correct matrix looks like.
+
+**This is F-40 turned on ourselves, in the one artefact we would have pointed a
+panelist at.** F-40 was a check reporting PASS without exercising the behaviour
+it names; this is a proof reporting a *verdict* without exercising the *actor* it
+names.
+
+**Suggested fix:** A row may only be populated by an actor whose strongest role
+is that row's role. When none exists, say so.
+**Resolution:** **Closed 2026-09-28 by FEAT-02.** `ROLE_STRENGTH` orders the
+five roles and both resolvers (`_actor_for_binding`, `_admin_actor`) now refuse
+rather than borrow. The refusal message names the consequence — *"would report a
+stronger actor's numbers"* — because a refusal a reader cannot act on is a
+refusal they will work around. Two tests pin it: a missing participant binding,
+and **an event where every judge is also an organizer**, which is the case that
+produced the bug. `Actor.label`'s docstring now says it returns the *strongest*
+role, because that is the fact the matrix was missing.
+
+### F-44 [P2] closed - The plan said 20 models, `DATA-MODEL.md` said 20 tables across 8 apps, and `bible/05` names 24
+
+**File:** `blueprint/build-plan.md`, `DATA-MODEL.md`
+**Found:** 2026-09-28, at FEAT-02, before writing the migration
+**Why it matters:** Three documents in the spec layer disagreed about the size of
+the schema, and **no gate covered any of them.** `verify_spec.py` has 67 checks
+and none of them reads a model count, so the disagreement would have survived to
+the end of the build.
+
+| Source | Claimed |
+|---|---|
+| `blueprint/build-plan.md` | **20 models, 12 apps** |
+| `DATA-MODEL.md` | **20 tables across 8 apps** |
+| `blueprint/context/coding-standards.md` §3 | "twenty across eight" |
+| `bible/05` §2–§9 | **24 distinct models** |
+
+This is **F-28's exact failure mode** — a hand-typed census number that nobody
+derived — committed by the layer whose stated purpose is to stop transcription.
+The count is load-bearing: it is how a reader judges whether the schema is
+defensible or sprawling, and "twenty across eight" is a *different architectural
+claim* from "twenty-four across twelve". The first says a dozen apps would be
+smell; the second says twelve is the right size for this scope.
+
+**Suggested fix:** Build what `bible/05` actually describes, then make the number
+un-typable.
+**Resolution:** **Closed 2026-09-28 by FEAT-02.** All 24 ship. Reaching 20 would
+have meant cutting four with reasons that would have had to be invented, and the
+cut ledger exists for decisions we actually made. Both documents now say 24
+across 12, and — this is the part that matters — `tests/test_schema_contract.py`
+**reads the number out of `build-plan.md` and compares it to the Django app
+registry**, and separately out of `DATA-MODEL.md`. The plan is the claim, the
+registry is the check, and retyping either document's number now fails the suite.
+The test failed on the first run, which is the evidence that it is real.
+
+### F-43 [P2] closed - `just lint` was already red when FEAT-01 was archived as "Lint: clean"
+
+**File:** `justfile`, `pyproject.toml`
+**Found:** 2026-09-28, at FEAT-02, when the new code was made to pass
+**Why it matters:** `just lint` runs two things: `ruff check` and
+`ruff format --check`. The FEAT-01 archive's verification table says **"Lint |
+clean"**, and `ruff check` did pass. `ruff format --check` did not, and had
+never been run — **11 of the 17 files FEAT-01 wrote failed it.** A gate whose
+second half had never executed was recorded as a pass on the strength of its
+first half.
+
+That is the same shape as F-11, F-33 and F-39: **a claim about a tool that was
+never executed against the installed tool.** It is also why the FEAT-01 archive
+is the right place to have recorded it, and did not.
+
+**Suggested fix:** Run both halves, and reformat.
+**Resolution:** **Closed 2026-09-28 by FEAT-02.** 22 files reformatted; the 49
+pre-existing tests still pass afterwards. `tools/verify_spec.py` was added to
+ruff's `extend-exclude` rather than reformatted, which **extends** the existing
+per-file-ignores decision instead of quietly overriding it — the recorded
+reason ("do not machine-edit the gate that polices the spec layer") was about
+`ruff check` and honouring it for `ruff check` while letting the formatter
+rewrite the same file would have honoured it in name only. **The real
+consequence of finding this late: it had been a red gate for a whole feature, and
+a gate that is always red is a gate nobody reads.**
+
 ### F-42 [P2] open - `run_acceptance.py` had a wrong default that produced the right answer
 
 **File:** `tools/run_acceptance.py`

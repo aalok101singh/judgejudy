@@ -37,12 +37,19 @@ import sys
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Assert the Python minor version.")
-    parser.add_argument("--expect", default="3.13",
-                        help="expected major.minor (default: 3.13)")
-    parser.add_argument("--allow-patch", action="store_true", default=True,
-                        help="a differing patch release is fine (default)")
-    parser.add_argument("--exact", dest="allow_patch", action="store_false",
-                        help="require the full major.minor.patch to match")
+    parser.add_argument("--expect", default="3.13", help="expected major.minor (default: 3.13)")
+    parser.add_argument(
+        "--allow-patch",
+        action="store_true",
+        default=True,
+        help="a differing patch release is fine (default)",
+    )
+    parser.add_argument(
+        "--exact",
+        dest="allow_patch",
+        action="store_false",
+        help="require the full major.minor.patch to match",
+    )
     args = parser.parse_args()
 
     expected = tuple(int(part) for part in args.expect.split("."))
@@ -70,7 +77,7 @@ def main() -> int:
         print("  has no upper bound, so the pin will not catch this for you.", file=sys.stderr)
         print("", file=sys.stderr)
         print("  Use the venv interpreter explicitly:", file=sys.stderr)
-        print('    .venv\\Scripts\\python.exe   (Windows)', file=sys.stderr)
+        print("    .venv\\Scripts\\python.exe   (Windows)", file=sys.stderr)
         print("    .venv/bin/python            (macOS / Linux)", file=sys.stderr)
         print("", file=sys.stderr)
         print("  Inside the container the image's own Python is used and this", file=sys.stderr)
