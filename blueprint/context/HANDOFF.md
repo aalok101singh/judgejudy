@@ -35,7 +35,7 @@ key. 69-hour window, one person, solo.
 
 Working directory: `C:\Users\Aalok\Desktop\Judge Judy`
 Repository: `https://github.com/aalok101singh/judgejudy` (branch `main`, pushed,
-clean tree at `4d28ce0`)
+clean tree at `0cad51d`)
 
 ## Read in this order, then stop and work
 
@@ -71,6 +71,64 @@ on one check (see the traps below).
 Do not start FEAT-04 (rubric, assignment, judge console). The judge surface
 needs routes that do not exist yet.
 
+## FEAT-03 reconnaissance — already done, do not redo it
+
+These were re-derived from `fixtures.json` directly. **Re-derive anything you
+are about to build on, but start from these rather than from nothing.**
+
+| | | |
+|---|---|---|
+| top-level keys | `event`, `tracks`, `judges`, `teams`, `projects`, `scores` | |
+| tracks | 8 — keys `id`, `name` | no descriptions |
+| judges | 30 — keys `id`, `name`, `email`, `tracks` | **21 single-track, 9 dual** → 39 judge `RoleBinding` rows |
+| teams | 40 — keys `id`, `name`, `members` | `members` are **emails** |
+| projects | 41 — `id`, `team`, `track`, `title`, `summary`, `repo_url`, `submitted_at` | **no `description`, no tags, no images** |
+| scores | 126 — `judge`, `project`, `criteria`, `comment` | `criteria` keys are always `functionality, quality, innovation` (that **order**) |
+| **people** | **121** = 30 judges + 91 team members | **zero overlap** — no judge is a team member, and every member is in exactly one team |
+| event | `id`, `name`, `submissions_close` only | **no `starts_at`, no `submissions_open`** — see below |
+
+**Three consequences that are not obvious and cost time to find:**
+
+1. **The census is exactly 121 people, so the demo identities must be drawn from
+   those 121** rather than invented. Six synthetic accounts would make
+   `verify_census` report 126 and quietly change a number the panel can check.
+   Promote five of the 121 instead.
+2. **`Event.starts_at` is required by our schema and the fixture does not
+   supply it.** Derive it — `min(project.submitted_at)` is defensible and is
+   computed rather than typed. Leave `submissions_open = NULL`, which the deadline
+   guard already treats as "no opening gate". Do **not** move
+   `submissions_close`; the portal is born closed and that is the T1-3 check.
+3. **The demo `participant` must hold ONLY the participant role.** `.dogfood.toml`
+   sends the participant header to the judge-scores route and expects a refusal —
+   so if the participant is also the organizer or a judge, the check fails for a
+   reason that is not the isolation model.
+
+**`.dogfood.toml` `[auth]` is four empty strings and that is deliberate.** The
+checker never logs in; the brief says to hand over "whatever header proves you
+are this role — a cookie, a bearer token, a basic auth string". The seed must
+print real values and they get pasted in verbatim. **Nothing is invented to make
+a check pass.** The organizers' own example uses a guessable fixed session
+value, so a deterministic demo credential is the spec's design, not a shortcut.
+
+Recommended mechanism, and the reason: **an HMAC'd bearer token derived from
+`SECRET_KEY` and the identity's email, carrying the identity in the token
+prefix.** No schema change, nothing stored, rotatable by rotating the key, and
+printable on boot. The alternative — a `Session` row with a fixed key — also
+works and is closer to the organizers' example, but it means the token is a row
+in a table that `down -v` wipes, so `.dogfood.toml` would need repasting after
+every reset. **Whichever you pick, document the trade — a predictable demo
+credential is a real property of a self-hosted portal whose only data is the
+fixture set, and the README has to say so.**
+
+**The single most important thing FEAT-03 must get right, and it is a false pass
+waiting to happen:** `run.py` accepts **any 4xx** for "closed event refuses
+submissions". So if your `POST /projects/new` is refused by CSRF, or by "you are
+not logged in", the check reports **PASS while the deadline guard is never
+called**. That is F-40 again, in a place where the fixture's past close date
+makes it look like it is working. The request must arrive as an authenticated
+participant and be refused **by the guard**. Assert it in a test that names the
+guard, and say so in the archive.
+
 ## The gate
 
     just check            # THE GATE. Clean volume, build, up, checker, proofs, tests.
@@ -88,7 +146,7 @@ A feature is done when its acceptance line in `build-plan.md` passes on a clean
 database AND `just check` is green AND `just lint` is green. Not when the code
 exists.
 
-## Verified state at `4d28ce0`
+## Verified state at `0cad51d`
 
 | | |
 |---|---|
@@ -100,6 +158,36 @@ exists.
 | Suite | **160 passed** |
 | Schema | 24 models / 12 apps, 12 initial migrations, `makemigrations --check` clean |
 | `claimed` | `[]` — and that is accurate. No tier is complete. |
+
+## What is already wired for you
+
+**The entrypoint already calls `load_fixtures`.** `docker/entrypoint.sh` does
+`migrate → collectstatic → load_fixtures → THEN gunicorn binds`, and it checks
+`manage.py help | grep load_fixtures` first, so today it logs "no load_fixtures
+command yet (FEAT-03); starting with an empty database" instead of crashing. The
+moment the command exists it runs automatically, with **no compose change**.
+
+**`tools/run_in_container.py` already knows the two commands** you are about to
+write — `load_fixtures` and `verify_census` are in its `OWNERS` table, so step 5
+of `just check` stops printing `SKIP` for them and starts **failing** on them if
+they are broken. That is the check you want.
+
+**Seeding is outside the checker's 10-second window.** gunicorn does not bind
+until the seed finishes, so the ~2 s of real password hashing (5 identities,
+F-12) is spent before the port exists rather than inside `run.py`'s
+`TIMEOUT = 10`. Do not "optimise" this by hashing fewer.
+
+**Routes `.dogfood.toml` already names:** `gallery = "/"` and
+`submit = "/projects/new"`. `/` currently serves a placeholder page; the gallery
+takes it over. The judge and export routes resolve in FEAT-05.
+
+**The four Hypothesis invariants** (`bible/05` §6b.2) can finally run: F-22 is
+accepted-and-resolved, FEAT-01 created the project, FEAT-02 created the models.
+Use `hypothesis.extra.django.TestCase` (one transaction per example — what
+`@given` needs), `@settings(max_examples=50, deadline=None)`, and
+`st.just()` / `st.builds` over **small worlds**, never `from_model()` on the big
+tables. The failure mode is "some combination we did not think of", not data
+volume.
 
 ## The traps that have already cost real time
 
