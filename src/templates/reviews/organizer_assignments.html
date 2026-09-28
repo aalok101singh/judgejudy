@@ -1,0 +1,75 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Judge Judy &middot; assignment plan</title>
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+</head>
+<body>
+  <main class="wrap wrap--wide">
+    <p class="eyebrow">DOGFOOD 2026 &middot; {{ actor.label }}</p>
+    <h1>Assignment plan</h1>
+    <p class="lede">
+      {{ event.name }} &mdash; target {{ event.reviews_per_project }} review{{
+      event.reviews_per_project|pluralize }} per project,
+      seed <strong>{{ plan.seed }}</strong>{% if event.judge_capacity %},
+      per-judge capacity {{ event.judge_capacity }}{% else %},
+      no organizer cap so the search finds the tightest bound{% endif %}.
+    </p>
+
+    <p class="window window--{{ plan.state|default:'none' }}">
+      {% if plan.feasible %}
+        Feasible. Every project reaches its target and no judge is asked to
+        review more than {{ plan.max_load }} project{{ plan.max_load|pluralize }}.
+      {% else %}
+        Infeasible, and the shortfall is proved rather than estimated. The
+        certificate below names the projects, the judges who are the constraint,
+        and the arithmetic of each fix.
+      {% endif %}
+    </p>
+
+    {#- The whole certificate, preformatted. It is the SAME string
+        `manage.py verify_assignment` prints and the same string a signed
+        feasibility report would carry, because they are one call. A screen that
+        re-implemented the arithmetic would reintroduce exactly the disagreement
+        this feature exists to remove (bible/06 §2.3). -#}
+    <pre class="certificate">{{ certificate }}</pre>
+
+    {% if plan.assignments %}
+      <h2>The proposed panel</h2>
+      <table class="assignments">
+        <thead>
+          <tr><th>Judge</th><th>Load</th><th>Track</th><th>Projects</th></tr>
+        </thead>
+        <tbody>
+          {% for judge_id, load in plan.loads.items %}
+            <tr>
+              <td>{{ judge_id }}</td>
+              <td>{{ load }}</td>
+              <td></td>
+              <td></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="note">
+        This table is ordered by judge id rather than by load, and the loads are
+        printed as data rather than as a picture. {{ plan.assignments|length }}
+        assignment{{ plan.assignments|length|pluralize }} proposed.
+      </p>
+    {% endif %}
+
+    <ul class="links">
+      <li><a href="/">Gallery</a></li>
+      <li><a href="/judge/">Judge console</a></li>
+    </ul>
+
+    <p class="foot">
+      Nothing on this page was typed. The capacity search, the min-cut and the
+      remedies are the same code path the verifier runs, so the screen and the
+      signed report cannot disagree.
+    </p>
+  </main>
+</body>
+</html>

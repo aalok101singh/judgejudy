@@ -75,6 +75,24 @@ class Event(SourceKeyMixin, TimeStampedModel, models.Model):
     # A DEFAULT, not a policy. The operative target is per-track; see Track.
     reviews_per_project = models.PositiveIntegerField(default=3)
 
+    # The assignment planner's two organizer-facing settings, both nullable so
+    # that "unset" is a real state and not a magic number pretending to be a
+    # decision.
+    #
+    # ``assignment_seed`` makes the seeded tiebreak reproducible. It is stored
+    # rather than passed in because the acceptance line for FEAT-04 is that the
+    # same seed reproduces the same assignment byte-for-byte, and a seed that
+    # lived in a request would be a seed nobody could reproduce. `bible/06`
+    # §2.2 requires it be shown in the organizer UI.
+    assignment_seed = models.PositiveIntegerField(default=0)
+    # The per-judge cap on the assignment search. NULL means "no organizer cap",
+    # which is the right default: the search then finds the tightest bound that
+    # delivers full coverage, which is a fact about the panel rather than a
+    # number somebody typed. Setting it to 5 is what makes `trk_01` and
+    # `trk_08` provably impossible (`bible/06` §2.1a) and is the infeasible
+    # instance the acceptance line names.
+    judge_capacity = models.PositiveIntegerField(null=True, blank=True)
+
     # Weights cannot change once judging starts. A schema-level statement of
     # that policy rather than a UI convention (bible/05 §2).
     rubric_weights_locked_at = models.DateTimeField(null=True, blank=True)
@@ -87,6 +105,14 @@ class Event(SourceKeyMixin, TimeStampedModel, models.Model):
                 condition=models.Q(reviews_per_project__gte=1),
                 name="events_event_target_positive",
                 violation_error_message="A review target of zero can never be satisfied.",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(judge_capacity__isnull=True) | models.Q(judge_capacity__gte=1),
+                name="events_event_capacity_positive",
+                violation_error_message=(
+                    "A per-judge capacity of zero can never assign anything. NULL means "
+                    "'no organizer cap' and is the only other allowed value."
+                ),
             ),
         ]
 

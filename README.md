@@ -18,22 +18,51 @@ That is the whole setup. Then open <http://localhost:8080>.
 ## ⚠ Status: T1 is green, T2 is not built yet
 
 **Read this before judging anything else on this page.** The container, the
-healthcheck, the offline guarantee, **the gallery**, **the seeded fixture** and
-**the deadline guard** are real, measured and passing. The judge surface is not
-built yet.
+healthcheck, the offline guarantee, **the gallery**, **the seeded fixture**, **the
+deadline guard**, **the assignment engine** and **the judge console** are real,
+measured and passing. The **scoped score endpoint and the CSV export** are not
+built yet, and those are exactly the two things the T2 checks are about.
 
 | | State |
 |---|---|
-| `docker compose up` → serving page | ✅ **11.8 s** from an empty volume, budget 60 s, measured 2026-09-28 |
+| `docker compose up` → serving page | ✅ **12.0 s** from an empty volume, budget 60 s, measured 2026-09-29 |
 | Boots with `--network none` | ✅ **proved** — healthy at **8.0 s**, four probes pass |
 | Healthcheck from a clean volume | ✅ green |
 | **Acceptance: T1** (gallery public · fixture projects shown · closed event refuses) | ✅ **3 of 3 PASS** — `run.py` prints `claimed T1, verified T1` |
-| Acceptance: T2 (judge console, peer refusal, export) | ❌ **not built** (FEAT-04/05) |
-| Judge console, rubric, assignment | ❌ **not built** (FEAT-04) |
-| Isolation enforcement, exports | ❌ **not built** (FEAT-05) |
+| Assignment: feasible instance assigns | ✅ **123 of 123**, tightest per-judge capacity **6**, found by search |
+| Assignment: infeasible instance diagnosed | ✅ at capacity 5, `trk_01` and `trk_08` each short by 3, **bottleneck judges named** |
+| Assignment: seeded tiebreak reproducible | ✅ two runs, identical digest over 123 pairs |
+| Judge console, rubric, draft and submit | ✅ built (`/judge/`), refusals are literal 403s with empty bodies |
+| Acceptance: T2 (scoped scores, peer refusal, export) | ❌ **not built** (FEAT-05) — all four checks FAIL with real URLs |
+| Isolation enforcement on the API, CSV export | ❌ **not built** (FEAT-05) |
 | Voting, comments, influence report | ❌ **not built** (FEAT-06) |
 | Bulk IO, signed records, OpenAPI | ❌ **not built** (FEAT-07) |
 | Normalization engine + proof | ❌ **not built** (FEAT-08) |
+
+### The assignment certificate, and why it is the interesting part
+
+`just check` prints this, from the same code path the organizer's screen uses:
+
+```
+  DEFICIENT trk_01 (Developer tools): demand 3x6 = 18, supply 3 judges x 5 = 15, DEFICIT 3
+    short:  prj_40
+    bottleneck judges (capacity exhausted):
+      - Sofia Duarte     sofia.duarte@example.org -- 5 assigned, cap 5  AT CAPACITY
+      - Diego Herrera    diego.herrera@example.org -- 5 assigned, cap 5  AT CAPACITY
+      - Jonas Vogel     jonas.vogel@example.org -- 5 assigned, cap 5  AT CAPACITY
+    OK [trk_01] invite 1 more judge(s) to trk_01
+         k x c >= demand  ->  k = ceil(18/5) - 3 = 1  ->  4 x 5 = 20 >= 18
+    OK [trk_01] raise the per-judge capacity to 6 for trk_01
+         ceil(demand / judges) = ceil(18 / 3) = 6
+    OK [trk_01] lower trk_01's target to 2
+         floor(supply / projects) = floor(15 / 6) = 2
+```
+
+**That is a minimum cut of the assignment network, so the shortfall is proved
+rather than estimated** — no separate checker can disagree with the plan, because
+it is read off the same graph. It is also a property of the *published fixture*:
+set "max reviews per judge" to a completely reasonable 5 and two tracks become
+arithmetically impossible, before the organizer has done anything wrong.
 
 The numbers above are **generated, not typed**: `just coldstart`,
 `just prove-offline` and `just check` re-measure them. Nothing in this README is

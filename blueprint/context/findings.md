@@ -777,7 +777,8 @@ number appears.
 measurement with a date against the budget, and the tenths are attributed to the
 run rather than asserted as the project's number.
 
-### F-59 [P3] open - No check that a command named in a document is a command that can be typed
+**F-59 [P3] — opened at BREAK-1, closed at FEAT-04. Signpost; the full entry is
+in the FEAT-04 section below.** One entry, one ID, one status.
 
 **File:** `tools/verify_spec.py`, `justfile`
 **Found:** 2026-09-28, at BREAK-1, running the recipe audit by hand
@@ -788,23 +789,219 @@ was a third variant: the recipes existed and `just --list` misdescribed them.
 **Three findings, one missing check.** All three were found *by hand*, in three
 separate sessions, by whoever remembered to run the audit.
 
-`verify_spec.py` has 67 checks and **not one of them is "every `just` recipe
-named in a document exists."** The audit is cheap and mechanical — at BREAK-1 it
-took one pass: extract `just <word>` from every markdown file outside `bible/`
-and assert each name is a recipe. It found 15 real recipe names, all present,
-plus 5 English false positives (*"just status"*, *"just counted"*) that a
-recipe-name allow-list rejects for free.
-**Why it is open and not closed in this pass:** adding a check to the spec layer
-is new work, and this is a break, not a feature. `ai-interaction.md` §6 is
-explicit about that.
-**Suggested fix:** ~15 lines in `verify_spec.py` — parse the recipe names out of
-the `justfile`, extract `just <recipe>` from the shipped markdown, and fail on
-any name that is not a recipe. Prefer requiring the match to start a line or sit
-inside a fenced block, which kills the false positives without an English
-allow-list.
-**Resolution:** Open. **Recommended for FEAT-04** — it is ~15 minutes and it
-mechanically prevents a fourth instance of a defect class that has now cost three
-findings.
+`verify_spec.py` had 67 checks and **not one of them was "every `just` recipe
+named in a document exists."** The audit is cheap and mechanical: extract the
+recipe names from the justfile, extract `just <recipe>` from every markdown file
+outside `bible/`, and assert each name is a recipe.
+**Why it was open and not closed at BREAK-1:** adding a check to the spec layer is
+new work, and that was a break, not a feature. `ai-interaction.md` §6 is explicit
+about that. **Closed at FEAT-04, where it was the work.**
+
+### F-59 [P3] closed - No check that a command named in a document is a command that can be typed
+
+**File:** `tools/verify_spec.py`, `justfile`
+**Found:** 2026-09-28, at BREAK-1
+**Closed:** 2026-09-28, at FEAT-04
+**Why it matters:** **F-47 and F-48 were the same defect twice** — `just
+prove-offline` and `just mutation-test` named in four documents with no recipe
+behind them (F-47), then three recipes that existed and were broken (F-48). F-56
+was a third variant: the recipes existed and `just --list` misdescribed them.
+**Three findings, one missing check.** All three were found *by hand*, in three
+separate sessions, by whoever remembered to run the audit.
+
+**Resolution:** **Closed 2026-09-28 at FEAT-04.** `verify_spec.py` gained
+`check_recipes`, which parses the recipe names out of the `justfile`, extracts
+`just <recipe>` from every markdown file outside `bible/`, and fails on any name
+that is not a recipe. **68/68 checks now, up from 67.**
+
+Three decisions inside it, each of which was a bug first:
+
+* **Position, not an English allow-list.** A name counts as a command only at the
+  start of a line, as a list item, or inside a fenced block. The alternative was
+  a list of English words to exclude, and "just status" and "it just counted"
+  are real sentences in our own documents — a word list is a list somebody has to
+  remember to extend, and the check stops being trustworthy the first time they
+  do not.
+* **The justfile parser handles parameters and assignments.** The first version
+  matched only `name:`, so it reported **`coldstart`, `coldboot` and `accept` as
+  missing — three recipes that exist.** A check that is wrong on its first run
+  teaches everyone to ignore it, which is worse than not having it. The fix is
+  `(?:\s+[^:=\n]*?)?:(?!=)`: the `(?!=)` is what separates `coldstart *args:`
+  from `py := ...`.
+* **It is proven to fail.** Adding a deliberately misspelled recipe name to the
+  README makes the gate exit non-zero and name the typo. A check that cannot
+  fail is worse than no check, and this one is not an identity: it compares two
+  independently derived lists.
+
+  **It caught this very entry, on its first run.** The first draft of this
+  paragraph demonstrated the failure by writing the misspelled command out loud
+  in backticks, and the check reported it as a missing recipe — in this file.
+  The example is now described in words rather than planted, because a
+  documentation file that contains a non-existent command is exactly the defect
+  the check exists to catch, and **a check that cannot be applied to its own
+  rationale is a check nobody will trust.**
+
+## Resolved — found in FEAT-04, 2026-09-29
+
+*Six findings, and the headline is not the one I expected. FEAT-04 opened no P1:
+the assignment engine ran against a panel we had already loaded and verified
+twice, so the data was not new. **Every one of these six is in our own reasoning
+or our own documents, and five of the six were found by executing something
+rather than by reading it** — which is the rule the project has been arguing for
+since F-11, now demonstrated on our own solver.
+
+### F-60 [P1] closed - The min-cost solver returned feasible but non-minimal flows, and never raised
+
+**File:** `src/reviewer/assignment/flow.py`
+**Found:** 2026-09-29, at FEAT-04, by differential testing against an independent implementation
+**Why it matters:** The textbook successive-shortest-path algorithm updates its
+Johnson potentials **incrementally** after each augmentation. That is
+asymptotically better and it is **wrong**, in the most expensive way available:
+a node that *drops out* of reachability keeps a stale potential, an arc from it
+into a reached node then has a negative reduced cost, and Dijkstra on negative
+reduced costs returns a path that is not shortest.
+
+**It does not crash, and it does not look wrong.** The result is a *feasible*
+flow with a slightly worse total cost — which for this application means a
+slightly worse spread of judge workloads, on a feature whose entire claim is
+that the spread is as fair as it can be.
+
+It was found by writing the solver and then **testing it against a second,
+independently written algorithm** — a plain Bellman-Ford SSP with no potentials —
+over 1,500 random instances of the planner's exact network shape. **1,500/1,500
+now agree**; the incremental version disagreed on some, and an explicit
+`AssertionError` guard in `_dijkstra` turned the silent version into a loud one.
+
+**The repair, and the reasoning is the point:** potentials are now recomputed
+from Bellman-Ford on **every** augmentation. At 81 nodes and 156 edges a
+Bellman-Ford is ~12,000 operations across at most 123 augmentations, so the solve
+stays **0.15 ms per instance, measured**. **Correctness was worth more than the
+asymptotics, and the asymptotics are exactly where this bug lives.** The guard
+stays, because it is what turned a wrong answer into a failure.
+
+### F-61 [P1] closed - "The bottleneck judges are on the sink side of the cut" names nobody, and the feature looked like it worked
+
+**File:** `bible/06` §2.3, `src/reviewer/assignment/planner.py`
+**Found:** 2026-09-29, at FEAT-04, by reading the empty output rather than the code
+**Why it matters:** `bible/06` §2.3 says the diagnosis should name "the judge
+nodes on the sink side of that cut". Implemented **literally on the network
+§2.2 itself describes, that set is empty** — and the certificate printed a
+deficiency with no judges on it, which is not a diagnosis.
+
+The reason is a property of the canonical minimum cut. Its source side is reached
+from the source through a track node that still has residual capacity, and from
+there through exactly the projects that went **un**covered — whose judge edges
+are untouched and therefore fully residual. **The judges of a deficient track are
+on the SOURCE side.** Naming the sink side names nobody.
+
+**The correct reading is the same cut, one arc later.** Every saturated
+`judge → sink` arc crosses it, because every judge is reachable and the sink is
+not. So the bottleneck judges are the eligible judges **whose capacity is
+exhausted** — and on `trk_01` at c=5 that is all three of them, by name, each
+marked `AT CAPACITY`. That is the answer an organizer acts on: *there is no
+fourth judge, and these three cannot take a 16th project between them.*
+
+**This is the project's own lesson, aimed at us.** A feature that returns
+structurally valid output containing nothing is indistinguishable from a feature
+that works, and a test asserting `bottleneck_judges == ()` would have passed
+forever. The test now asserts they are **named** and **at capacity**, and a
+mutation that empties the list fails it.
+
+### F-62 [P2] closed - `bible/06` §2.2's "40 nodes and 77 edges" is wrong; the true network is 81 nodes and 199 edges
+
+**File:** `bible/06` §2.2
+**Found:** 2026-09-29, at FEAT-04, by building the network the section describes
+**Why it matters:** §2.2 is the source for the "77" that its own
+`assert network.nnz == expected` instruction is built around. **Built and
+counted, the number is 199 eligible judge–project edges over 81 nodes** (source +
+8 tracks + 41 projects + 30 judges + sink).
+
+**77 is not reachable by any reading of the graph.** The per-track table in
+§2.1a of the same document implies `6·3 + 6·4 + 6·6 + 5·8 + 3·5 + 3·4 + 6·6 +
+6·3 = 214` before any exclusion is applied, and 199 is what is left after the
+submitting-team rule. So §2.1a and §2.2 disagree inside one file, and the
+assertion §2.2 asks for would have **pinned the wrong number and passed**.
+
+The parts of §2.2 that survived contact with the code are the ones that were
+arguments rather than measurements, and they are all confirmed: the **capacity
+curve** (c=5 → 117/123, c=6 → 123/123), the **tightest capacity of 6**, the
+**mean load of 4.10**, and the whole of §2.3's remedy table, which reproduces
+exactly — `k=1 → 4×5=20 ≥ 18`, `⌈18/3⌉ = 6`, `⌊15/6⌋ = 2`.
+
+**Resolution:** **Closed 2026-09-29.** `manage.py verify_assignment` re-derives
+199, 81 and 123 from the database on every `just check`, and
+`tests/test_assignment.py::test_the_graph_has_the_derived_edge_count` computes the
+expected count from `fixtures.json` by a **second, independent implementation** —
+so the assertion is a comparison, not a transcription. §2.2's prose is left as
+the planning record and this entry is the correction; the numbers in the shipped
+documents are the generated ones.
+
+### F-63 [P2] closed - Two of the three remedies did not say which track they were for
+
+**File:** `src/reviewer/assignment/planner.py`
+**Found:** 2026-09-29, at FEAT-04, by a test that could not find what it was looking for
+**Why it matters:** The fixture has **two** deficient tracks, and the diagnosis
+produces **six** remedies. `invite 1 more judge(s) to trk_01` named its track;
+`raise the per-judge capacity to 6` and `lower this track's target to 2` did not.
+An organizer reading that has four remedies and no way to tell which two belong
+to the track that is actually fatal.
+
+It surfaced because a test asserted that each deficiency had all three remedy
+kinds, found only one, and I read the failure instead of loosening the
+assertion. **The fix was the feature's, not the test's**: `Remedy` now carries
+`track_slug` as a field, and the rendered certificate prints it.
+`raise the per-judge capacity to 6 for trk_01` and `lower trk_01's target to 2`.
+
+The general lesson is the one the project keeps relearning: **a report that
+cannot be attributed is not a report.** Four numbers with no track attached is
+the same failure as a number that is wrong, one level up.
+
+### F-64 [P2] closed - The fixture never exercises the conflict-of-interest rule, so it would have shipped untested
+
+**File:** `src/reviewer/assignment/graph.py`, `tests/test_assignment.py`
+**Found:** 2026-09-29, at FEAT-04, by a test asserting a reason that never fired
+**Why it matters:** `bible/06` §2.1 makes "the judge is not a member of the
+submitting team" one of five hard eligibility rules, and it is the only one with a
+*correctness* consequence rather than a fairness one. I asserted the exclusion
+reasons were countable, and `submitting_team_member` was not among them.
+
+Measured: **not one of the fixture's 30 judges is a member of any of its 40
+teams.** The rule is **unreachable on shipped data**.
+
+That is not a reason to delete it — judges submit at hackathons, and that is
+precisely when it matters — but it *is* a reason to be honest about coverage. A
+test that asserted "the exclusion rules are exercised by the fixture" would have
+been **lying**, and the rule would have shipped as untested code behind a green
+gate. The test now asserts the split explicitly: `no_track_binding` is reachable
+and asserted; `submitting_team_member` is asserted **not** to fire, with a
+pointer to F-64; and a **synthetic** test adds a team member who is also a judge
+on that track and asserts the pair disappears *with the right reason*.
+
+**This is the third time the fixture's silence has been mistaken for coverage**
+(F-49, F-50, F-55 were values that agreed with what we expected). The rate is now
+the prior for FEAT-05.
+
+### F-65 [P3] closed - The one assertion in the new suite that could not fail
+
+**File:** `tests/test_assignment.py`
+**Found:** 2026-09-29, at FEAT-04, on review rather than on a run
+**Why it matters:** The sole-cover test built a thinned graph, called
+`_sole_covers` on it, and then `break`-ed out of the loop **without asserting
+anything about the result**. It passed. It would have passed with the feature
+deleted.
+
+It is the F-41 defect in a new file, and it is worth recording because it was
+written *after* I had written a module docstring asserting that every layer would
+be proven load-bearing. The rewrite asserts **three** things: nothing on the
+shipped fixture is flagged, a track reduced to one judge names **that judge by
+email** and **that track by slug**, and two judges is *not* a single point of
+failure. The last one is the half that was missing — without it, a rule that
+fires on everything would have satisfied the original test perfectly.
+
+**Resolution:** Closed 2026-09-29. Sixteen deliberate corruptions were run
+against the two new modules — **8 against the engine and 8 against the console**,
+each naming the test that must notice — and **all 16 were caught**, each with its
+specific reason rather than a substring.
 
 ## Resolved — environment verification, 2026-09-27
 

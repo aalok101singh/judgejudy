@@ -257,9 +257,10 @@ check:
     @{{pyq}} tools/run_acceptance.py .dogfood.toml
     @echo ""
     @echo "=========================================================="
-    @echo " 5/6  isolation proof + census"
+    @echo " 5/6  isolation proof + census + assignment"
     @{{pyq}} tools/run_in_container.py isolation_proof --require-data
     @{{pyq}} tools/run_in_container.py verify_census
+    @{{pyq}} tools/run_in_container.py verify_assignment
     @echo ""
     @echo "=========================================================="
     @echo " 6/6  extended suite"

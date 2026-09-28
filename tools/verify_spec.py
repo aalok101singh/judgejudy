@@ -369,6 +369,134 @@ def check_clock(r):
 
 # ------------------------------------------- 5. citations, ledger, byte budget
 
+def check_recipes(r):
+    """Every ``just <recipe>`` a document names must be a recipe that exists.
+
+    **F-59, and the third instance of one defect class.** ``just prove-offline``
+    and ``just mutation-test`` were named in four documents with no recipe behind
+    them (F-47). Then three recipes that existed and were broken (F-48). Then
+    ``just --list`` misdescribing them (F-56). Three findings, and every one of
+    them was found *by hand*, in a different session, by whoever happened to
+    remember to run the audit.
+
+    A reader who types a command from our documentation and gets "just: command
+    not found" concludes the tool is broken, not that the document is. So the
+    audit is now mechanical.
+
+    **The false positives are handled by position, not by an English
+    allow-list.** The shipped markdown contains real prose like "just status" and
+    "computed from the same list it just counted", and an allow-list of English
+    words is a list that has to be extended every time someone writes a new
+    sentence. Instead a name only counts as a command when it starts a line,
+    begins a list item, or sits inside a fenced code block -- which is how a
+    command is actually written in every document here.
+    """
+    g = "5. SPEC INTEGRITY — citations, ledger, budget, question tally"
+
+    recipes = _just_recipes()
+    if not recipes:
+        r.check(g, "just recipes named in documents all exist", False,
+                "recipes parsed from the justfile", "no recipes found in the justfile",
+                "The justfile could not be parsed, so this check would pass vacuously.")
+        return
+
+    named: dict[str, set[str]] = collections.defaultdict(set)
+    for rel in _shipped_markdown():
+        for name in _commands_named_in(read(rel)):
+            named[name].add(rel)
+
+    missing = sorted(
+        "%s (named in %s)" % (name, ", ".join(sorted(where)))
+        for name, where in named.items()
+        if name not in recipes
+    )
+    r.check(g, "every `just` recipe named in a document exists", not missing,
+            "%d recipes, %d named, all present" % (len(recipes), len(named)),
+            missing or "%d distinct recipes named, all present" % len(named),
+            "A reader types the command we told them to type. F-47, F-48 and F-56 "
+            "were all this, found by hand.")
+
+
+def _just_recipes() -> set[str]:
+    """The recipe names in the justfile.
+
+    Parsed from the recipe definitions rather than from ``just --list`` on
+    purpose: this is stdlib-only and runs before Docker exists, and a list of
+    names is all the check needs.
+
+    **Two shapes have to be handled or the check is worse than nothing.** A
+    recipe may take parameters (``coldstart *args:``), and the file also
+    contains assignments (``py := ...``) and settings (``set shell := [...]``).
+    The first version of this parser matched only ``name:``, so it reported
+    ``coldstart``, ``coldboot`` and ``accept`` as missing -- **three recipes
+    that exist** -- which would have trained everyone to ignore the check on its
+    first run. And a naive ``name:`` pattern also matches ``py :=`` as a recipe
+    called ``py``. The ``(?!=)`` is what separates a recipe from an assignment.
+    """
+    try:
+        body = read("justfile")
+    except OSError:
+        return set()
+    pattern = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_-]*)(?:\s+[^:=\n]*?)?:(?!=)")
+    names = set()
+    for line in body.splitlines():
+        if not line or line[0].isspace() or line.lstrip().startswith("#"):
+            continue
+        m = pattern.match(line)
+        if m:
+            names.add(m.group(1))
+    return names
+
+
+def _shipped_markdown() -> list[str]:
+    """Markdown a reader is actually told to follow.
+
+    ``bible/`` is excluded on purpose: it is 330KB of research, the overview
+    says not to read it, and nothing in it is an instruction to run a command.
+    Everything else -- the root docs, the blueprint, the archives -- is.
+    """
+    out = []
+    for base, dirs, files in os.walk(ROOT):
+        dirs[:] = [
+            d for d in dirs
+            if d not in {".git", ".venv", "bible", "node_modules", "__pycache__"}
+        ]
+        for name in files:
+            if name.endswith(".md"):
+                out.append(os.path.relpath(os.path.join(base, name), ROOT).replace("\\", "/"))
+    return sorted(out)
+
+
+def _commands_named_in(body: str) -> set[str]:
+    """``just <recipe>`` occurrences that are commands rather than English.
+
+    Three positions count, and they are the three ways a command appears in
+    these documents: at the start of a line (inside a fenced block or as the
+    first word of a sentence that is a command), as a list item, or after a
+    markdown inline-code fence. Anything else -- "just status", "it just
+    counted" -- is prose and is ignored without needing a word list.
+    """
+    found: set[str] = set()
+    in_fence = False
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        candidates = []
+        if in_fence or stripped.startswith("just ") or stripped.startswith("- just "):
+            candidates.append(stripped)
+        for m in re.finditer(r"`just ([a-z][a-z0-9-]*)`", line):
+            found.add(m.group(1))
+        for text in candidates:
+            m = re.match(r"^(?:-\s+)?just ([a-z][a-z0-9-]*)", text)
+            if m:
+                found.add(m.group(1))
+    found.discard("--list")
+    found.discard("--version")
+    return found
+
+
 def check_structure(r):
     g = "5. SPEC INTEGRITY — citations, ledger, budget, question tally"
 
@@ -664,6 +792,7 @@ def main():
     check_runpy(r)
     check_census(r, data)
     check_clock(r)
+    check_recipes(r)
     check_structure(r)
     if args.env:
         check_env(r)

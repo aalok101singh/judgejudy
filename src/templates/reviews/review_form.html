@@ -1,0 +1,79 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Judge Judy &middot; {{ project.title }}</title>
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+</head>
+<body>
+  <main class="wrap">
+    <p class="eyebrow">DOGFOOD 2026 &middot; {{ track.name }}</p>
+    <h1>{{ project.title }}</h1>
+    <p class="lede">
+      <strong>{{ project.team.name }}</strong> &middot;
+      <span class="project-id">{{ project.id }}</span> &middot;
+      rubric {{ review.rubric_version.name }} v{{ review.rubric_version.version }}
+    </p>
+
+    {% if project.summary %}<p class="summary">{{ project.summary }}</p>{% endif %}
+
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    {% if saved == "draft" %}
+      <p class="saved">Draft saved. You can come back to it.</p>
+    {% elif saved == "submitted" %}
+      <p class="saved">
+        Submitted and locked. A submitted review cannot be edited, because a
+        judge who can change a score after seeing results is not a judge, they
+        are a variable.
+      </p>
+    {% endif %}
+
+    <form method="post" action="/judge/review/{{ review.assignment.pk }}/">
+      {% csrf_token %}
+      <fieldset {% if locked %}disabled{% endif %}>
+        <legend>Scores</legend>
+        {% for item in scored %}
+          <p class="criterion">
+            <label for="score_{{ item.criterion.pk }}">
+              {{ item.criterion.label }}
+              <span class="criterion-weight">weight {{ item.criterion.weight }}</span>
+            </label>
+            <input
+              type="number"
+              id="score_{{ item.criterion.pk }}"
+              name="score_{{ item.criterion.pk }}"
+              min="{{ rubric.scale_min }}"
+              max="{{ rubric.scale_max }}"
+              step="1"
+              value="{{ item.value|default_if_none:'' }}">
+          </p>
+        {% endfor %}
+      </fieldset>
+
+      <p class="criterion">
+        <label for="overall_comment">Overall comment</label>
+        <textarea id="overall_comment" name="overall_comment" rows="5"
+                  {% if locked %}disabled{% endif %}>{{ overall_comment }}</textarea>
+      </p>
+
+      {% if not locked %}
+        <p class="actions">
+          <button type="submit" name="action" value="draft">Save draft</button>
+          <button type="submit" name="action" value="submit">Submit review</button>
+        </p>
+      {% endif %}
+    </form>
+
+    <ul class="links">
+      <li><a href="/judge/">Back to your assignments</a></li>
+    </ul>
+
+    <p class="foot">
+      A draft is a real review in progress, not a throwaway: it is yours, it is
+      scoped to you, and no other judge can see it. You are reading
+      {{ actor.label }}'s scope and nobody else's.
+    </p>
+  </main>
+</body>
+</html>

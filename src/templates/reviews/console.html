@@ -1,0 +1,71 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Judge Judy &middot; your assignments</title>
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+</head>
+<body>
+  <main class="wrap">
+    <p class="eyebrow">DOGFOOD 2026 &middot; {{ actor.label }}</p>
+    <h1>Your assignments</h1>
+    <p class="lede">
+      {{ progress.submitted }} of {{ progress.total }} submitted
+      ({{ progress.percent }}%), {{ progress.in_progress }} in progress,
+      {{ progress.outstanding }} outstanding.
+    </p>
+
+    {#- The scope receipt. bible/05 §6a: isolation you can read, not just isolation
+        you have. A receipt that is in the context but not in the markup is not a
+        receipt. -#}
+    <p class="scope-receipt">
+      <strong>Scope:</strong> {{ receipt.summary }}
+      {% if receipt.constraints %}
+        <span class="scope-constraints">
+          {% for name, why in receipt.constraints %} {{ name }} ({{ why }}){% endfor %}
+        </span>
+      {% endif %}
+    </p>
+
+    <table class="assignments">
+      <thead>
+        <tr>
+          <th>Project</th><th>Track</th><th>Status</th><th>Scored</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr class="assignment assignment--{{ row.status }}">
+            <td>
+              <span class="project-title">{{ row.project.title }}</span>
+              <span class="project-id">{{ row.project.id }}</span>
+            </td>
+            <td>{{ row.track.name }}</td>
+            <td>{{ row.status }}</td>
+            <td>{{ row.score_count }} of {{ criteria|length }}</td>
+            <td>
+              <a href="/judge/review/{{ row.assignment.pk }}/">
+                {% if row.status == "submitted" %}View{% else %}Open{% endif %}
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5">Nothing is assigned to you in this event.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <ul class="links">
+      <li><a href="/">Gallery</a></li>
+      <li><a href="/healthz">Health check</a></li>
+    </ul>
+
+    <p class="foot">
+      This page is built from a scoped queryset, and the scope is printed above.
+      The number after the slash is the whole event, counted independently of the
+      filter &mdash; so "3 of 126" is evidence rather than a restatement.
+    </p>
+  </main>
+</body>
+</html>
