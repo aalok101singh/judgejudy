@@ -1,9 +1,11 @@
 # Architecture
 
-> **Status: FEAT-01, the skeleton.** The container, the boot order, the
-> layering and the health contract below are built, measured and shipping. The
-> application layers underneath are named and decided; they are not written yet,
-> and this document says which is which so a reviewer is never misled.
+> **Status: FEAT-03, the seeded portal.** The container, the boot order, the
+> layering, the health contract, the **isolation primitive**, the **loader**,
+> the **public gallery** and the **deadline guard** are built, measured and
+> shipping. The judge console, the assignment engine, the exports and the
+> public voting layer are named and decided; they are not written yet, and this
+> document says which is which so a reviewer is never misled.
 
 ---
 
@@ -20,7 +22,7 @@
         │  entrypoint.sh                                    │
         │    1. migrate --noinput                          │
         │    2. collectstatic --noinput                    │
-        │    3. load_fixtures          (FEAT-03)           │
+        │    3. load_fixtures          (the seed)            │
         │    4. gunicorn  2 workers × 2 threads            │
         │                                                  │
         │  /app/src/judge_judy/     settings, urls, wsgi   │
@@ -173,7 +175,7 @@ it, and the schema has to survive a port.
 
 ---
 
-## 7. The application layers (designed, not yet written)
+## 7. The application layers (partly built, and it says which part)
 
 `reviewer/` is the centre of gravity, and one folder in it is the
 architectural claim the whole submission rests on:
@@ -200,6 +202,34 @@ a 302.** `run.py` follows redirects, so a redirect returns 200 and fails the
 check while looking correct in a browser. It is the single highest-value line
 in this project.
 
+**And it is asserted on the *mechanism*, not the status code.** The checker
+accepts **any** 4xx for "closed event refuses submissions", so a 404, a 405, a
+CSRF rejection and a 401 for a bad password all report PASS. The submit route
+therefore puts the guard's own name in the refusal body, and the acceptance gate
+re-sends the checker's request and requires that name back. A 403 that is
+produced by CSRF is now a *failing* check, which is the only way a 4xx ever
+became evidence.
+
+**The other two folders that exist, both packages rather than apps** — they
+define no model, so listing them in `INSTALLED_APPS` would add a `models`
+module that does not exist and a migration that creates nothing:
+
+```
+reviewer/isolation/     for_actor() + the scope receipt + the lint rule
+reviewer/importer/      census.py, demo.py, loader.py — the seed
+```
+
+`reviewer/importer` is the first code in the project that met the organizers'
+*data* rather than data we built, and it is where three P1 findings came from —
+123 accounts with an empty password, a `UNIQUE` constraint their own fixture
+violates, and a credential format that could never verify. **The rate is worth
+carrying forward as a prior: anything that meets the published data for the
+first time will find something we got wrong about it.** The loader's answer to
+that is to print its own reconciliation — every table's row count, both census
+invariants, and the awkward cases it deliberately kept — and to re-derive all of
+it from `fixtures.json` at the moment of comparison, so nothing it prints is a
+number somebody typed.
+
 The rest, all designed and documented in `blueprint/` and `bible/`, not yet
 built: `reviewer/audit/` (hash chain, chain head), `reviewer/crypto/`
 (Ed25519, in-toto Statement v1 in DSSE), `reviewer/normalization/`
@@ -217,8 +247,8 @@ built: `reviewer/audit/` (hash chain, chain head), `reviewer/crypto/`
   ~150 MB toolchain to paper over it in the image.
 - **Key material.** Keys live on their own volume. A key baked into a layer
   cannot be un-written, and layers are readable by anyone who pulls the image.
-- **Anything the app did not need at boot.** One stylesheet, one landing page,
-  two health endpoints.
+- **Anything the app did not need at boot.** One stylesheet, the gallery, the
+  submit form, two health endpoints.
 
 ---
 

@@ -15,20 +15,48 @@ about itself.
 
 from __future__ import annotations
 
-import ast
 import importlib
 import json
-import os
-import pathlib
-import re
 import subprocess
 import sys
 from pathlib import Path
 
-import pytest
+from tests import fake_http
 
 REPO = Path(__file__).resolve().parent.parent
 TOOLS = REPO / "tools"
+
+#: Imported rather than shelled out to, so the probe's decision function can be
+#: called directly. `run_probe` and `judge_probe` are pure enough to test against
+#: a stubbed `urlopen`, and testing them through the CLI would mean asserting on
+#: a formatted report string -- which is F-41's shape.
+sys.path.insert(0, str(TOOLS))
+run_acceptance_module = importlib.import_module("run_acceptance")
+
+GUARD = "assert_open_for_submission"
+SPEC = {
+    "method": "POST",
+    "auth": "participant",
+    "json": {"title": "dogfood-late-submission-probe", "summary": "probe"},
+    "expect_status": "4xx",
+    "body_must_contain": GUARD,
+    "must_not_have_header": "Location",
+}
+CREDENTIAL = "Authorization: JJ1.deadbeef.who@example.org"
+#: What ``run_probe`` is handed: the whole ``[auth]`` block, keyed as in the
+#: config. Passing the bare string instead is the mistake this shape exists to
+#: prevent -- ``run_probe`` looks the key up in it, and a string has no ``.get``.
+AUTH_BLOCK = {"participant": CREDENTIAL}
+
+
+def probe(answer, *, auth=AUTH_BLOCK, spec=None, raise_http_error=True, monkeypatch=None):
+    """`(ok, why, recorder)` for one probe, against a stubbed `urlopen`."""
+    spec = spec or SPEC
+    recorder = fake_http.install(monkeypatch, answer, raise_http_error=raise_http_error)
+    outcome = run_acceptance_module.run_probe("http://portal", "/projects/new", spec, auth)
+    ok, why = run_acceptance_module.judge_probe(outcome, spec)
+    return ok, why, recorder
+
 
 # `tools/` is not a package, so the gates are imported by path rather than with
 # `from tools.x import y`. Putting it on sys.path once here is cheaper and less
@@ -71,6 +99,89 @@ def run_tool(name: str, *args: str) -> subprocess.CompletedProcess[str]:
         encoding="utf-8",
         errors="replace",
     )
+
+
+def one_shot_server(routes: dict, default=None) -> tuple[str, object]:
+    """Serve a fixed ``{path: (status, body, headers)}`` map on an ephemeral port.
+
+    The false-pass tests used to interrogate whatever happened to be listening on
+    8080, which meant they exercised the *previous* feature's container and
+    failed for reasons that had nothing to do with the false pass. This is a few
+    lines of stdlib, and it makes the most important behaviour of the acceptance
+    gate -- "a PASS that does not test what it names fails the gate" --
+    reproducible on a laptop with nothing running.
+
+    ``"*"`` is the fallback entry, and it may carry a fourth element: a callable
+    taking the request and returning ``(status, body, headers)``, for the probe
+    tests that need to look at the request rather than serve a fixed answer.
+
+    Returns ``(base_url, server)``. The caller shuts the server down.
+    """
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        # HTTP/1.1 with an explicit Content-Length, so the connection is
+        # reusable and the client always reads a complete response. The 1.0
+        # default closes the socket immediately after the body, which on Windows
+        # surfaces to urllib as WSAECONNABORTED (10053) roughly one run in six --
+        # a failure that has nothing to do with the thing under test.
+        protocol_version = "HTTP/1.1"
+
+        def _respond(self):
+            entry = routes.get(self.path.split("?")[0]) or routes.get("*") or (404, "", {})
+            if len(entry) == 4:
+                status, body, headers = entry[3](self)
+            else:
+                status, body, headers = entry
+            raw = body.encode()
+            self.send_response(status)
+            for name, value in headers.items():
+                self.send_header(name, value)
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        # `do_GET` and friends are the names `http.server` dispatches on.
+        do_GET = do_POST = do_PUT = _respond  # noqa: N815
+
+        def log_message(self, *args):  # a test does not need a log
+            pass
+
+    # ThreadingHTTPServer, not HTTPServer: a redirect makes urllib open a SECOND
+    # connection while the first is still open, and a single-threaded server
+    # answers that with ConnectionAbortedError on Windows. Which is a test that
+    # fails for a reason that has nothing to do with what it is testing.
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return f"http://127.0.0.1:{server.server_port}", server
+
+
+def write_expectations(name: str, checks: dict, preconditions: dict) -> str:
+    """A temporary expectations file, so a test can declare its own milestone.
+
+    The real `tools/expected_checks.json` is a ratchet that only moves from
+    ``fail`` to ``pass``, so it can never express a scenario the build has not
+    reached yet. That is the point of it, and it is also why a test that wants a
+    false pass has to bring its own file.
+    """
+    path = REPO / "tools" / f"_tmp_{name}.json"
+    path.write_text(
+        json.dumps(
+            {
+                "checks": {
+                    key: {"expect": value, "reason": "test fixture", "flips_at": "test"}
+                    for key, value in checks.items()
+                },
+                "preconditions": preconditions,
+                "tier_claims": {"enforce": False},
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return str(path)
 
 
 class TestAcceptanceWrapper:
@@ -121,7 +232,7 @@ class TestAcceptanceWrapper:
         """
         fake = fake_checker(
             "T1  gallery is public ................. PASS\n"
-            "T1  project from fixtures shown ....... FAIL\n"
+            "T1  project from fixtures shown ....... PASS\n"
             "       none of them appeared in the response body\n"
             "T1  closed event refuses submissions .. PASS\n"
             "T2  judge sees own scores ............. FAIL\n"
@@ -133,7 +244,11 @@ class TestAcceptanceWrapper:
         )
         try:
             result = run_tool(
-                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--skip-preconditions",
             )
         finally:
             Path(fake).unlink(missing_ok=True)
@@ -142,7 +257,7 @@ class TestAcceptanceWrapper:
             "The gate failed even though every failing check is expected to "
             f"fail at this milestone.\n{result.stdout}"
         )
-        assert "2 passed, 5 failed, of 7 checks" in result.stdout
+        assert "3 passed, 4 failed, of 7 checks" in result.stdout
         assert "GATE OK" in result.stdout
 
     def test_a_regression_fails_the_gate(self) -> None:
@@ -165,7 +280,7 @@ class TestAcceptanceWrapper:
         fake = fake_checker(
             "T1  gallery is public ................. FAIL\n"
             "       got 0, wanted 200\n"
-            "T1  project from fixtures shown ....... FAIL\n"
+            "T1  project from fixtures shown ....... PASS\n"
             "T1  closed event refuses submissions .. PASS\n"
             "T2  judge sees own scores ............. FAIL\n"
             "T2  judge cannot see peer scores ...... FAIL\n"
@@ -174,7 +289,11 @@ class TestAcceptanceWrapper:
         )
         try:
             result = run_tool(
-                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--skip-preconditions",
             )
         finally:
             Path(fake).unlink(missing_ok=True)
@@ -193,26 +312,34 @@ class TestAcceptanceWrapper:
         of date. That must be red rather than quietly green, because a stale
         expectation teaches a reader to discount the file — and the next time it
         is genuinely wrong about a regression, they discount that too.
+
+        The stale check here is `csv export works`, which FEAT-05 still owns. It
+        used to be `project from fixtures shown`, which FEAT-03 flipped to
+        `pass`; using the flipped one would have made this test assert that the
+        ratchet never moves, which is the opposite of what a ratchet is for.
         """
         fake = fake_checker(
             "T1  gallery is public ................. PASS\n"
             "T1  project from fixtures shown ....... PASS\n"
-            "       Glass Signal\n"
             "T1  closed event refuses submissions .. PASS\n"
             "T2  judge sees own scores ............. FAIL\n"
             "T2  judge cannot see peer scores ...... FAIL\n"
             "T2  participant blocked ............... FAIL\n"
-            "T2  csv export works .................. FAIL"
+            "T2  csv export works .................. PASS"
         )
         try:
             result = run_tool(
-                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--skip-preconditions",
             )
         finally:
             Path(fake).unlink(missing_ok=True)
 
         assert result.returncode == 1
-        assert "'project from fixtures shown' is marked 'fail'" in result.stdout, (
+        assert "'csv export works' is marked 'fail'" in result.stdout, (
             "The stale expectation must be named. Asserting the marker alone "
             "lets any other finding satisfy it."
         )
@@ -222,7 +349,7 @@ class TestAcceptanceWrapper:
         actually costs points, so the gate refuses to let it through."""
         fake = fake_checker(
             "T1  gallery is public ................. PASS\n"
-            "T1  project from fixtures shown ....... FAIL\n"
+            "T1  project from fixtures shown ....... PASS\n"
             "T1  closed event refuses submissions .. PASS\n"
             "T2  judge sees own scores ............. FAIL\n"
             "T2  judge cannot see peer scores ...... FAIL\n"
@@ -233,7 +360,11 @@ class TestAcceptanceWrapper:
         )
         try:
             result = run_tool(
-                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--skip-preconditions",
             )
         finally:
             Path(fake).unlink(missing_ok=True)
@@ -247,12 +378,10 @@ class TestAcceptanceWrapper:
 
         This is the F-11 lesson applied to ourselves, and it is the subtlest
         failure in the file. `run.py` accepts any 4xx for "closed event refuses
-        submissions" — and a 404 is a 4xx. So the check reports PASS while the
-        route does not exist and the deadline is never tested.
-
-        A check that reports PASS without testing the thing it names is worse
-        than one reporting FAIL, because it is believed. The gate therefore
-        fails on it by default, and says why.
+        submissions" -- and a 404 is a 4xx -- so the check reports PASS while
+        the route does not exist and the deadline is never tested. A check that
+        reports PASS without testing the thing it names is worse than one
+        reporting FAIL, because it is believed.
 
         The first draft of run_acceptance.py printed the FALSE PASSES block and
         then returned 0 with "GATE OK". A gate that names a problem and then
@@ -260,42 +389,70 @@ class TestAcceptanceWrapper:
         that the warnings are decorative, which is exactly how a real failure
         gets ignored on the day it matters.
 
-        Note the ordering dependency: this needs a portal that is UP and whose
-        `/projects/new` 404s. `just check` runs its own `up` before the suite,
-        so under the gate the container is there. Run standalone with nothing
-        listening, the gate reports "nothing is listening" instead — a
-        different, equally correct finding — so this test skips rather than
-        asserting a message that is not the one.
+        **Hermetic, and it used not to be.** The first version pointed the
+        probe at whatever was listening on 8080, so the test exercised the
+        PREVIOUS feature's container and failed for a reason that had nothing
+        to do with false passes. A one-shot server plus a temporary
+        expectations file makes the scenario -- a route that answers 404, and a
+        report that calls that a pass -- the thing under test.
         """
-        result = run_tool("run_acceptance.py", ".dogfood.toml")
-
-        if "nothing is listening" in result.stdout:
-            # A skip here would make tools/mutation_test.py read this mutation
-            # as undetected, because pytest exits 0 on a skip. That is a real
-            # hazard: a gate that quietly stops running looks exactly like a
-            # gate that passes. Skip loudly, in the output, rather than
-            # silently.
-            print(
-                "NOTE: the portal is not running, so this assertion is about "
-                "the unreachable branch instead. Start it with `just up` to "
-                "exercise the false-pass branch."
+        fake = fake_checker(
+            "T1  gallery is public ................. PASS\n"
+            "T1  project from fixtures shown ....... PASS\n"
+            "T1  closed event refuses submissions .. PASS\n"
+            "T2  judge sees own scores ............. FAIL\n"
+            "T2  judge cannot see peer scores ...... FAIL\n"
+            "T2  participant blocked ............... FAIL\n"
+            "T2  csv export works .................. FAIL"
+        )
+        expectations = write_expectations(
+            "false_pass",
+            {
+                "gallery is public": "pass",
+                "project from fixtures shown": "pass",
+                "closed event refuses submissions": "pass",
+                "judge sees own scores": "fail",
+                "judge cannot see peer scores": "fail",
+                "participant blocked": "fail",
+                "csv export works": "fail",
+            },
+            {
+                "closed event refuses submissions": {
+                    "submit_route_exists": {
+                        "why": "a 404 is a 4xx, so the deadline is never consulted",
+                        "flips_at": "test",
+                    }
+                }
+            },
+        )
+        base, server = one_shot_server({"/": (200, "<html>gallery</html>", {})})
+        try:
+            result = run_tool(
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--expectations",
+                expectations,
+                "--url-override",
+                base,
             )
-            assert "nothing is listening" in result.stdout
-            assert result.returncode == 1
-            return
+        finally:
+            server.shutdown()
+            server.server_close()
+            Path(fake).unlink(missing_ok=True)
+            Path(expectations).unlink(missing_ok=True)
 
-        # The default path prints "GATE FAILED - false passes are not evidence",
-        # not the "FALSE PASSES" header that --allow-false-passes prints. Both
-        # name the same finding; asserting the wrong one is how a test starts
-        # passing for the wrong reason, so the assertion matches the branch it
-        # is actually testing and the other branch is asserted separately in
-        # test_allow_false_passes_downgrades_only_that_finding.
         assert "GATE FAILED" in result.stdout
         assert "false passes are not evidence" in result.stdout
         assert "closed event refuses submissions" in result.stdout
         assert "/projects/new" in result.stdout, (
             "The false-pass message must name the route that answered, so a "
             "reader can go and look at it."
+        )
+        assert "HTTP 404" in result.stdout, (
+            "and it must name the STATUS that answered. F-42 was a correct "
+            "verdict with a wrong explanation, which is worse than either."
         )
         assert "Isolation enforced by absence is not isolation" in result.stdout
         assert result.returncode == 1, (
@@ -311,10 +468,35 @@ class TestAcceptanceWrapper:
         the difference is operationally real: one means start the container, the
         other means build the feature. So the gate names the reachable case
         first, and only then looks for false passes.
+
+        **Hermetic, and it has to be.** The first version of this test pointed
+        `--url-override` at a dead port but let ``run.py`` run against whatever
+        happened to be listening on 8080. Under `just check` that is the
+        container the gate just built, so it worked; run standalone against a
+        stale container it reported a REGRESSION instead and returned 1 for the
+        wrong reason, and the test failed on a message that had nothing to do
+        with reachability. A fake runner removes the dependency entirely.
         """
-        unreachable = run_tool(
-            "run_acceptance.py", ".dogfood.toml", "--url-override", "http://localhost:9"
+        fake = fake_checker(
+            "T1  gallery is public ................. PASS\n"
+            "T1  project from fixtures shown ....... PASS\n"
+            "T1  closed event refuses submissions .. PASS\n"
+            "T2  judge sees own scores ............. FAIL\n"
+            "T2  judge cannot see peer scores ...... FAIL\n"
+            "T2  participant blocked ............... FAIL\n"
+            "T2  csv export works .................. FAIL"
         )
+        try:
+            unreachable = run_tool(
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--url-override",
+                "http://localhost:9",
+            )
+        finally:
+            Path(fake).unlink(missing_ok=True)
 
         assert unreachable.returncode == 1
         assert "nothing is listening" in unreachable.stdout
@@ -327,13 +509,98 @@ class TestAcceptanceWrapper:
     def test_allow_false_passes_downgrades_only_that_finding(self) -> None:
         """`--allow-false-passes` must not quietly allow anything else.
 
-        `just check` passes this flag so the gate is usable before FEAT-03. The
-        risk of such a flag is that it becomes a general escape hatch — someone
-        adds it one day to get past a false pass and, by habit, leaves it on
-        through the rest of the build. So the flag is asserted to downgrade
-        exactly one finding and nothing more.
+        `just check` passed this flag from FEAT-01 until FEAT-03, when the false
+        passes it was covering actually went away. The risk of such a flag is
+        that it becomes a general escape hatch -- someone adds it one day to get
+        past a false pass and, by habit, leaves it on through the rest of the
+        build. So the flag is asserted to downgrade exactly one finding and
+        nothing more, in both directions.
+
+        Hermetic, for the same reason the false-pass test is: a live portal has
+        no false passes left, so the flag would have nothing to downgrade and
+        the test would pass vacuously.
         """
-        allowed = run_tool("run_acceptance.py", ".dogfood.toml", "--allow-false-passes")
+        fake = fake_checker(
+            "T1  gallery is public ................. PASS\n"
+            "T1  project from fixtures shown ....... PASS\n"
+            "T1  closed event refuses submissions .. PASS\n"
+            "T2  judge sees own scores ............. FAIL\n"
+            "T2  judge cannot see peer scores ...... FAIL\n"
+            "T2  participant blocked ............... FAIL\n"
+            "T2  csv export works .................. FAIL"
+        )
+        expectations = write_expectations(
+            "allow_false",
+            {
+                "gallery is public": "pass",
+                "project from fixtures shown": "pass",
+                "closed event refuses submissions": "pass",
+                "judge sees own scores": "fail",
+                "judge cannot see peer scores": "fail",
+                "participant blocked": "fail",
+                "csv export works": "fail",
+            },
+            {
+                "closed event refuses submissions": {
+                    "submit_route_exists": {
+                        "why": "a 404 is a 4xx, so the deadline is never consulted",
+                        "flips_at": "test",
+                    }
+                }
+            },
+        )
+        base, server = one_shot_server({"/": (200, "<html>gallery</html>", {})})
+
+        def gate(*extra: str):
+            return run_tool(
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--expectations",
+                expectations,
+                "--url-override",
+                base,
+                *extra,
+            )
+
+        try:
+            allowed = gate("--allow-false-passes")
+            strict = gate()
+
+            # And it must NOT rescue a regression, which is the escape-hatch risk.
+            # Inside the same `try` because it reuses the temporary expectations
+            # file, and a file cleaned up one block too early produces exit code
+            # 2 -- "no such file" -- which is not the answer this test is about.
+            regressing = fake_checker(
+                "T1  gallery is public ................. FAIL\n"
+                "       got 0, wanted 200\n"
+                "T1  project from fixtures shown ....... PASS\n"
+                "T1  closed event refuses submissions .. PASS\n"
+                "T2  judge sees own scores ............. FAIL\n"
+                "T2  judge cannot see peer scores ...... FAIL\n"
+                "T2  participant blocked ............... FAIL\n"
+                "T2  csv export works .................. FAIL"
+            )
+            try:
+                result = run_tool(
+                    "run_acceptance.py",
+                    ".dogfood.toml",
+                    "--runner",
+                    regressing,
+                    "--expectations",
+                    expectations,
+                    "--url-override",
+                    base,
+                    "--allow-false-passes",
+                )
+            finally:
+                Path(regressing).unlink(missing_ok=True)
+        finally:
+            server.shutdown()
+            server.server_close()
+            Path(fake).unlink(missing_ok=True)
+            Path(expectations).unlink(missing_ok=True)
 
         assert allowed.returncode == 0, (
             "--allow-false-passes should let the gate through while the false "
@@ -345,30 +612,10 @@ class TestAcceptanceWrapper:
             "exists to prevent."
         )
         assert "not counted as evidence" in allowed.stdout
-
-        # And it must NOT rescue a regression, which is the escape-hatch risk.
-        fake = fake_checker(
-            "T1  gallery is public ................. FAIL\n"
-            "       got 0, wanted 200\n"
-            "T1  project from fixtures shown ....... FAIL\n"
-            "T1  closed event refuses submissions .. PASS\n"
-            "T2  judge sees own scores ............. FAIL\n"
-            "T2  judge cannot see peer scores ...... FAIL\n"
-            "T2  participant blocked ............... FAIL\n"
-            "T2  csv export works .................. FAIL"
+        assert strict.returncode == 1, (
+            "and without the flag the same scenario must fail. If both pass, the "
+            "flag is doing nothing, which is the state an escape hatch rots into."
         )
-        try:
-            result = run_tool(
-                "run_acceptance.py",
-                ".dogfood.toml",
-                "--runner",
-                fake,
-                "--skip-preconditions",
-                "--allow-false-passes",
-            )
-        finally:
-            Path(fake).unlink(missing_ok=True)
-
         assert result.returncode == 1, (
             "--allow-false-passes let a REGRESSION through. It must downgrade "
             "only the false-pass finding; a regression is always fatal."
@@ -390,7 +637,7 @@ class TestAcceptanceWrapper:
         """
         fake = fake_checker(
             "T1  gallery is public ................. PASS\n"
-            "T1  project from fixtures shown ....... FAIL\n"
+            "T1  project from fixtures shown ....... PASS\n"
             "T1  closed event refuses submissions .. PASS\n"
             "T2  judge sees own scores ............. FAIL\n"
             "T2  judge cannot see peer scores ...... FAIL\n"
@@ -399,7 +646,11 @@ class TestAcceptanceWrapper:
         )
         try:
             result = run_tool(
-                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--skip-preconditions",
             )
         finally:
             Path(fake).unlink(missing_ok=True)
@@ -422,7 +673,7 @@ class TestAcceptanceWrapper:
         """
         fake = fake_checker(
             "T1  gallery is public ................. PASS\n"
-            "T1  project from fixtures shown ....... FAIL\n"
+            "T1  project from fixtures shown ....... PASS\n"
             "T1  closed event refuses submissions .. PASS\n"
             "T2  judge sees own scores ............. FAIL\n"
             "T2  judge cannot see peer scores ...... FAIL\n"
@@ -461,7 +712,11 @@ class TestAcceptanceWrapper:
         fake = fake_checker("DOGFOOD 2026 acceptance report")
         try:
             result = run_tool(
-                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--skip-preconditions",
             )
         finally:
             Path(fake).unlink(missing_ok=True)
@@ -478,7 +733,7 @@ class TestAcceptanceWrapper:
         """
         fake = fake_checker(
             "T1  gallery is public ................. PASS\n"
-            "T1  project from fixtures shown ....... FAIL\n"
+            "T1  project from fixtures shown ....... PASS\n"
             "       note: 2 of the 4 checks would FAIL if you tuned it\n"
             "T1  closed event refuses submissions .. PASS\n"
             "T2  judge sees own scores ............. FAIL\n"
@@ -488,12 +743,16 @@ class TestAcceptanceWrapper:
         )
         try:
             result = run_tool(
-                "run_acceptance.py", ".dogfood.toml", "--runner", fake, "--skip-preconditions"
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--skip-preconditions",
             )
         finally:
             Path(fake).unlink(missing_ok=True)
 
-        assert "2 passed, 5 failed, of 7 checks" in result.stdout, (
+        assert "3 passed, 4 failed, of 7 checks" in result.stdout, (
             "A detail line was counted as a check verdict. The pattern must be "
             "anchored to the verdict column, or the count can be inflated by "
             "the failure message it is reporting."
@@ -502,6 +761,10 @@ class TestAcceptanceWrapper:
 
 class TestExpectationsFile:
     """`tools/expected_checks.json` — the ratchet, and its own integrity."""
+
+    def test_tier_claim_enforcement_is_on(self) -> None:
+        """Overclaiming is the one thing the organizers say costs points."""
+        assert self._spec()["tier_claims"]["enforce"] is True
 
     def _spec(self) -> dict:
         return json.loads((TOOLS / "expected_checks.json").read_text(encoding="utf-8"))
@@ -541,25 +804,65 @@ class TestExpectationsFile:
             )
             assert entry.get("flips_at"), f"{label!r} does not say what flips it"
 
-    def test_every_expected_pass_has_a_specific_reason(self) -> None:
+    def test_a_check_marked_pass_is_not_passing_for_the_wrong_reason(self) -> None:
         """A PASS that passes for the wrong reason must be recorded as such.
 
-        Two of the seven checks currently pass on a 404, which is inside the
-        range run.py accepts. The `flips_at` field says so in words — this
-        asserts those two are marked as accidental, so nobody later counts
-        them as evidence.
+        This assertion **inverted in FEAT-03**, and the inversion is the point.
+        Until then, `closed event refuses submissions` was expected to pass with
+        `flips_at: "already passing, but for the wrong reason"`, because the
+        route 404ed and 404 is a 4xx. FEAT-03 built the route and the guard, and
+        a body probe now proves the refusal came from the guard -- so an entry
+        still claiming a wrong-reason pass is a *stale* claim, and is now a
+        failing test rather than a passing one.
+
+        The rule is unchanged and now enforced in both directions: every check
+        expected to pass must either be genuinely right or say in words that it
+        is not yet evidence.
         """
         spec = self._spec()
-        for label in ("closed event refuses submissions",):
-            entry = spec["checks"][label]
-            assert "wrong reason" in entry["flips_at"], (
-                f"{label!r} passes on a 404 today. Its flips_at field must say "
-                f"so, or a later reader will treat the PASS as evidence that "
-                f"the deadline guard works. It does not exist yet."
+        for label, entry in spec["checks"].items():
+            if entry["expect"] != "pass":
+                continue
+            wrong_reason = "wrong reason" in entry["flips_at"] or "by accident" in entry["reason"]
+            assert not wrong_reason or label in spec["preconditions"], (
+                f"{label!r} is recorded as passing for the wrong reason but has no "
+                "precondition that would catch it. A wrong-reason pass with no "
+                "ratchet is just a green check nobody believes."
             )
-            assert "wrong reason" in entry["reason"] or "by accident" in entry["reason"], (
-                f"{label!r} must record in its reason that the current PASS is not evidence."
-            )
+
+    def test_the_deadline_check_names_the_guard_in_its_reason(self) -> None:
+        """The strongest sentence in the file, and it has to stay in the file.
+
+        `run.py` accepts any 4xx here. So the only thing that distinguishes "the
+        deadline held" from "something else refused first" is the guard's name
+        appearing in the response body, and the reason a reviewer reads has to
+        say that is what is being checked.
+        """
+        entry = self._spec()["checks"]["closed event refuses submissions"]
+
+        assert entry["expect"] == "pass"
+        assert "assert_open_for_submission" in entry["reason"]
+        assert "FEAT-03" in entry["flips_at"]
+
+    def test_a_probe_precondition_exists_for_the_deadline_check(self) -> None:
+        """`submit_route_exists` alone is not enough, and the reason matters.
+
+        A route that exists and is refused by CSRF, by a 401 or by an emptied
+        `[auth]` block satisfies the checker's "any 4xx" exactly as well as a
+        404 does. The route-existence precondition cannot see that; the body
+        probe can, and it is the only thing in the repository that can.
+        """
+        rules = self._preconditions()["closed event refuses submissions"]
+
+        assert "submit_route_exists" in rules
+        probe_rules = [r for r in rules.values() if r.get("probe")]
+        assert len(probe_rules) == 1, "exactly one probe, or the gate is guessing"
+        probe = probe_rules[0]["probe"]
+        assert probe["body_must_contain"] == "assert_open_for_submission"
+        assert probe["auth"] == "participant", (
+            "the probe must present the SAME credential run.py used, read out of "
+            "the same .dogfood.toml -- otherwise it is testing a different request"
+        )
 
     def test_false_pass_preconditions_exist_for_the_404_checks(self) -> None:
         """The two checks that pass on a 404 must have a precondition.
@@ -595,348 +898,232 @@ class TestExpectationsFile:
         return {k: v for k, v in raw.items() if not k.startswith("$")}
 
     def test_every_precondition_names_a_real_route(self) -> None:
-        """A precondition naming an unknown route must be a loud failure.
+        """An unmapped precondition key is a broken precondition.
 
-        This exists because of a bug the first version of the gate had, and it
-        is worth the test. The gate looked a route up as
-        `route_status.get("submit_route_exists", 0)` against a dict keyed
-        `submit`. The lookup returned its **default of 0** — and because 0 was
-        in the "missing" set, the gate still reported a false pass, so the
-        *verdict* was right while the *explanation* was wrong: it said "no HTTP
-        response" when the route was answering 404.
-
-        A wrong default that happens to produce the right answer is the most
-        expensive kind of bug there is. It survives a green run and lies in the
-        one message a human reads to decide what to fix.
+        The original defect (F-42) was the reverse: a key that *was* mapped by
+        accident, through a dict lookup that returned a default of 0 and
+        therefore produced the right verdict for the wrong reason. So both
+        directions are asserted — the key resolves, and the route it resolves to
+        is one the checker actually visits.
         """
-        runner = importlib.import_module("run_acceptance")
+        spec = json.loads((TOOLS / "expected_checks.json").read_text(encoding="utf-8"))
+        rules = {k: v for k, v in spec.get("preconditions", {}).items() if not k.startswith("$")}
 
-        for label, rules in self._preconditions().items():
-            for key in rules:
-                assert key in runner.PRECONDITION_ROUTES, (
-                    f"precondition {key!r} (on {label!r}) names no route. "
-                    f"Add it to PRECONDITION_ROUTES in run_acceptance.py, or "
-                    f"the gate will look it up, get a default, and explain the "
-                    f"failure with the wrong status code."
+        checked = 0
+        for label, entries in rules.items():
+            for key, _rule in entries.items():
+                assert key in run_acceptance_module.PRECONDITION_ROUTES, (
+                    f"precondition {key!r} for {label!r} names no route. A key that "
+                    "resolves to nothing is F-42 again."
                 )
-                assert runner.PRECONDITION_ROUTES[key] in runner.ROUTES, (
-                    f"precondition {key!r} maps to a route that is not probed."
-                )
+                route = run_acceptance_module.PRECONDITION_ROUTES[key]
+                assert route in run_acceptance_module.ROUTES, route
+                checked += 1
+        assert checked >= 3, f"only {checked} preconditions are declared"
 
-    def test_probed_routes_are_the_ones_the_checker_uses(self) -> None:
-        """The probed paths must be the paths in `.dogfood.toml`.
+    def test_every_probe_carries_a_marker_and_a_method(self) -> None:
+        """A probe with no marker is a status check wearing a probe's clothes.
 
-        The gate probes the portal to decide whether a PASS is real. If it
-        probes a different URL than the checker visited, the precondition is
-        testing a route nobody is being asked about, and it will pass for the
-        wrong reason — which is the entire bug class this mechanism exists to
-        catch.
+        `run.py` already does the status check. The entire value of a probe is
+        that it asserts on the response BODY, so a probe without
+        `body_must_contain` is a precondition that says nothing the checker did
+        not already say — and it would read as though something more were being
+        verified.
         """
-        runner = importlib.import_module("run_acceptance")
-        config = (REPO / ".dogfood.toml").read_text(encoding="utf-8")
+        spec = json.loads((TOOLS / "expected_checks.json").read_text(encoding="utf-8"))
+        rules = {k: v for k, v in spec.get("preconditions", {}).items() if not k.startswith("$")}
 
-        for route_key, expected in (
-            ("submit", '"/projects/new"'),
-            ("judge_scores", '"/api/v1/judge/scores"'),
-        ):
-            path = runner.ROUTES[route_key]
-            assert path in config, (
-                f"the gate probes {path!r} for {route_key!r}, but that path is "
-                f"not in .dogfood.toml. The precondition would be interrogating "
-                f"a URL the checker never visits."
-            )
-            assert expected in config
+        probes = [
+            (label, key, rule)
+            for label, entries in rules.items()
+            for key, rule in entries.items()
+            if rule.get("probe")
+        ]
+        assert probes, "the body probe was added in FEAT-03 and must still be declared"
 
-    def test_tier_claim_enforcement_is_on(self) -> None:
-        """Overclaiming is the one thing the organizers say costs points."""
-        assert self._spec()["tier_claims"]["enforce"] is True
+        for label, key, rule in probes:
+            probe = rule["probe"]
+            assert probe.get("body_must_contain"), f"{label}/{key} probes nothing"
+            assert probe.get("method", "").upper() in run_acceptance_module.PROBE_METHODS
+            assert probe.get("expect_status"), f"{label}/{key} does not say what it wants"
+            assert rule.get("why"), f"{label}/{key} has no reason a reviewer can read"
 
-    def test_the_checker_still_always_exits_zero(self) -> None:
-        """The premise of the whole design, re-checked against run.py itself.
 
-        If this ever becomes false, the wrapper is still correct (it parses the
-        body) but the F-32 note in the docs is wrong and needs updating. A
-        design assumption that cannot be detected drifting is a design
-        assumption that will drift.
-        """
-        source = (REPO / "run.py").read_text(encoding="utf-8")
+class TestTheDeadlineProbe:
+    """FEAT-03's addition: a precondition that can tell a refusal from a refusal.
 
-        assert re.search(r"^\s*return 0\s*$", source, re.MULTILINE), (
-            "run.py no longer ends in a bare `return 0`. F-32 may no longer "
-            "hold; re-check tools/run_acceptance.py and its documentation."
+    Before this, the gate knew only whether `/projects/new` existed. That made
+    F-40 disappear *mechanically* when the route was built -- and mechanically
+    is not the same as genuinely, because `run.py` accepts any 4xx: a CSRF
+    rejection, a 401 for an unrecognised credential, and an emptied `[auth]`
+    block all report PASS.
+
+    These drive `run_probe` and `judge_probe` against a stubbed `urlopen` rather
+    than a real socket. The stub is faithful -- it raises `HTTPError` for a 4xx
+    exactly as `urlopen` does, and it records the request -- so the code under
+    test is the real code. The socket is gone because a Windows `http.server`
+    aborts about one connection in six for reasons of its own, and a test that
+    fails one run in six for its own infrastructure is one people learn to
+    re-run.
+    """
+
+    def test_a_guard_refusal_passes_the_probe(self, monkeypatch):
+        ok, why, _ = probe(
+            (
+                403,
+                json.dumps({"refused_by": GUARD, "reason": "closed"}),
+                {"Content-Type": "application/json"},
+            ),
+            monkeypatch=monkeypatch,
         )
 
+        assert ok, why
+        assert "naming" in why
 
-class TestSpecGate:
-    """`tools/verify_spec.py` — the 67-check gate, stdlib-only."""
-
-    def test_passes_on_the_repository_as_committed(self) -> None:
-        """The spec layer must agree with the organizers' own files."""
-        result = run_tool("verify_spec.py")
-
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert "67/67 checks PASSED" in result.stdout
-
-    def test_exits_non_zero_unlike_run_py(self) -> None:
-        """The property that makes it usable as a gate at all.
-
-        `run.py` always returns 0. This one must not, or it is decoration in the
-        same way a template-level hiding is decoration.
-        """
-        assert run_tool("verify_spec.py", "--help").returncode == 0
-
-    def test_is_stdlib_only(self) -> None:
-        """No third-party imports.
-
-        It has to run before the venv and Docker exist, which is the whole
-        reason it can police the spec layer during the pre-application phase.
-        A single `import django` would make it unrunnable at the moment it is
-        most needed.
-        """
-        source = (TOOLS / "verify_spec.py").read_text(encoding="utf-8")
-
-        # `import x` at the start of a line, allowing indentation. A bare
-        # substring search also matches the word inside a comment or a
-        # docstring — the first draft of this test asserted `"import django"
-        # not in source` and failed on a comment that *discusses* Django, which
-        # is a test that cannot be satisfied by fixing the thing it is
-        # supposed to guard.
-        for banned in ("django", "rest_framework", "pytest", "hypothesis", "ruff"):
-            pattern = rf"^\s*(?:import\s+{banned}\b|from\s+{banned}\b)"
-            assert not re.search(pattern, source, re.MULTILINE), (
-                f"verify_spec.py must be stdlib-only, but it imports {banned!r}. "
-                f"It has to run before the venv and Docker exist, which is the "
-                f"only reason it can police the spec layer during the "
-                f"pre-application phase."
-            )
-
-
-class TestFixturesPin:
-    """The organizers' inputs are pinned by hash, so a rebuild is detectable."""
-
-    def test_fixtures_hash_matches_the_pinned_value(self) -> None:
-        """A re-downloaded `fixtures.json` must be detectable.
-
-        Every number in this project is derived from that file. If it changes,
-        every derived number is wrong and nothing downstream would notice.
-        """
-        import hashlib
-
-        digest = hashlib.sha256((REPO / "fixtures.json").read_bytes()).hexdigest()
-
-        assert digest.upper().startswith("252896BC45D49FCA69AD413BE40C6BFDE"), (
-            f"fixtures.json SHA-256 is {digest}. The pinned value is "
-            f"252896BC45D49FCA69AD413BE40C6BFDE9D9B9F9DD8DB702B3FF74EAAA181121. "
-            f"If this file was legitimately re-downloaded, update the pin in "
-            f"project-overview.md and re-derive every census number."
+    def test_a_csrf_refusal_is_caught(self, monkeypatch):
+        """The F-11 trap, live: 403, an HTML body, and not the deadline."""
+        ok, why, _ = probe(
+            (
+                403,
+                "<h1>Forbidden</h1><p>CSRF verification failed.</p>",
+                {"Content-Type": "text/html"},
+            ),
+            monkeypatch=monkeypatch,
         )
 
+        assert not ok
+        assert "did not come from the mechanism" in why
+        assert "CSRF verification failed" in why, (
+            "the message must quote what the portal actually said, or the reader has to go and look"
+        )
 
-class TestDockerResolver:
-    """`tools/docker.py` — the F-34 fix, and the F-39 bug it grew."""
+    def test_a_404_is_caught(self, monkeypatch):
+        ok, why, _ = probe((404, "<h1>Not Found</h1>", {}), monkeypatch=monkeypatch)
 
-    def test_resolves_the_per_user_install_by_absolute_path(self) -> None:
-        """F-34: docker is installed per-user and is on no PATH.
+        assert not ok
+        assert "answered HTTP 404" in why
 
-        The assertion is on WHICH binary, not on "docker works". That
-        distinction is the entire finding: this project spent a whole phase
-        believing Docker was not installed, because a shell that could not see
-        the per-user install printed NOT FOUND from a perfectly healthy daemon.
+    def test_a_401_is_caught(self, monkeypatch):
+        """What an emptied `[auth]` block produces: the request is anonymous."""
+        ok, why, _ = probe(
+            (401, json.dumps({"refused_by": "new_project"}), {"Content-Type": "application/json"}),
+            monkeypatch=monkeypatch,
+        )
 
-        The first version of this test asserted that `docker.py` *contained*
-        the string "DockerDesktop". `tools/mutation_test.py` then deleted the
-        entire per-user entry from the candidate list — the exact F-34
-        regression — and the test did not notice, because a comment elsewhere
-        in the file still mentioned Docker Desktop.
+        assert not ok
+        assert "answered HTTP 401" in why
 
-        So: import the module and call `resolve()`. If the constant is removed
-        from the code, this fails. If the machine legitimately has docker on
-        its PATH, the PATH branch is also correct and the test passes on the
-        second condition.
+    def test_a_200_is_caught(self, monkeypatch):
+        """The redirect case's outcome: a refusal that arrives as a page."""
+        ok, why, _ = probe((200, "<html>sign in</html>", {}), monkeypatch=monkeypatch)
+
+        assert not ok
+        assert "answered HTTP 200, wanted 4xx" in why
+
+    def test_a_redirect_header_is_caught(self, monkeypatch):
+        """D-02, stated as a property rather than as a status.
+
+        `must_not_have_header` is the check that survives a portal which starts
+        refusing with a 302: the status is a 4xx-adjacent success and the header
+        is the whole tell.
         """
-        resolver = importlib.import_module("docker")
-
-        resolved = resolver.resolve()
-        assert resolved, (
-            "docker could not be resolved by absolute path or from the PATH. "
-            "On this machine it is installed per-user (F-34); a shell opened "
-            "before the PATH fix cannot see it, which is exactly the case "
-            "tools/docker.py exists to handle."
+        ok, why, _ = probe(
+            (403, json.dumps({"refused_by": GUARD}), {"Location": "/login/"}),
+            monkeypatch=monkeypatch,
         )
 
-        candidates = [str(pathlib.Path(c)) for c in resolver.CANDIDATES]
-        assert any("DockerDesktop" in c for c in candidates), (
-            "tools/docker.py no longer lists the per-user Docker Desktop "
-            "install. That is the F-34 regression: without it, a stale shell "
-            "reports docker as missing while the daemon is up."
-        )
+        assert not ok
+        assert "follows" in why and "Location" in why
 
-    def test_a_bad_override_is_ignored_rather_than_trusted(self) -> None:
-        """`JJ_DOCKER` must be checked, not believed.
+    def test_an_emptied_auth_block_is_caught_before_a_request_is_sent(self, monkeypatch):
+        """A stale `.dogfood.toml` must not be papered over with a default.
 
-        Pointing it at a path that does not exist must fall through to the
-        normal resolution. Trusting it unchecked would let a stale env var
-        reintroduce exactly the "docker is missing" confusion this tool
-        exists to prevent — and with less visibility, because the user would
-        believe they had configured something.
+        This is the branch that matters most in practice: someone empties an
+        `[auth]` value to tidy up a report, the checker's request becomes
+        anonymous, and the check still passes on the resulting 401.
         """
-        resolver = importlib.import_module("docker")
-
-        previous = os.environ.get("JJ_DOCKER")
-        os.environ["JJ_DOCKER"] = str(REPO / "definitely" / "not" / "here.exe")
-        try:
-            resolved = resolver.resolve()
-        finally:
-            if previous is None:
-                os.environ.pop("JJ_DOCKER", None)
-            else:
-                os.environ["JJ_DOCKER"] = previous
-
-        assert resolved, (
-            "An override pointing at a nonexistent binary suppressed the whole "
-            "resolution chain, so a stale env var can make docker look missing."
-        )
-        assert not str(resolved).endswith("here.exe"), (
-            "resolve() returned a path it had already established does not "
-            "exist. The override must be verified before it is used."
+        ok, why, recorder = probe(
+            (403, "{}", {}), auth={"participant": ""}, monkeypatch=monkeypatch
         )
 
-    def test_does_not_call_execv(self) -> None:
-        """F-39: `os.execv` does not quote arguments containing spaces.
+        assert not ok
+        assert "is empty in the config" in why
+        assert "none of them is the deadline" in why
+        assert recorder.requests == [], (
+            "no request may be sent without the credential the checker used, or "
+            "the probe is testing something else"
+        )
 
-        On Windows it builds a command line by joining argv without quoting, so
-        `sh -c "echo A; echo B"` arrives as `sh -c echo` with the rest as
-        positional parameters — the command runs, prints nothing, and exits 0.
-        That is the worst combination: a silently wrong result, the same shape
-        as F-32.
+    def test_the_credential_is_actually_sent(self, monkeypatch):
+        """A probe that dropped the header would pass against a portal that
+        refuses everyone, which is the opposite of evidence."""
+        _, _, recorder = probe(
+            (403, json.dumps({"refused_by": GUARD}), {"Content-Type": "application/json"}),
+            monkeypatch=monkeypatch,
+        )
+        sent = recorder.last
 
-        **This checks the PARSE TREE, not the text.** The first draft asserted
-        `"os.execv" not in source`, which failed immediately — the file's own
-        docstring explains the F-39 bug and necessarily names `os.execv`.
-        Narrowing it to `"os.execv("` then failed again, because the docstring's
-        worked example is itself a call, and a regex cannot tell prose from
-        code. A test that cannot pass without deleting the explanation of the
-        bug it guards is a test that gets deleted instead.
+        assert sent.get_method() == "POST"
+        assert sent.get_header("Authorization") == "JJ1.deadbeef.who@example.org", (
+            f"the header was {sent.headers!r}. run.py splits the config value on "
+            "the FIRST colon and attaches the remainder, so the token is the "
+            "whole value -- not 'Authorization: JJ1...'."
+        )
+        assert sent.get_header("Content-type") == "application/json"
+        assert json.loads(sent.data) == SPEC["json"], (
+            "the probe must send the same body run.py sent, or it is testing a different request"
+        )
 
-        `ast.parse` gives the actual call nodes, with docstrings excluded by
-        construction because a docstring is a string constant, not a call. So
-        the file can explain the bug in as much detail as it likes and this
-        test still only fires on code.
+    def test_a_dead_portal_is_reported_not_scored(self, monkeypatch):
+        def explode(request):
+            raise OSError("connection refused")
+
+        ok, why, _ = probe(explode, raise_http_error=False, monkeypatch=monkeypatch)
+
+        assert not ok
+        assert "could not be probed" in why
+
+    def test_an_unparseable_expectation_fails_rather_than_defaulting(self):
+        """F-42's shape: a wrong value that happens to produce a passing result.
+
+        `expect_status = "not a status"` must not be read as "close enough". A
+        default here would re-create the exact defect the file was rewritten to
+        remove.
         """
-        tree = ast.parse((TOOLS / "docker.py").read_text(encoding="utf-8"))
+        assert run_acceptance_module._status_is("not a status", 403) is False
+        assert run_acceptance_module._status_is("4xx", 403) is True
+        assert run_acceptance_module._status_is("4xx", 200) is False
+        assert run_acceptance_module._status_is("401/403", 403) is True
+        assert run_acceptance_module._status_is("401/403", 200) is False
+        assert run_acceptance_module._status_is("403", 403) is True
 
-        called = {
-            node.func.attr
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    def test_a_method_this_tool_will_not_send_is_refused(self, monkeypatch):
+        ok, why, recorder = probe(
+            (403, "{}"), spec={**SPEC, "method": "TRACE"}, monkeypatch=monkeypatch
+        )
+
+        assert not ok
+        assert "is not one this tool will send" in why
+        assert recorder.requests == []
+
+    def test_the_declared_probe_matches_this_spec(self):
+        """The expectations file and this module must agree on the marker.
+
+        Two places naming the guard's function, and nothing tying them together,
+        is how a rename leaves the gate quietly asserting a string the portal
+        stopped returning -- and a gate that asserts a stale string is a gate
+        that is always red or, worse, one somebody turns off.
+        """
+        expectations = json.loads(
+            (REPO / "tools" / "expected_checks.json").read_text(encoding="utf-8")
+        )
+        rules = {
+            key: value
+            for label, entries in expectations["preconditions"].items()
+            if not label.startswith("$")
+            for key, value in entries.items()
         }
+        probes = [rule["probe"] for rule in rules.values() if rule.get("probe")]
 
-        assert "execv" not in called, (
-            "tools/docker.py must not CALL os.execv. It does not quote "
-            "arguments containing spaces on Windows (F-39), so `sh -c 'a; b'` "
-            "arrives as `sh -c a` with the rest as positional parameters — the "
-            "command runs, prints nothing, and exits 0. Use subprocess.run "
-            "with a list."
-        )
-        assert "run" in called, "tools/docker.py must call subprocess.run"
-
-    def test_propagates_the_exit_code(self) -> None:
-        """A wrapper that reported ITS success rather than docker's would be a
-        second place for the F-32 class of bug to hide.
-
-        The first version of this asserted `"returncode" in source`, which
-        passes whether the code returns the exit code, prints it, or merely
-        mentions it. `tools/mutation_test.py` then replaced the `return
-        subprocess.run(...).returncode` with a discarded call and a bare
-        `return 0`, and the test did not notice.
-
-        So this one *runs* it. `false` is a command that exists in every
-        container image and always fails, so a correct wrapper exits non-zero
-        and a swallowing wrapper exits 0. There is no mocking and no
-        cleverness: the property is "does the status survive", and the honest
-        way to test that is to have a failure to propagate.
-        """
-        probe = (
-            "import sys; sys.path.insert(0, 'tools'); import docker; "
-            "assert docker.resolve(), 'docker must be resolvable for this test'; "
-            "print('resolvable')"
-        )
-        resolved = subprocess.run(
-            [sys.executable, "-c", probe],
-            capture_output=True,
-            text=True,
-            cwd=REPO,
-            encoding="utf-8",
-            errors="replace",
-        )
-        if resolved.returncode != 0:
-            pytest.skip("docker is not resolvable on this machine")
-
-        failing = subprocess.run(
-            [sys.executable, str(TOOLS / "docker.py"), "run", "--rm", "alpine:3", "false"],
-            capture_output=True,
-            text=True,
-            cwd=REPO,
-            encoding="utf-8",
-            errors="replace",
-        )
-        if "not found" in (failing.stderr or "").lower() and failing.returncode == 0:
-            pytest.skip("no container image available to run the probe")
-
-        assert failing.returncode != 0, (
-            "tools/docker.py exited 0 after a command that failed. It must "
-            "propagate the exit code. A wrapper that reports its own success "
-            "is a second place for the F-32 class of bug to hide."
-        )
-
-
-class TestColdstart:
-    """`tools/coldstart.py` — the 60-second acceptance measurement."""
-
-    def _verdict(self, status: int, body: str, elapsed: float, budget: float = 60.0):
-        """Call the real verdict function in the tool, not a reimplementation.
-
-        Imported rather than re-derived so this cannot drift from the code it
-        is meant to police — a test that re-implements the rule under test is a
-        second implementation, and the second one is the one nobody updates.
-        """
-        return importlib.import_module("coldstart").verdict(status, body, elapsed, budget)
-
-    def test_passes_on_a_real_measurement(self) -> None:
-        ok, message = self._verdict(200, "<html>Judge Judy</html>", 6.2)
-        assert ok, message
-        assert "6.2s" in message
-
-    def test_rejects_a_non_200(self) -> None:
-        ok, message = self._verdict(0, "Connection refused", 6.2)
-        assert not ok
-        assert "did not return 200" in message
-
-    def test_rejects_a_200_that_is_not_our_page(self) -> None:
-        """The check that makes the measurement mean something.
-
-        A 200 from a proxy, a placeholder, or a previous container that never
-        died all satisfy a bare status check. Without this, "6.2s" would be a
-        measurement of a socket answering rather than of the portal serving.
-        """
-        ok, message = self._verdict(200, "<html>Some other app</html>", 6.2)
-        assert not ok
-        assert "not ours" in message
-
-    def test_rejects_an_over_budget_start(self) -> None:
-        ok, message = self._verdict(200, "Judge Judy", 61.0)
-        assert not ok
-        assert "exceeds" in message
-
-    def test_exactly_at_the_budget_fails(self) -> None:
-        """`>=`, not `>`. "In under 60 seconds" excludes 60.0."""
-        ok, _ = self._verdict(200, "Judge Judy", 60.0)
-        assert not ok
-
-    def test_the_budget_is_sixty_seconds(self) -> None:
-        """Guards a silent relaxation from 60 s to 10 minutes.
-
-        The acceptance criterion is a number. A budget nobody re-reads drifts,
-        and the README quotes whichever value was measured.
-        """
-        assert importlib.import_module("coldstart").BUDGET_SECONDS == 60.0
+        assert len(probes) == 1
+        assert probes[0]["body_must_contain"] == GUARD == SPEC["body_must_contain"]

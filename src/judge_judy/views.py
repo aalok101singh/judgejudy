@@ -1,6 +1,6 @@
 """Project-wide views that belong to no domain app.
 
-Only two, and neither is a feature:
+**One, and it is not a feature.**
 
 ``healthz``
     The liveness probe the container healthcheck polls. It must answer from a
@@ -9,22 +9,22 @@ Only two, and neither is a feature:
     queries a table which does not exist yet would report the portal unhealthy
     during the very migration that is creating it.
 
-``home``
-    The page a judge sees when they open the portal for the first time. Its
-    job at this stage is to be unmistakably *ours* and unmistakably *working*,
-    so that a 200 from this route is never confused with a 200 from a proxy or
-    a placeholder.
+The landing page used to live here too. It moved to
+``reviewer/projects/views.py`` when the gallery replaced it, because a gallery
+is a domain surface and a module that "belongs to no domain app" is the wrong
+home for one. Keeping it here would have meant this file growing past the
+"should not grow past it" rule its own docstring sets, and the gallery needs a
+``projects/`` template directory anyway.
 
-The gallery, the dashboard and everything a judge touches arrive in later
-features. This module is the right size for FEAT-01 and it should not grow
-past it without a reason recorded here.
+Everything a judge touches -- the judge console, the dashboard, the export,
+the event editor -- arrives in later features and lands in the app that owns
+the domain, not here.
 """
 
 from __future__ import annotations
 
 from django.db import connection
-from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.http import HttpRequest, JsonResponse
 
 
 def healthz(request: HttpRequest) -> JsonResponse:
@@ -53,21 +53,3 @@ def healthz(request: HttpRequest) -> JsonResponse:
         return JsonResponse(payload, status=200 if payload["status"] == "ok" else 503)
 
     return JsonResponse(payload)
-
-
-def home(request: HttpRequest) -> HttpResponse:
-    """The landing page.
-
-    Server-rendered HTML on purpose. It is the first thing a judge loads, it
-    must work with the network off, and it must not depend on a JavaScript
-    bundle having parsed. A portal whose front door needs JavaScript is a
-    portal that shows a blank page to the person deciding whether it works.
-    """
-    return render(
-        request,
-        "home.html",
-        {
-            "tier": "FEAT-01",
-            "status": "skeleton",
-        },
-    )

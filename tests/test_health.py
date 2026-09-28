@@ -97,8 +97,14 @@ class TestDeepHealthz:
         assert "OSError" in payload["checks"]["database"]
 
 
-class TestHome:
-    """`/` — the first thing a judge sees."""
+class TestGallery:
+    """`/` — the first thing a judge sees, and T1-1.
+
+    Renamed from ``TestHome`` when the gallery replaced the placeholder. The
+    assertions are the same three properties a landing page has to have, and
+    they are now load-bearing: ``run.py``'s T1-2 greps this exact response body
+    for the first three fixture project titles.
+    """
 
     def test_is_public(self) -> None:
         """No authentication. A judge opens this before logging in."""
@@ -110,7 +116,8 @@ class TestHome:
         This is the acceptance-relevant part: the front door has to work with
         no network and no JavaScript. A portal whose landing page is an empty
         <div> that a script fills in shows a judge a blank page while the
-        container reports itself healthy.
+        container reports itself healthy — and `urlopen`, which is what
+        `run.py` uses, never runs the script at all.
         """
         body = Client().get("/").content.decode()
 
@@ -122,6 +129,19 @@ class TestHome:
         body = Client().get("/").content.decode()
 
         assert "/healthz" in body
+
+    def test_survives_an_empty_database(self) -> None:
+        """A portal whose migrations have not run yet must not 500 on `/`.
+
+        `just check` boots from a clean volume, and the healthcheck is what
+        reports readiness during exactly that window. A front door that queries
+        a table which does not exist would make the container look broken while
+        it is still being built.
+        """
+        body = Client().get("/").content.decode()
+
+        assert "no event has been created yet" in body
+        assert "Judge Judy" in body
 
 
 class TestAdmin:

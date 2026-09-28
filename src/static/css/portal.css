@@ -41,6 +41,11 @@ body {
 
 .wrap { max-width: 40rem; margin: 0 auto; }
 
+/* The gallery is wider than the front page: 41 cards in one column at 40rem
+   is a scroll, and a judge deciding whether this portal works gets a worse
+   first impression from a narrow column than from a wide one. */
+.wrap--wide { max-width: 64rem; }
+
 .eyebrow {
   margin: 0;
   font-size: .75rem;
@@ -113,4 +118,110 @@ code {
   border-top: 1px solid var(--rule);
   color: var(--ink-soft);
   font-size: .875rem;
+}
+
+/* --- the submission window ---------------------------------------------------
+ * A first-class state, not a footnote. The published fixture closes in the
+ * past, so every demo visitor lands on a portal that refuses submissions, and
+ * "this is broken" is the wrong first impression. The three states get three
+ * different colours because they mean three different things.
+ */
+.window {
+  margin: 0 0 1.75rem;
+  padding: .85rem 1.1rem;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--ink-soft);
+  border-radius: .4rem;
+  background: var(--card);
+  font-size: .95rem;
+}
+
+.window--open { border-left-color: #2f7a4d; }
+.window--closed { border-left-color: #a33b3b; }
+.window--not-yet-open { border-left-color: #9a7b1f; }
+
+.window-note {
+  display: block;
+  margin-top: .4rem;
+  color: var(--ink-soft);
+  font-size: .875rem;
+}
+
+/* --- the gallery ------------------------------------------------------------ */
+.projects {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: .6rem;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+}
+
+.project {
+  padding: .9rem 1.05rem;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: .5rem;
+}
+
+.project--empty { grid-column: 1 / -1; color: var(--ink-soft); }
+
+.project-title {
+  margin: 0 0 .3rem;
+  font-size: 1.05rem;
+  font-weight: 620;
+  line-height: 1.3;
+}
+
+.project-meta {
+  margin: 0 0 .55rem;
+  color: var(--ink-soft);
+  font-size: .85rem;
+}
+
+.project-id { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.project-tags { margin: 0; display: flex; flex-wrap: wrap; gap: .3rem; }
+
+.tag {
+  padding: .1rem .45rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: .75rem;
+}
+
+.tag--count { margin-left: auto; color: var(--ink); }
+
+.pager {
+  margin: 1.5rem 0 0;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: .9rem;
+}
+
+/* --- the submit form ------------------------------------------------------- */
+.form { margin: 0 0 1.5rem; }
+.form-row { margin: 0 0 .9rem; display: grid; gap: .25rem; }
+.form-row label { font-size: .85rem; color: var(--ink-soft); }
+.form-row input {
+  padding: .5rem .6rem;
+  border: 1px solid var(--rule);
+  border-radius: .35rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+.form-note { color: var(--ink-soft); font-size: .85rem; }
+
+button {
+  padding: .5rem 1.1rem;
+  border: 1px solid var(--accent);
+  border-radius: .35rem;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
 }

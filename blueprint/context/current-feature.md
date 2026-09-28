@@ -7,88 +7,93 @@
 
 ---
 
-## In flight: FEAT-03 — Loader, identities, gallery, deadline guard
+## In flight: FEAT-04 — gated on BREAK-1, the T1 claim ☕
 
-**Planned:** 5h · **Phase C** · **Gate:** BREAK-1 (H+14), the T1 claim
+**1h of break, then 7h of feature** · **Phase D** · **Gate:** a tier claim made
+in writing against what is actually green, then `v-t1-verified`
 
-### Scope
+### BREAK-1 first. FEAT-04 does not start until the tag exists.
 
-- [ ] Idempotent loader from `fixtures.json` — **run it twice, get the same
-      database.** `docker compose up` is run many times against one volume and
-      a loader that only works once makes the portal non-reproducible
-- [ ] **5 test identities get real password hashes; the other ~116 get
-      `UNUSABLE_PASSWORD`.** Hashing all 121 costs ~48 s against `run.py`'s 10 s
-      timeout (F-12)
-- [ ] Gallery, **first page in fixture order**, ~24 per page. `run.py` reads
-      `fixture_titles(fixture, n=3)` → `projects[:3]` **positionally**, so the
-      slice is a page slice, not a search (overview §6 trap 1)
-- [ ] Deadline guard `assert_open_for_submission(event)` — a **service
-      function**, called by every write path, because a `save()` override is
-      bypassed by `bulk_create` and a view decorator by the admin
-- [ ] The four Hypothesis isolation invariants P1–P4 (`bible/05` §6b.2) — they
-      finally can run: F-22 is resolved, FEAT-01 created the project, and
-      FEAT-02 created the models
-- [ ] `verify_census` command — every census table prints its own row count on
-      boot, and a count that disagrees with its stated population is a boot
-      failure. `tools/run_in_container.py` already has an entry for it
+The brief is explicit that the claim is decided at a break and not in advance,
+and `AGENTS.md` repeats it. **Everything BREAK-1 needs is already measured** —
+the numbers are in the FEAT-03 archive and the run below reproduces them. What
+is left is judgement, and judgement is the human's.
 
-### Acceptance
+### Protocol — one hour, fixed
 
-Gallery serves the first three fixture projects in fixture order; the loader is
-idempotent; the four invariants pass; `verify_census` exits 0.
+1. **Clean `down -v` → `up`, network off.** `just check` does this itself, so
+   step 1 is *already done* by running it. Do not skip it on a warm volume.
+2. **`just check`** — the gate. It is currently green.
+3. **`just prove-offline`** and **`just mutation-test`** — outside the gate, run
+   at every break.
+4. **Update the slippage ledger** (`bible/08` §1c). This is the first entry, so
+   the format is being set here.
+5. **Decide the claim and write it down.** `claimed = ["T1"]` in
+   `.dogfood.toml`, with the reason beside it.
+6. **Tag `v-t1-verified`** and push.
 
-### Depends on
-
-- **F-40** — "closed event refuses submissions" currently passes on a **404**.
-  When `/projects/new` starts existing it passes for the *right* reason and
-  `tools/expected_checks.json` goes stale, so `just check` **goes red**. That red
-  is the design working. Flip the entry with a reason naming the route.
-- **F-44** — the model count is 24, not 20, and
-  `tests/test_schema_contract.py` reads the number out of `build-plan.md`. If
-  the loader needs a new table, add it to the plan first or that test fails.
-- The isolation primitive is **done**, so the loader has something to seed
-  `RoleBinding` rows *for*. The 9 dual-track judges are two binding rows each —
-  the model is the fixture's shape, not a special case.
-
-### Environment
-
-Working and verified. `just doctor` is the one command that checks it.
+### The evidence, as measured
 
 | | |
 |---|---|
-| Interpreter | `.venv\Scripts\python.exe` → **3.13.13**. **Never a bare `python`** — the ambient one is 3.14.6 with no Django (F-38) |
-| Docker | 29.6.2 / Compose v5.3.1, reachable by bare name *and* by absolute path |
-| Container | `python:3.13-slim` pinned by digest; Python 3.13.15 |
-| `just` | 1.58.0 |
+| `run.py` | `claimed nothing, verified T1` — **3 of 3 T1 checks PASS** |
+| Acceptance gate | `GATE OK: no regressions, no stale expectations, no false passes` |
+| `just check` | green end to end, clean volume, network-independent build |
+| `just prove-offline` | PASS — boots under `--network none`, healthy at **8.0 s** |
+| `just mutation-test` | **18/18** deliberate corruptions caught |
+| `tools/verify_spec.py` | **67/67** |
+| Suite | **291 tests** |
+| Cold start | **11.6 s** to a serving page against the 60 s budget |
+| `verify_census` | 14 tables match the fixture, both invariants on both sides |
+| `isolation_proof --require-data` | the real matrix, no `?` in the three decidable columns |
 
-**One new local trap:** swapping `AUTH_USER_MODEL` (done in FEAT-02) makes a
-**pre-existing local database** fail with `InconsistentMigrationHistory`, because
-`accounts.0001` is a dependency of `admin.0001` and the old database has
-`admin.0001` applied without it. `just reset-local` fixes it. The container is
-unaffected because `just check` starts from a clean volume.
+### The claim to make, and the gap to name with it
 
-### Not in this feature
+**T1 is earned.** All three checks pass, and — this is the part that matters —
+they pass *for the right reason*. The `closed event refuses submissions` check
+used to pass on a 404; the gate now re-sends the checker's own request and
+requires `assert_open_for_submission` in the response body, so a CSRF rejection
+or a 401 can no longer stand in for the deadline.
 
-The judge console, the CSV export, the audit view and the denial properties.
-Those are FEAT-04/FEAT-05, and **`isolation_proof` cannot print the published
-matrix without the loader** — which is why FEAT-03 is where that proof becomes
-real.
+**Name the gap in the same breath:** T2 is four checks and **none of them runs**.
+The judge console, the scoped score endpoint and the CSV export arrive in
+FEAT-04 and FEAT-05, and until they do, `run.py` prints their failures with real
+URLs. `verified` is prefix-locked and there are no T3 or T4 checks at all, so
+even a flawless build would print `verified T1 T2` (`bible/03` §2).
+
+### Do not
+
+- **Do not claim T2.** Nothing about T2 is green.
+- **Do not edit `acceptance-report.txt` by hand.** It is generated; `just
+  report` produces it, and the panel runs the identical program.
+- **Do not move `submissions_close`.** It is in the past because that is what
+  makes the deadline check meaningful.
 
 ### State
 
 | | |
 |---|---|
-| **Status** | **ready** — FEAT-02 verified green |
+| **Status** | **BREAK-1 ready** — every input the break needs is measured and green. FEAT-04 unblocked the moment the tag exists |
 | **Started** | — |
-| **Elapsed** | 0h of 5h |
-| **Fresh session?** | **Paste `HANDOFF.md`** — it is a self-contained prompt (read-in order, verified state, the eight traps) and is 9,710 bytes, so it loads whole. Anything in it that contradicts a file it points at is a bug in `HANDOFF.md` |
-| **Last touched** | FEAT-02 verified and pushed; `just check` green end to end, `prove-offline` 5.4 s, `mutation-test` 15/15, spec 67/67, 160 tests (`../history/features/02-schema-and-isolation.md`) |
-| **Next action** | write `load_fixtures`, run it twice, and prove the second run changed nothing |
+| **Elapsed** | 0h of 1h (break), then 0h of 7h (FEAT-04) |
+| **Last touched** | FEAT-03 verified and committed; `just check` green, `verified T1`, 291 tests, 18/18 mutations, 67/67 spec, cold start 11.6 s (`../history/features/03-loader-gallery-deadline-guard.md`) |
+| **Next action** | run the six steps above, and the sixth one is the one that matters: **write the claim down** |
 
 ---
 
-## Next up
+## FEAT-04, once the break is tagged
 
-- **FEAT-04** Rubric, assignment + min-cut, judge console, reviews — 7h
-- **BREAK-1** at H+14 — **☕ T1.** Hard gate. `just check` plus
-  `just prove-offline` plus `just mutation-test`, against a clean volume.
+**Rubric, assignment + min-cut, judge console, reviews** — 7h. Scope and
+acceptance line in `build-plan.md` Phase D.
+
+Three things are already in place and the feature starts from a populated
+schema: the seeded `Rubric`/`Criterion` rows with **non-uniform weights**
+(functionality 0.40, innovation 0.35, quality 0.25), the **126 synthesised
+`Assignment` rows** the loader derives from the score rows, and the
+`Review.objects.for_actor()` accessor with its scope receipt.
+
+**One deferred question lands here:** **F-51** — should a judge who *also*
+organises be refused their own peers' scores? The accessor currently refuses
+(the safe reading), the docstring now says so, and the finding is deliberately
+left `fixed` rather than `closed`. FEAT-04/05 own the console and the route
+that would reach it, so they own the decision.

@@ -231,10 +231,13 @@ class Command(BaseCommand):
         for name, source in CAPABILITY_SOURCES.items():
             self.stdout.write(f"  {name:<13}{source}")
         self.stdout.write("")
-        self.stdout.write("  The 403 / empty body / no Location properties are asserted by")
-        self.stdout.write("  tests/test_denial_contract.py once the routes exist. D-02 is the")
-        self.stdout.write("  highest-value line in this project and a matrix that omitted it")
-        self.stdout.write("  would be proving the wrong thing.")
+        self.stdout.write("  D-02 -- a refusal is a literal 403, an empty redirect chain and no")
+        self.stdout.write("  Location header. It is asserted on /projects/new by")
+        self.stdout.write("  tests/test_denial_contract.py, which sends the identical request with")
+        self.stdout.write("  the window open (201) and closed (403 naming")
+        self.stdout.write("  assert_open_for_submission). The judge-scores refusals arrive with")
+        self.stdout.write("  those routes in FEAT-05, and until then this matrix does not claim")
+        self.stdout.write("  to have exercised them.")
 
     def _cells(self, actor, total: int, peer) -> list[str]:
         """The six cells for one actor, as real counts or `?`.
@@ -481,12 +484,41 @@ class Command(BaseCommand):
             raise CommandError("isolation_proof failed")
         self.stdout.write("  The proof passed what it ran.")
         self.stdout.write("")
-        self.stdout.write("  STILL NOT PROVEN, at every milestone so far:")
-        self.stdout.write("    * the 403 / empty body / no Location denial properties (D-02)")
-        self.stdout.write("      -- properties of an HTTP response; no routes exist until FEAT-05")
-        self.stdout.write("    * the published FIG. 02 matrix -- needs the loader (FEAT-03)")
-        self.stdout.write("    * that no view reaches an unscoped Review -- enforced by the")
-        self.stdout.write("      syntactic lint rule, `just lint`, which is a separate gate")
+        self.stdout.write("  STILL NOT PROVEN, and this list is maintained as the build moves:")
+        for line in self._still_not_proven():
+            self.stdout.write(f"    * {line}")
+        self.stdout.flush()
+
+    def _still_not_proven(self) -> list:
+        """What this command has *not* established, in its own words.
+
+        **A "still not proven" list that is not maintained is worse than none**,
+        because a reader takes it as current. FEAT-03 removed one item from it
+        -- the matrix needed the loader -- and left the other two in place, and a
+        reader who trusted the stale list would conclude the matrix was still a
+        guess while looking at a table of real counts.
+
+        Kept as a method returning a list rather than three hard-coded writes so
+        that removing a line is a deletion in one place, and so a test can
+        assert on the CONTENT rather than on the absence of a phrase.
+        """
+        with_data = bool(Review.objects.exists())
+        if with_data:
+            return [
+                "the aggregate, export and audit columns -- they print `?` because no "
+                "accessor and no route exist for them yet (FEAT-04/FEAT-05)",
+                "that a judge is refused the LEADERBOARD while judging is open, which "
+                "is the aggregate cell nobody tests and everybody forgets",
+                "that no view reaches an unscoped Review -- enforced by the syntactic "
+                "lint rule (`just lint`), which is a separate gate",
+            ]
+        return [
+            "the 403 / empty body / no Location denial properties (D-02) -- "
+            "properties of an HTTP response",
+            "the published FIG. 02 matrix -- needs the loader (FEAT-03)",
+            "that no view reaches an unscoped Review -- enforced by the syntactic "
+            "lint rule (`just lint`), which is a separate gate",
+        ]
 
     # ------------------------------------------------------------------ helper
 

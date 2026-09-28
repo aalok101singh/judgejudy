@@ -33,14 +33,14 @@
       "flips_at": "already passing"
     },
     "project from fixtures shown": {
-      "expect": "fail",
-      "reason": "FEAT-03. Needs the loader and the gallery. The first gallery page must be in FIXTURE ORDER, because run.py slices projects[:3] positionally rather than searching. Ship all three of Glass Signal, Small Meadow and Deep Compass; the check passes on any ONE of them, which is easy to forget when reading the spec.",
-      "flips_at": "FEAT-03"
+      "expect": "pass",
+      "reason": "FEAT-03. The gallery is server-rendered at `/`, its first page is in FIXTURE ORDER and its page size is 24, so all three of Glass Signal, Small Meadow and Deep Compass are on page one. `run.py` slices projects[:3] POSITIONALLY rather than searching, so this is a page-slice property and not a search. The check needs any ONE of them; shipping all three costs nothing and removes the temptation to re-paginate. Asserted in tests/test_gallery.py against titles read out of fixtures.json, not typed.",
+      "flips_at": "FEAT-03, verified"
     },
     "closed event refuses submissions": {
       "expect": "pass",
-      "reason": "FEAT-01 by accident, and it is worth being precise about why. POST /projects/new is a 404, and 404 is inside the checker's 4xx range. This check will CONTINUE to pass for the wrong reason until the route exists and the deadline guard refuses it. Tracked as F-40: this is the F-11 trap in its purest form - a check that reports PASS without testing the thing it names. The ratchet below (`submit_route_exists`) exists to stop it being reported as evidence.",
-      "flips_at": "already passing, but for the wrong reason"
+      "reason": "FEAT-03, and now for the RIGHT reason, which is the whole point of this entry. The route `/projects/new` exists and accepts POST; the refusal is a literal 403 with no Location header, produced by `assert_open_for_submission` in reviewer/events/deadlines.py, and the response body NAMES that function. `run.py` accepts any 4xx, so a body probe below re-sends the checker's own request and asserts the guard's name comes back — a CSRF rejection, a 401 or a 404 can no longer pass this. That probe is the `submit_refused_by_deadline` precondition, added in FEAT-03 when F-40 stopped being hypothetical.",
+      "flips_at": "FEAT-03, verified"
     },
     "judge sees own scores": {
       "expect": "fail",
@@ -73,14 +73,37 @@
       "This exists because two of the seven checks currently pass for a reason",
       "that has nothing to do with the portal being correct. That is F-11's",
       "lesson applied to ourselves: a check reporting PASS without exercising",
-      "the behaviour it names is worse than a check reporting FAIL, because it",
-      "is believed."
+      "the behaviour it names is worse than one reporting FAIL, because it",
+      "is believed.",
+      "",
+      "TWO KINDS, and the second is the one FEAT-03 added. A route-existence",
+      "rule asks 'is this URL routed at all'. A probe rule sends the checker's",
+      "OWN request, with its OWN credential, and asserts on the RESPONSE BODY --",
+      "so it can tell a real refusal from a refusal by something else. That",
+      "distinction is the entire value of the file: a route that exists and is",
+      "refused by CSRF, by a missing login or by an empty .dogfood.toml looks",
+      "exactly like a route that exists and is refused by the deadline."
     ],
 
     "closed event refuses submissions": {
       "submit_route_exists": {
         "why": "A 404 is a 4xx, so this check passes while the route is absent. The deadline guard is not being tested at all. Assert the route resolves before believing the PASS.",
-        "flips_at": "FEAT-03"
+        "flips_at": "FEAT-03, satisfied"
+      },
+      "submit_refused_by_deadline": {
+        "why": "The route existing is not enough. run.py accepts ANY 4xx here, so a CSRF rejection, a 401 for an unrecognised credential, or an emptied [auth] block all report PASS while the deadline is never consulted. This probe repeats the checker's own POST, carrying the [auth] participant header out of the very .dogfood.toml run.py read, and requires the response body to name the guard that refused it. If the credential does not verify, the probe cannot see the marker and the gate goes red — which is the point.",
+        "flips_at": "FEAT-03, satisfied",
+        "probe": {
+          "method": "POST",
+          "auth": "participant",
+          "json": {
+            "title": "dogfood-late-submission-probe",
+            "summary": "probe"
+          },
+          "expect_status": "4xx",
+          "body_must_contain": "assert_open_for_submission",
+          "must_not_have_header": "Location"
+        }
       }
     },
 

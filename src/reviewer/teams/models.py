@@ -1,6 +1,7 @@
 """Teams, memberships and invites.
 
-**The one decision here is the constraint that is deliberately *absent*.**
+**The one decision here is the constraints that are deliberately *absent*, and
+there are now two of them.**
 
 There is no uniqueness constraint on "a user in one team per event". The fixture
 happily satisfies it -- every person is in exactly one team -- so adding the
@@ -11,10 +12,27 @@ import that trips a database constraint on real input is a bad import path, and
 this project is scored on being a platform somebody can get their data *out* of
 (``bible/05`` §8, "a platform you cannot leave is a trap").
 
-The trade is stated rather than hidden: data integrity at the database, traded
-for a loader that never fails on real input. The organizer-facing surface warns
-in the UI; the schema does not lie about it. Every *other* constraint on this
-page is real.
+There is also **no uniqueness constraint on ``(event, name)``, and that one is
+not a prediction -- it is measured.** FEAT-03's loader hit
+``UNIQUE constraint failed: teams_team.event_id, teams_team.name`` on the
+published fixture, because **40 teams carry only 36 distinct names**:
+``StillTrail`` appears three times (``tm_03``, ``tm_30``, ``tm_40``),
+``OpenSignal`` twice, ``AmberSwitch`` twice. Two of those are different teams
+with different projects, so it is a property of the data rather than a fixture
+typo. A constraint that the organizers' own dataset violates is a constraint
+that would make our own loader un-runnable, and the same reasoning as above
+applies with more force: two teams legitimately named "Team Rocket" at one
+hackathon is a Tuesday, not a data error.
+
+``(event, slug)`` **is** unique, and that is the constraint that actually earns
+its place: a slug is derived, so it is the thing that has to be unambiguous for
+a URL to mean one team. See ``reviewer.importer.loader._entity_slug`` for why
+the slug is derived from the name *and* the fixture id -- ``slugify`` is lossy
+enough to collapse those three names onto one slug on its own.
+
+The trade is stated rather than hidden: display names may repeat, and the
+organizer-facing surface is where a duplicate is surfaced. Every *other*
+constraint on this page is real.
 """
 
 from __future__ import annotations
@@ -49,7 +67,9 @@ class Team(SourceKeyMixin, TimeStampedModel, models.Model):
         db_table = "teams_team"
         ordering = ["event_id", "name"]
         constraints = [
-            models.UniqueConstraint(fields=["event", "name"], name="teams_team_event_name_uniq"),
+            # NOT `UniqueConstraint(fields=["event", "name"])`, and the reason is
+            # measured rather than argued -- see the module docstring. 40 fixture
+            # teams, 36 distinct names.
             models.UniqueConstraint(fields=["event", "slug"], name="teams_team_event_slug_uniq"),
         ]
 

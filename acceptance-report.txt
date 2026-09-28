@@ -4,11 +4,7 @@ claimed: nothing
 fixtures: fixtures.json
 
 T1  gallery is public ................. PASS
-T1  project from fixtures shown ....... FAIL
-       GET http://localhost:8080/
-       looked for any of these fixture project titles: 'Glass Signal', 'Small Meadow', 'Deep Compass'
-       none of them appeared in the response body
-       if your gallery paginates, make sure page one is what this route returns
+T1  project from fixtures shown ....... PASS
 T1  closed event refuses submissions .. PASS
 T2  judge sees own scores ............. FAIL
        GET http://localhost:8080/api/v1/judge/scores
@@ -27,4 +23,4 @@ T2  csv export works .................. FAIL
        sent as organizer
        got 404, wanted 200
 
-claimed nothing, verified nothing
+claimed nothing, verified T1

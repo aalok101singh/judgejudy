@@ -140,8 +140,35 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # After AuthenticationMiddleware: it replaces the lazy `request.user` that
+    # middleware installs, rather than competing with it for the attribute.
+    # It only ever ADDS a user, and only when there is not one already, so a
+    # session cookie always wins over a demo header. See
+    # reviewer/accounts/authentication.py for the ordering argument.
+    "reviewer.accounts.authentication.DemoCredentialMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+#: Two backends, and the split between them is the point.
+#:
+#: `ModelBackend` is here **only** so `django.contrib.admin`'s own login form
+#: works -- an organizer debugging a stuck portal needs somewhere to look, and
+#: without this backend nobody can sign in to `/admin/` at all. It grants
+#: nothing: `User` has no `PermissionsMixin` and `User.has_perm` returns False
+#: unconditionally, so the admin's index is empty by construction. That is the
+#: documented FEAT-02 consequence, and `tests/test_schema_contract.py` pins it.
+#:
+#: `DemoCredentialBackend` is how the acceptance checker proves a role without a
+#: login round-trip. It authenticates an identity and nothing else; authority is
+#: a `RoleBinding` lookup in every case.
+#:
+#: The thing that is deliberately NOT here is a single place where the product's
+#: authorization rules live. That is `reviewer.isolation`, and nothing in the
+#: application reads a permission bitmask.
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "reviewer.accounts.authentication.DemoCredentialBackend",
 ]
 
 ROOT_URLCONF = "judge_judy.urls"

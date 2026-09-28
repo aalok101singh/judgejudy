@@ -39,11 +39,224 @@ defect than the one it removed.
 **None.** The only blocking finding, **F-13 (Docker)**, was closed on
 2026-09-27 after the real cause turned out to be a PATH problem rather than a
 missing install — see the *Resolved — environment verification* section
-below. **No P0 or P1 is open, so nothing currently blocks a feature from being
-marked done.** One P2 (F-38, the ambient `python` is 3.14.6) still needs
-settling before the build relies on a bare `python`.
+below. F-38 (the ambient `python` is 3.14.6) was closed at FEAT-01.
 
-## Open — non-blocking
+**FEAT-03 opened three P1s and closed all three in the same feature**: F-49 (123
+blank-password accounts), F-50 (`UNIQUE (event, name)` violated by the fixture)
+and F-55 (a credential format that could never verify). **No P0 or P1 is open,
+so nothing currently blocks a feature from being marked done.** The rate is
+worth noticing rather than explaining away: this was the first feature that ran
+our code against the organizers' *data* instead of data we built, and the
+findings are almost all values that agreed with what we expected.
+
+## Resolved — found in FEAT-03, 2026-09-28
+
+*Eight findings from building the loader, the gallery and the deadline guard.
+**Six of the eight are P1 or P2 and every one of them changed a shipped
+artefact**, which is a higher rate than any previous feature and is worth a
+sentence about why: this was the first feature that ran our own code against
+the organizers' *data* rather than against data we built. Four of the eight are
+values that agreed with what we expected and disagreed with what the file said.
+
+F-48 stays in the *Open* section below because it is a live tooling defect that
+a reviewer can still trip over until the next session reads the justfile comment.
+
+### F-49 [P1] closed - 123 accounts with an empty password, and an empty password authenticates
+
+**File:** `src/reviewer/importer/loader.py`
+**Found:** 2026-09-28, at FEAT-03, by the seed's own census
+**Why it matters:** The loader's first version guarded its password writes with
+Django's own predicate:
+
+```python
+if not user.has_usable_password():
+    user.set_unusable_password()
+```
+
+which looks exactly right and is **false for a row that has just been created**:
+
+```
+is_password_usable("")   ->  True
+has_usable_password()    ->  True   (password == "")
+check_password("", "")   ->  True
+```
+
+So on a first run every one of the 121 fixture people was *skipped*, and the
+database was left with 121 rows whose credential was the empty string — plus the
+two portal-created organizers, **123 accounts that authenticate with a blank
+password.** The five demo identities were skipped too, so `passwords_hashed`
+printed **0** and the seed's own self-test (which had not been written yet) had
+nothing to catch it.
+
+**The census caught it, and only because the census row exists.** `verify_census`
+prints `accounts.User with a real hash` against a derived expectation of five,
+and 0 ≠ 5. A row-count census would have said "123 users, looks fine".
+
+**The fix is a prefix comparison against `UNUSABLE_PASSWORD_PREFIX`, in one named
+function** (`_lacks_credential`) used in both directions, because the predicate
+has to be right twice: write an unusable marker when there is no real hash, and
+write a real hash when there is only a marker. A separate test
+(`TestPasswords::test_a_fixture_person_cannot_log_in_with_an_empty_password`)
+asserts `check_password("") is False` on a fixture person, which is the claim
+that was false.
+
+**The generalisable lesson, and it is F-11 in a new medium:** a library
+predicate recalled rather than executed. `has_usable_password()` reads like
+"does this account have a working password" and answers a different question —
+"is the stored value something other than the unusable marker" — and for the
+empty string those two questions have opposite answers. The production hasher is
+still pbkdf2; only the suite swaps in MD5, and a test asserts the settings
+module does not mention `PASSWORD_HASHERS` at all, so the fast suite cannot
+become a fast portal.
+
+### F-50 [P1] closed - `UNIQUE (event, name)` on `Team` is violated by the organizers' own fixture
+
+**File:** `src/reviewer/teams/models.py`, migration `0002_remove_team_...`
+**Found:** 2026-09-28, at FEAT-03, by the loader raising `IntegrityError`
+**Why it matters:** The schema FEAT-02 shipped declared
+`UniqueConstraint(fields=["event", "name"])` on `Team`, and the loader died on
+the published fixture:
+
+```
+IntegrityError: UNIQUE constraint failed: teams_team.event_id, teams_team.name
+```
+
+**40 teams carry 36 distinct names.** `StillTrail` appears three times
+(`tm_03`, `tm_30`, `tm_40`), `OpenSignal` twice, `AmberSwitch` twice — and two
+of the colliding teams own different projects, so it is a property of the data
+and not a fixture typo.
+
+This is the same class as F-49 and it is the same lesson from the other side: a
+constraint we designed, that no test could catch because the test data was ours,
+and that the *real* input violates. Two teams named "Team Rocket" at one
+hackathon is a Tuesday.
+
+**Resolution:** The `(event, name)` constraint is **dropped**, by a named
+migration rather than by an edit to `0001`, so the history records a constraint
+that was tried against real data and corrected. `(event, slug)` is kept — a slug
+is derived, so it is the column that has to be unambiguous for a URL to mean one
+team — and the module docstring states the trade in the same terms
+`teams/models.py` already used for the absent "one team per user per event"
+constraint.
+
+### F-54 [P2] closed - `slugify` collapses three fixture team names onto one slug
+
+**File:** `src/reviewer/importer/loader.py`, `src/reviewer/importer/census.py`
+**Found:** 2026-09-28, at FEAT-03, one error after F-50
+**Why it matters:** With the name constraint gone, the *slug* constraint failed
+instead. `slugify` is lossy — it drops case and punctuation — and three team
+names collapse: `amberswitch` ← `tm_05`, `tm_34`; `opensignal` ← `tm_11`,
+`tm_16`; `stilltrail` ← `tm_03`, `tm_30`, `tm_40`. Both `Track` and `Team` are
+`UNIQUE (event, slug)`, so a loader deriving the slug from the name alone raises
+`IntegrityError` part-way through, with a message that reads like a schema bug.
+
+The same shape appears for projects: `prj_07` and `prj_41` are one team, one
+title, and `(team, slug)` is unique.
+
+**Resolution:** `_entity_slug(name, natural_id)` appends the fixture id, and
+`_project_slug` appends the numeric suffix. **And the census now reports the
+collisions on every boot** rather than leaving the loader to raise — a seed step
+that prints its own anomaly report is doing the reader's verification work, and
+"three names collapse onto one slug" is a sentence a reviewer can check.
+
+### F-55 [P1] closed - the demo token's first layout could never verify, and failed silently
+
+**File:** `src/reviewer/accounts/demo_tokens.py`
+**Found:** 2026-09-28, at FEAT-03, when the participant header arrived anonymous
+**Why it matters:** The role-proving token was laid out as
+`JJ1.<email>.<signature>` and parsed with `token.split(".")` expecting three
+parts. **An email address contains dots.** `priya1@example.org` is three
+dot-separated fields, so every token in the fixture produced **four** parts, the
+length check rejected all of them, and `email_from_token` returned `None`.
+
+The failure mode is the expensive one: `email_from_token` returns `None` for
+"malformed" and for "wrong signature" alike, so the symptom was a demo identity
+that **simply never authenticated** — no exception, no log line, and every
+acceptance check still passing on the resulting 401. It was found by reading a
+401 that should not have been a 401, which is the only reason it was found at
+all.
+
+**Resolution:** The signature comes **first** — `JJ1.<hmac>.<email>` — and the
+signature's fixed width is checked before it is compared, so the split is
+unambiguous rather than lucky. The committed `.dogfood.toml` values were
+regenerated and are asserted against the identities the seed promotes, by
+`tests/test_demo_credentials.py`, so an emptied or hand-edited value fails the
+suite rather than the acceptance report.
+
+### F-51 [P2] fixed - `for_actor_and_subject`'s docstring described behaviour the code does not have
+
+**File:** `src/reviewer/reviews/queryset.py`
+**Found:** 2026-09-28, at FEAT-03, by a Hypothesis counter-example
+**Why it matters:** The docstring said *"Organizers and admins legitimately ask
+about any subject, so this falls through to `for_actor` for them."* The guard is
+`actor.is_judge`, so a user holding **both** a judge binding and an organizer
+binding is **refused** when they ask about a peer — even though `for_actor`
+alone hands that same user the whole event. The two accessors disagree, and the
+comment said they did not.
+
+It surfaced because the first version of Hypothesis invariant P2 was stated
+over *every* role set, and is false: with `roles = ['judge', 'organizer',
+'participant']` the actor legitimately saw three other judges' reviews. The
+falsifying example arrived in about two seconds.
+
+**A judge who also organises is the ordinary case at a hackathon, not a
+misconfiguration** — the same premise F-45 was found on — so this is a real
+question, not a typo.
+
+**Resolution, and the reasoning is the point:** the **code is kept** and the
+**docstring corrected**, because the strict reading is the safe one and nothing
+can reach that accessor until FEAT-05 builds the route that does. Widening an
+access rule to match a sentence in a comment is the wrong repair at this hour;
+recording the ambiguity for the feature that owns the judge console is the right
+one. Both halves are now pinned by tests — the organizer-only fall-through and
+the judge-organizer refusal — and P2 is restated over the roles it is actually
+about, with the counter-example quoted in its docstring.
+
+### F-52 [P3] closed - this ledger's own F-28 entry has the wrong mass arithmetic
+
+**File:** `blueprint/context/findings.md`, the F-28 entry
+**Found:** 2026-09-28, at FEAT-03, while writing the test that injects F-28
+**Why it matters:** The entry says the mass invariant settles the histogram and
+quotes the sum as `8x2 + 26x3 + 3x4 + 5x5 = 126`. That sum is **131**. The
+buckets also total **42**, not 41, so **cardinality catches it too** — the entry
+credits one invariant when the argument for having two is that both fire.
+
+The correct histogram is `8@2, 26@3, 3@4, 4@5`: 8·2 + 26·3 + 3·4 + 4·5 = 126, and
+8+26+3+4 = 41. `project-overview.md` §5 has it right; the ledger entry was the
+transcription error.
+
+**Finding a transcription error inside the entry about transcription errors is
+not a surprise at this point, and it is not a reason to stop writing them down.**
+**Resolution:** Corrected above and in place, and the test that injects F-28's
+exact typo now asserts **both** invariants fire, with the arithmetic inline, so
+the claim is checkable rather than remembered.
+
+### F-53 [P3] closed — `bible/04` §5.2 names a track the fixture does not
+
+**File:** `bible/04-FIXTURES-DATASET-BIBLE.md` §5.2
+**Found:** 2026-09-28, at FEAT-03, while deriving the demo identities
+**Why it matters:** The bible's table of the five seeded identities says
+`judge_b` is `jdg_07` bound to **`trk_03`**. The fixture says `jdg_07` is bound
+to **`trk_06`**. `jdg_08` is `trk_04`, not the `trk_04` the same row claims for
+`judge_a` — that one is right.
+
+So a planning document carried a transcribed track id for a person, which is
+F-28's shape, and it survived the audit that produced F-28…F-32 because the
+audit checked *histograms*, not per-person track bindings.
+
+**Resolution:** The loader does not use the bible's ids at all. `importer.demo`
+**derives** the demo identities from the fixture by a stated rule — the lowest-id
+judge with at least two reviews on exactly one track, then the lowest-id judge on
+a *different* track — so the choice is a pure function of the file and a
+transcribed id cannot reach it. The bible's specific ids are left as they are
+written: it is a research document, and the fix belongs in the code that was
+wrong to depend on them.
+
+**One entry below is `fixed` and deliberately not `closed`: F-51.** The code is
+right for now and the docstring now matches it, but the underlying question —
+*should* a judge who also organises be refused their own peers' scores? — is
+deferred to FEAT-05, which owns the judge console and the route that reaches
+the accessor. Closing it now would be closing a question, not a defect.
 
 ### F-47 [P2] closed - `just prove-offline` and `just mutation-test` were named in four documents and did not exist as commands
 
@@ -218,7 +431,7 @@ rewrite the same file would have honoured it in name only. **The real
 consequence of finding this late: it had been a red gate for a whole feature, and
 a gate that is always red is a gate nobody reads.**
 
-### F-42 [P2] open - `run_acceptance.py` had a wrong default that produced the right answer
+### F-42 [P2] closed - `run_acceptance.py` had a wrong default that produced the right answer
 
 **File:** `tools/run_acceptance.py`
 **Found:** 2026-09-28, by `tools/mutation_test.py`
@@ -238,11 +451,24 @@ response" would look at the network, not at the typo in a dict key.
 (`PRECONDITION_ROUTES`), and **fail loudly** on an unmapped key rather than
 defaulting. A precondition naming a route that does not exist is a broken
 precondition, and defaulting blames the portal for a typo in our own file.
-**Resolution:** Fixed. `PRECONDITION_ROUTES` added, unmapped keys are appended
-to `problems`, and `test_every_precondition_names_a_real_route` plus
+**Resolution:** **Closed 2026-09-28 by FEAT-03**, on the grounds that the repair
+has now been reviewed against new work rather than merely written.
+`PRECONDITION_ROUTES` added, unmapped keys are appended to `problems`, and
+`test_every_precondition_names_a_real_route` plus
 `test_probed_routes_are_the_ones_the_checker_uses` guard both directions. The
 second test exists because the original defect was a *name* mismatch, so
 asserting the name is what actually catches it.
+
+**The review found one more instance of the same shape, in new code.** FEAT-03
+added a second kind of precondition — a `probe` that re-sends the request and
+asserts on the *body* — and the first version of its status check was a chained
+ternary whose `401/403` branch read `{401, 403} == {status}`, which is a
+*set equality against a singleton* and is False for every real answer. It would
+have failed loudly rather than silently, which is the lucky direction, but it is
+the same mistake: a clever expression in a place that should have been a
+four-line function. It is now `_status_is()`, and
+`test_an_unparseable_expectation_fails_rather_than_defaulting` pins that an
+unparseable expectation returns False rather than defaulting to "close enough".
 
 ### F-41 [P2] closed - Two tests could not fail: they asserted on substrings that a different bug also produced
 
@@ -400,6 +626,42 @@ second history created locally). `.venv` is ignored. The fixtures pin is now
 instead of silently invalidating every derived number.
 
 ---
+
+## Open — non-blocking
+
+*One entry. Everything else in this section was closed at FEAT-02.*
+
+### F-48 [P2] closed - `just accept` and `just coldstart` had never been runnable
+
+**File:** `justfile`
+**Found:** 2026-09-28, at FEAT-03, while trying to record a cold-start number
+**Why it matters:** Three recipes declared a variadic with a **literal string
+default**, `*args="{}"`. `just` interpolates a variadic default as text, so
+`just accept` expanded to `run.py .dogfood.toml {}` and argparse answered:
+
+```
+run.py: error: unrecognized arguments: {}
+```
+
+`just coldstart` and `just coldboot` failed identically. **`just accept` is the
+command every document tells a reader to run** — it is in `AGENTS.md`, in
+`.dogfood.toml` ("Read the result with: just accept") and in the README — and it
+had never once worked. The FEAT-01 and FEAT-02 archives both cite cold-start
+numbers, so the measurement was real; only the command that produces it was
+broken.
+
+**This is F-47 exactly, one layer out.** F-47 was `just prove-offline` and
+`just mutation-test` named in four documents with no recipe behind them. Here the
+recipes existed and were wrong, which is strictly worse: the command *looks*
+present, so a reader who tries it concludes the tool is misconfigured rather
+than that it has never run.
+
+**Suggested fix:** Drop the default. `*args` with no default is a genuine
+variadic; `*args="{}"` is a parameter whose value happens to be two braces.
+**Resolution:** **Fixed 2026-09-28.** `*args` on all three recipes, with the
+reason recorded beside `coldstart` so the default is not "helpfully" restored.
+Both commands re-run: `just accept` prints the report, `just coldstart` measures
+**11.6 s** to a serving page against the 60 s budget.
 
 ## Resolved — environment verification, 2026-09-27
 

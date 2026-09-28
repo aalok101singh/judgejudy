@@ -64,13 +64,39 @@ ignore = [
     # properly needs the plugin's own config; leaving it out of the default set
     # is better than enabling it wrong.
     "RUF012",
+    # N818 wants every exception to end in `Error`. Ours do not, and that is a
+    # decision rather than an oversight: `SubmissionClosed` is the name
+    # `bible/05` §4 specifies for the deadline guard's exception and the name the
+    # team uses for it in every document, and `FixtureNotFound` reads better in
+    # `except FixtureNotFound:` than `FixtureNotFoundError` does. Renaming code
+    # to satisfy a convention would put the code and the spec out of agreement,
+    # and on this project an out-of-agreement name is the exact failure the
+    # whole findings ledger is about.
+    "N818",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests build obviously-fake data on purpose. A password literal in a test is
 # not a leaked credential, and a subprocess call in a test is not a shell
 # injection. S101 (assert) and S603/S607 are noise in this directory.
+# tests/** and run.py are the organizers' file...
 "tests/**" = ["S101", "S105", "S106", "S603", "S607"]
+# The demo credentials are hardcoded password LITERALS, and that is the design
+# rather than a leak: `bible/04` §5.2 and §3.2 both record them as published,
+# non-secret demo passwords, because the portal is a single-tenant self-hosted
+# instance whose entire dataset is a public fixture and whose only secrets --
+# the signed judge records -- come from `cryptography`'s own key management
+# rather than from a seed. The signing key of the role-proving token is
+# published in the repository on purpose, for the reason its module docstring
+# gives, so S105/S106 firing on the neighbouring literal is noise that would
+# train a reader to skip the module that explains it.
+"src/reviewer/importer/demo.py" = ["S105", "S106"]
+"src/reviewer/importer/loader.py" = ["S105", "S106"]
+"src/reviewer/accounts/demo_tokens.py" = ["S105", "S106"]
+# `password__startswith="!"` is the census row that asserts F-12's invariant in
+# BOTH directions: too many real hashes is the 10-second timeout, too few is a
+# portal the checker's credentials cannot authenticate into.
+"src/reviewer/events/management/commands/verify_census.py" = ["S105", "S106"]
 # run.py is the organizers' file and is never modified, so linting it would
 # create pressure to modify it. That would invalidate every result in
 # acceptance-report.txt.
@@ -79,7 +105,7 @@ ignore = [
 "tools/docker.py" = ["S603", "S607"]
 "tools/coldstart.py" = ["S603", "S607"]
 "tools/prove_offline.py" = ["S603", "S607"]
-"tools/run_acceptance.py" = ["S603", "S607"]
+"tools/run_acceptance.py" = ["S603", "S607", "S310"]
 "tools/doctor.py" = ["S603", "S607"]
 
 # tools/verify_spec.py was written BEFORE the window, in the spec layer, and is

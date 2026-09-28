@@ -95,6 +95,7 @@ ROUTES = {
     "gallery": "/",
     "submit": "/projects/new",
     "judge_scores": "/api/v1/judge/scores",
+    "csv_export": "/api/v1/export.csv",
 }
 
 # Maps a precondition key in expected_checks.json to a route in ROUTES above.
@@ -113,9 +114,168 @@ ROUTES = {
 # one is missing rather than defaulting.
 PRECONDITION_ROUTES = {
     "submit_route_exists": "submit",
+    "submit_refused_by_deadline": "submit",
     "judge_scores_route_exists": "judge_scores",
     "gallery_route_exists": "gallery",
 }
+
+#: A precondition that carries a `probe` is a DIFFERENT kind of rule, and the
+#: difference is the whole point of this section.
+#:
+#: A route-existence rule asks "is this URL routed at all", and it is blind to
+#: *why* a request was refused. `run.py` accepts any 4xx for "closed event
+#: refuses submissions", so from its point of view a CSRF rejection, a 401 for an
+#: unrecognised credential, an emptied `[auth]` block and a 404 are the same
+#: result. All four report PASS. Only one of them is the deadline working.
+#:
+#: So a probe re-sends the checker's own request — same method, same JSON body,
+#: same credential, read out of the same `.dogfood.toml` — and asserts on the
+#: RESPONSE BODY. A refusal that does not name the mechanism that produced it is
+#: reported as a false pass with the body it got instead, which is the message a
+#: human needs and which a status code cannot give.
+#:
+#: Stated as a limit: a probe is only as good as its marker. Ours is the guard's
+#: own function name, which the view puts in `refused_by` — see
+#: `reviewer/events/deadlines.py`. A view that refused everything with the same
+#: body would pass this, and that is why
+#: `tests/test_denial_contract.py::test_the_same_form_post_is_refused_only_by_the_clock`
+#: sends the identical request with the window open and requires a 201.
+PROBE_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
+
+
+def read_config_auth(config_path: pathlib.Path) -> dict:
+    """The ``[auth]`` block from the config the checker itself was given.
+
+    Read with ``tomllib`` when it is available, and with ``run.py``'s own
+    fallback parser otherwise, so a value that authenticates under one parser
+    authenticates under both. A stale or empty value is not "handled" here -- it
+    is reported by the probe, because that is exactly the false pass this whole
+    mechanism exists to catch.
+    """
+    try:
+        import tomllib
+
+        with config_path.open("rb") as handle:
+            return tomllib.load(handle).get("auth", {})
+    except Exception:
+        return {}
+
+
+def run_probe(base_url: str, path: str, spec: dict, auth: dict) -> dict:
+    """Send the checker's own request and describe what came back.
+
+    Returns a dict rather than raising, so a portal that is down, a route that
+    500s and a credential that does not verify all produce a *report* naming
+    what happened, which is what a reader needs. A probe that raised would turn
+    every one of those into the same traceback.
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    method = str(spec.get("method", "GET")).upper()
+    if method not in PROBE_METHODS:
+        return {"error": f"probe method {method!r} is not one this tool will send"}
+
+    url = base_url.rstrip("/") + path
+    header = auth.get(str(spec.get("auth", ""))) if spec.get("auth") else None
+    if spec.get("auth") and not header:
+        return {
+            "error": f"[auth] {spec['auth']!r} is empty in the config, so the probe "
+            "cannot present the credential the checker used. Every 4xx still "
+            "counts as a pass for the checker, and none of them is the deadline."
+        }
+
+    request = urllib.request.Request(url, method=method)
+    if header:
+        name, _, value = str(header).partition(":")
+        request.add_header(name.strip(), value.strip())
+    body = None
+    if method not in ("GET", "HEAD") and spec.get("json") is not None:
+        body = _json.dumps(spec["json"]).encode()
+        request.data = body
+        request.add_header("Content-Type", "application/json")
+
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            status, text, headers = (
+                response.status,
+                response.read().decode("utf-8", "replace"),
+                dict(response.headers),
+            )
+    except urllib.error.HTTPError as exc:
+        status, text, headers = exc.code, exc.read().decode("utf-8", "replace"), dict(exc.headers)
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+    return {"status": status, "body": text, "headers": headers}
+
+
+def _status_is(expected: str, status: int) -> bool:
+    """Whether ``status`` satisfies an ``expect_status`` from the expectations file.
+
+    Three forms, because the checker's own assertions use three and the file
+    should be able to say the same thing the checker says: ``4xx``, ``401/403``,
+    or an exact number. An unparseable expectation is False rather than a
+    default that happens to pass -- F-42's shape, which is how the previous
+    version of this file reported a correct verdict for a wrong reason.
+    """
+    text = expected.strip()
+    if text == "4xx":
+        return 400 <= status < 500
+    if "/" in text:
+        try:
+            allowed = {int(part) for part in text.split("/") if part.strip()}
+        except ValueError:
+            return False
+        return status in allowed
+    try:
+        return status == int(text)
+    except ValueError:
+        return False
+
+
+def judge_probe(outcome: dict, spec: dict) -> tuple[bool, str]:
+    """``(ok, why)`` for one probe. ``why`` names what came back, not what broke.
+
+    Every failure branch ends with the *observed* status and body, because the
+    reader's next question is always "what did it actually say?" and a verdict
+    without that sends them to the source. The body is truncated -- a portal that
+    answers 500 with a Django traceback is 3 kB of somebody else's problem, and a
+    gate that prints 3 kB stops being read.
+    """
+    if "error" in outcome:
+        return False, f"could not be probed: {outcome['error']}"
+
+    status = outcome["status"]
+    body = outcome["body"] or ""
+    expected = str(spec.get("expect_status", "4xx"))
+    if not _status_is(expected, status):
+        return False, f"answered HTTP {status}, wanted {expected}"
+
+    marker = spec.get("body_must_contain")
+    if marker and marker not in body:
+        snippet = " ".join(body.split())[:220] or "(empty body)"
+        return (
+            False,
+            f"answered HTTP {status} with no {marker!r} in the body, so the refusal "
+            f"did not come from the mechanism this check names. It said: {snippet}",
+        )
+
+    forbidden = spec.get("must_not_have_header")
+    if forbidden and forbidden in {k.title() for k in outcome["headers"]}:
+        return (
+            False,
+            f"answered HTTP {status} WITH a {forbidden} header, and run.py follows "
+            "redirects -- so this refusal would arrive as a 200",
+        )
+
+    detail = f"answered HTTP {status}"
+    if marker:
+        detail += f" naming {marker!r}"
+    if forbidden:
+        detail += f" with no {forbidden} header"
+    return True, detail
 
 
 def probe_routes(base_url: str) -> dict[str, int]:
@@ -138,7 +298,7 @@ def probe_routes(base_url: str) -> dict[str, int]:
         try:
             if not url.startswith(("http://", "https://")):
                 raise ValueError(f"refusing to probe a non-HTTP URL: {url!r}")
-            with urllib.request.urlopen(url, timeout=5) as response:  # noqa: S310
+            with urllib.request.urlopen(url, timeout=5) as response:
                 status[name] = response.status
         except urllib.error.HTTPError as exc:
             status[name] = exc.code
@@ -283,6 +443,10 @@ def main() -> int:
     gallery_status = route_status.get("gallery", 0)
     portal_down = gallery_status in (0,)
 
+    config_auth: dict = {}
+    if not args.skip_preconditions and not portal_down:
+        config_auth = read_config_auth(pathlib.Path(args.config))
+
     false_passes: list[tuple[str, str]] = []
     for label, got in verdicts.items():
         if got != "PASS" or portal_down:
@@ -301,6 +465,14 @@ def main() -> int:
                     f"precondition {route_key!r} for {label!r} names no known "
                     f"route. Add it to PRECONDITION_ROUTES in this file."
                 )
+                break
+
+            if rule.get("probe") is not None:
+                # A probe precondition: the MECHANISM, not the route's existence.
+                outcome = run_probe(base_url, ROUTES[route_name], rule["probe"], config_auth)
+                ok, why = judge_probe(outcome, rule["probe"])
+                if not ok:
+                    false_passes.append((label, f"{route_name} {why}"))
                 break
 
             status = route_status.get(route_name, 0)

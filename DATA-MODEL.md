@@ -1,18 +1,31 @@
 # Data Model
 
-> **Status: as built in FEAT-02.** The migration that implements this document
-> is `src/reviewer/*/migrations/0001_initial_schema.py` — 12 apps, 24 models,
-> twelve initial migrations, each with a docstring naming the requirement or
-> decision it serves. The model and app counts below are **checked against the
-> Django app registry** by `tests/test_schema_contract.py`, which reads the
-> number out of `blueprint/build-plan.md` and compares. They are not typed here
-> and transcribed: the plan is the claim, the registry is the check, and F-44
-> records the two stale counts this document used to carry.
+> **Status: as built in FEAT-02, corrected by FEAT-03.** The migrations that
+> implement this document are `src/reviewer/*/migrations/0001_initial_schema.py`
+> — 12 apps, 24 models, twelve initial migrations — plus **one correction**,
+> `teams/0002_remove_team_teams_team_event_name_uniq`. Each migration has a
+> docstring naming the requirement or decision it serves. The model and app
+> counts below are **checked against the Django app registry** by
+> `tests/test_schema_contract.py`, which reads the number out of
+> `blueprint/build-plan.md` and compares. They are not typed here and
+> transcribed: the plan is the claim, the registry is the check, and F-44 records
+> the two stale counts this document used to carry.
+>
+> **What FEAT-03 changed in the schema, and it is a measurement.** `Team` lost
+> its `UNIQUE (event, name)` constraint because **`fixtures.json` violates it**:
+> 40 teams, **36 distinct names**, `StillTrail` three times, `OpenSignal` twice,
+> `AmberSwitch` twice — and two teams sharing a name own different projects. The
+> constraint was not a design anyone argued for; it was inherited from
+> "uniqueness is good" and the first code that ran against the real data killed
+> it. `(event, slug)` is kept, because a slug is derived and therefore has to be
+> unambiguous for a URL to mean one team. F-50.
 >
 > The plan for the depth behind each decision: `bible/05` (domain model, full
 > depth) · `blueprint/build-plan.md` Phase B (FEAT-02, 5h) ·
 > `blueprint/history/features/02-schema-and-isolation.md` (what was actually
-> built, and what was left out).
+> built, and what was left out) ·
+> `blueprint/history/features/03-loader-gallery-deadline-guard.md` (what the
+> real data changed).
 
 ---
 

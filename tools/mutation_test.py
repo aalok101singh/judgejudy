@@ -261,10 +261,62 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
     ),
     (
         "src/judge_judy/urls.py",
-        '    path("", views.home, name="home"),',
+        '    path("", project_views.gallery, name="gallery"),',
         "",
         "the landing page is removed — a judge opens the portal and gets a 404",
-        [sys.executable, "-m", "pytest", "tests/test_health.py::TestHome", "-q"],
+        [sys.executable, "-m", "pytest", "tests/test_health.py::TestGallery", "-q"],
+    ),
+    # --- the deadline guard, which is the whole of T1-3 -----------------------
+    # `run.py` accepts ANY 4xx for "closed event refuses submissions", so the
+    # check passes on a 404, on a CSRF rejection and on a 401 as readily as on a
+    # real deadline refusal. These three mutations are the ones that would take
+    # the check green while testing nothing, and each is caught by a test that
+    # names the mechanism -- not by a status-code assertion.
+    (
+        "src/reviewer/events/deadlines.py",
+        "    if opens_at is not None and moment < opens_at:",
+        "    if False:",
+        "the opening gate is never enforced, so a future event accepts early "
+        "submissions — invisible on the shipped fixture, whose window is closed",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_denial_contract.py::TestTheGuardItself"
+            "::test_it_refuses_before_the_window_opens",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/projects/views.py",
+        "except SubmissionClosed as exc:\n        return JsonResponse(exc.as_dict(), status=403)",
+        "except SubmissionClosed as exc:\n        return JsonResponse(exc.as_dict(), status=400)",
+        "the deadline guard still refuses, but with a 400 — a wrong-reason 4xx "
+        "that the acceptance check cannot tell from a CSRF rejection",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_denial_contract.py::TestRefusedByTheDeadlineGuard"
+            "::test_it_is_a_403_and_not_a_302",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/events/deadlines.py",
+        'GUARD_NAME = "assert_open_for_submission"',
+        'GUARD_NAME = "submission"',
+        "the refusal stops naming the guard, so a 403 from CSRF or from a missing "
+        "team is indistinguishable from the deadline — F-40, and the acceptance "
+        "gate's body probe stops being able to tell",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_denial_contract.py::TestRefusedByTheDeadlineGuard"
+            "::test_the_refusal_names_the_guard",
+            "-q",
+        ],
     ),
     # --- the healthcheck timing contract --------------------------------------
     # Both of these report the portal unhealthy during normal operation on a

@@ -217,9 +217,24 @@ class TestMatrixMode:
             assert column in output.split("own          ")[-1]
 
     def test_it_still_discloses_the_denial_properties(self, seeded):
-        """Even in matrix mode. D-02 is not covered by a row count."""
+        """Even in matrix mode. D-02 is not covered by a row count.
+
+        Rewritten in FEAT-03. The assertion used to be on the literal string
+        ``403 / empty body / no Location``, which was in the matrix footer while
+        the routes did not exist. Now that ``/projects/new`` does exist and the
+        submit refusal is tested, the footer's job is different: it has to say
+        **which** denials are proven, and admit that the judge-scores ones are
+        not. Asserting the old phrase would have kept a stale claim alive --
+        a "still not proven" list nobody maintains is worse than none.
+        """
         output = run()
-        assert "403 / empty body / no Location" in output
+
+        assert "D-02" in output
+        assert "assert_open_for_submission" in output, (
+            "the footer must name what IS proven, or a reader cannot tell a "
+            "tested refusal from an assumed one"
+        )
+        assert "until then this matrix does not claim" in output
 
     def test_an_unknown_event_is_an_error_not_an_empty_table(self, seeded):
         with pytest.raises(CommandError, match="no event"):

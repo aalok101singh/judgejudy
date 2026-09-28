@@ -12,7 +12,7 @@ order. It is short on purpose.
 
 | # | File | Bytes | When |
 |---|---|---|---|
-| 1 | **`blueprint/context/project-overview.md`** | **17,577** | **Always. This is the whole project in one load.** |
+| 1 | **`blueprint/context/project-overview.md`** | **18,436** | **Always. This is the whole project in one load.** |
 | 2 | `blueprint/context/current-feature.md` | — | Find the in-flight scope. Exactly one. |
 | 3 | `blueprint/context/findings.md` | — | What is known broken, and what was chosen not to fix. Check anything touching the files you are about to touch. |
 | 4 | `blueprint/context/ai-interaction.md` | — | How to work here. Read once per session. |
@@ -141,12 +141,15 @@ a test instead of quietly weakening a document.
 
 ## Current state
 
-Specification complete. **0 of 10 features built.** Next: **FEAT-01**, now
-unblocked — Docker verified working, `just` installed, base image pre-pulled.
+FEAT-01, FEAT-02 and FEAT-03 built and verified. 24 models across 12 apps; the
+isolation primitive, the loader, the public gallery and the deadline guard are
+in place, and **`run.py` prints `claimed nothing, verified T1` with all three T1
+checks PASS**. Next: **BREAK-1** — the T1 claim, the slippage ledger, the tag.
 
 | | |
 |---|---|
-| Findings | **47** — **0 open blocking**, 1 open (F-42), 1 unverified (F-27), 10 accepted by decision, 35 closed |
-| Open questions | **0** |
-| Contributions upstream | 5, including a corrected figure in the spec itself |
+| Findings | **55** — **0 open blocking, 0 open**, 1 fixed (F-51, a question deferred to FEAT-05), 1 unverified (F-27), 10 accepted by decision, 31 closed |
+| Acceptance | **T1 green** — 3 of 7 checks pass, and the false passes are gone because the gate can now tell a deadline refusal from a CSRF one |
+| Suite | **291 tests**, 18/18 mutations caught, 67/67 spec checks |
+| Container | cold start **11.6 s** against the 60 s budget; `prove-offline` passes |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |

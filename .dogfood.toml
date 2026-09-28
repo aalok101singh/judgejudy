@@ -19,11 +19,10 @@ base_url = "http://localhost:8080"
 [tiers]
 # Honest claims only, and they are checked against what the program can verify.
 #
-# `claimed = []` right now, and that is the accurate statement: at the skeleton
-# milestone the container, the healthcheck and the offline guarantee are real,
-# but the gallery, the deadline guard and the judge surface are not built, so no
-# tier is complete. Claiming T1 here would mean claiming a gallery that does not
-# exist.
+# `claimed = []` and that is still the accurate statement: the gallery, the
+# deadline guard and the census are real, but the judge surface, the export and
+# the public layer are not built, so no tier is complete. Claiming T1 here would
+# mean claiming T2 checks we cannot pass.
 #
 # The claim is made at a scheduled verification break, against what is actually
 # green — not in advance, and not in a README.
@@ -31,33 +30,52 @@ claimed = []
 pitch = "Self-hostable hackathon submission and judging platform. One command, offline, no cloud."
 
 [auth]
-# Session cookies the seeded identities print on boot.
+# Real values, printed by `docker compose logs portal` on every boot.
 #
-# These are empty until the seed command lands in FEAT-03. An empty header makes
-# the checker's request unauthenticated, which is the correct answer for "the
-# portal has not seeded identities yet" — the report says FAIL with a real
-# reason instead of erroring out.
+# The checker never logs in — logging in is the one thing no two stacks do
+# alike — so it attaches whatever header we hand it. Ours is
+# `Authorization: JJ1.<hmac>.<email>`: an HMAC-SHA256 over the identity, signed
+# with a key that is **published in the repository**
+# (`src/reviewer/accounts/demo_tokens.py`). That means anyone holding this repo
+# can mint a token for any of the 121 fixture identities, which is why the
+# README says in plain words that these are demo credentials and not secrets.
+# It is a deliberate trade: a key derived from `SECRET_KEY` would be rotated by
+# `down -v`, so this committed file would go stale on every reset and the
+# participant probe would silently become an anonymous request — a false pass,
+# which is the one outcome this project cannot afford.
 #
-# When seeding lands, the container prints the real values and they are pasted
-# here verbatim. Nothing is invented to make a check pass.
-organizer   = ""
-judge_a     = ""
-judge_b     = ""
-participant = ""
+# The seed prints the block below verbatim on every boot. `manage.py
+# load_fixtures --quiet` prints just this, if you want it and nothing else.
+#
+# Every value here is asserted against the identities the seed promotes, by
+# `tests/test_demo_credentials.py`. An emptied or hand-edited value fails the
+# suite rather than the acceptance report.
+organizer   = "Authorization: JJ1.d15bbfefced7cc79fdc3df06417be798.organizer@example.org"
+judge_a     = "Authorization: JJ1.389ab67b635f718eb9dfda4690ce93ca.noor.haddad@example.org"
+judge_b     = "Authorization: JJ1.7eadf0e2614a461c0bd456fe968abda3.kofi.mensah@example.org"
+participant = "Authorization: JJ1.9705e9ffb45cbd9e082907afab26fa9d.priya1@example.org"
 
 [routes]
 # Our route names. Whatever we call them, we write them down.
 #
-# The gallery and submit routes are declared now and resolve in FEAT-03. The
-# judge and export routes resolve in FEAT-05. Declaring a route before it
-# exists is honest — the checker gets a 404 and reports FAIL with that URL in
-# the message, which is more informative than a route the file does not mention.
+# `gallery` and `submit` exist as of FEAT-03. The judge and export routes are
+# declared ahead of FEAT-05 so the checker's failure message carries a real URL
+# rather than a route the file never mentioned — and because a declared route
+# that 404s is reported as FAIL with the URL in the message, which is more
+# informative than silence.
 #
 # `peer_scores` is the URL that WOULD return judge_a's scores. The checker
 # visits it as judge_b, who must be refused. In this portal it is a query
 # parameter on the judge scores endpoint, and the refusal is a 403 from the
 # permission layer — never a redirect, because the checker follows redirects
 # and a 302 would come back as a 200.
+#
+# `submit` is a POST-capable endpoint that genuinely evaluates the deadline. It
+# is **not** a GET-only form page: a 405 satisfies the checker's "any 4xx" for
+# the wrong reason (bible/03 §4.4). Its refusal body names the guard that
+# produced it — `assert_open_for_submission` — which is how a reader, a test and
+# `tools/run_acceptance.py` can each tell a real deadline refusal from a CSRF
+# rejection or a 404.
 gallery      = "/"
 submit       = "/projects/new"
 judge_scores = "/api/v1/judge/scores"

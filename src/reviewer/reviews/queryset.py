@@ -46,6 +46,7 @@ empty and the predicate matches no rows.
 from __future__ import annotations
 
 from django.db import models
+from django.db.models import Count
 
 from reviewer.isolation.scope import (
     DECISION_ALLOW_ALL,
@@ -124,8 +125,23 @@ class ReviewQuerySet(ScopedQuerySetMixin, models.QuerySet):
         brief names. Making the peer case a differently-named method means the
         call site has to say out loud that it is asking about someone else.
 
-        Organizers and admins legitimately ask about any subject, so this falls
-        through to ``for_actor`` for them.
+        **Who falls through, stated precisely, because this sentence used to be
+        wrong (F-51).** The guard is ``actor.is_judge``, so:
+
+        * a visitor, a participant, an organizer or an admin who is **not** also
+          a judge falls through to ``for_actor`` -- an organizer's subject
+          parameter is ignored, which is the organizer role working;
+        * a **judge who is also an organizer is refused.** ``for_actor`` alone
+          would hand that user the whole event, so the two accessors disagree,
+          and the docstring used to claim they did not.
+
+        The strict reading is kept deliberately. It is the safe one, and nothing
+        can reach this accessor until FEAT-05 builds the route that does -- so
+        widening an access rule to match a sentence in a comment is the wrong
+        repair at this hour. Which of the two is *correct* is a real question and
+        it is recorded as F-51 for the feature that owns the judge console. The
+        two tests that pin this are
+        ``tests/test_isolation_invariants.py::TestP2NoCrossEvasion``.
         """
         if actor.is_judge and subject is not None and subject.pk != getattr(actor.user, "pk", None):
             return (
@@ -144,6 +160,42 @@ class ReviewQuerySet(ScopedQuerySetMixin, models.QuerySet):
                 )
             )
         return self.for_actor(actor)
+
+    # ------------------------------------------------------------- public read
+
+    def public_review_counts(self, event_id, project_ids) -> dict:
+        """``{project_id: how many reviews it has}`` -- counts, never rows.
+
+        **This is the gallery's one unscoped read, and it lives here rather than
+        in the view for two reasons.**
+
+        First, the isolation lint. ``Review.objects.filter(...)`` in a view is
+        JJ01's forbidden form, and the honest responses to that are "write a
+        scoped accessor" or "put the module on the allowlist". The first is right
+        and the second is a habit. This is a third option that is better than
+        both: a method whose *name* says what it exposes. There is no way to
+        reach a review row through it, so it is not a leak even though it is not
+        scoped -- it is a count, and a count is the public fact the gallery is
+        supposed to show.
+
+        Second, and this is the part that matters: a count with no actor on it
+        belongs next to the accessor that *does* require one, so a reader
+        comparing the two sees the difference rather than inferring it. The
+        gallery's card shows "3 reviews" while judging is open, which is
+        deliberately a count and never a score.
+
+        ``public_`` is the whole contract. Renaming it to something neutral would
+        be a security-relevant change and the lint rule would not notice.
+        """
+        ids = [str(i) for i in project_ids]
+        if not ids:
+            return {}
+        rows = (
+            self.model._default_manager.filter(event_id=event_id, project_id__in=ids)
+            .values("project_id")
+            .annotate(n=Count("id"))
+        )
+        return {row["project_id"]: row["n"] for row in rows}
 
     # ------------------------------------------------------------------ receipt
 

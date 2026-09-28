@@ -57,25 +57,40 @@
 
 ## Phase C — Import, gallery, seed (FEAT-03, 5h)
 
-- [ ] **FEAT-03 Loader, identities, gallery, deadline guard** — 5h
-  - Idempotent loader from `fixtures.json` — run twice, same database
-  - **5 test identities get real password hashes; ~116 get
-    `UNUSABLE_PASSWORD`.** Hashing all 121 costs ~48 s against a 10 s timeout (F-12)
-  - Gallery, first page in fixture order, ≥24 per page — `run.py` greps
-    `projects[0:3]`
-  - Deadline guard: `submissions_close` is **past**, so every mutating view is
-    closed. Do not move the date.
-  - The four isolation invariants as Hypothesis tests
-  - `verify_census` — both `fixtures.json` invariants, and every generated table
-    prints its own row count
+- [x] **FEAT-03 Loader, identities, gallery, deadline guard** — 5h
+  - [x] Idempotent loader from `fixtures.json` — run twice, same database
+        (**measured: 979 created / 0 updated on the second run, 0 re-hashes**)
+  - [x] **5 test identities get real password hashes; ~116 get
+        `UNUSABLE_PASSWORD`.** Hashing all 121 costs ~48 s against a 10 s timeout (F-12)
+        (**measured: 5 hashes, 1.90 s inside the seed**)
+  - [x] Gallery, first page in fixture order, ≥24 per page — `run.py` greps
+        `projects[0:3]` **positionally** (**24 per page, 41 projects, 2 pages**)
+  - [x] Deadline guard: `assert_open_for_submission(event)` — a **service
+        function**, not a `save()` override and not a view decorator
+  - [x] The four isolation invariants as Hypothesis tests (P1–P4, `bible/05` §6b.2)
+  - [x] `verify_census` — both `fixtures.json` invariants, and every generated table
+        prints its own row count
   - **Verify:** fresh `up` → gallery shows the three greppable projects; deadline
     guard is visibly closed; `verify_census` clean; four invariants green
+  - **Done 2026-09-28.** All three T1 checks PASS and `verified T1`; 291 tests;
+    18/18 mutations; cold start 11.6 s. See
+    `history/features/03-loader-gallery-deadline-guard.md`.
+  - **Note (F-50):** `UNIQUE (event, name)` on `Team` was **dropped** — the
+    organizers' fixture has 40 teams and 36 distinct names. Migration
+    `teams/0002_remove_team_...`, and `(event, slug)` is kept.
+  - **Note (F-55):** the demo credential is an HMAC'd bearer token
+    `JJ1.<hmac>.<email>` signed with a **published** key, so `.dogfood.toml` keeps
+    working across `down -v`. The trade is stated in the README and in the
+    module's own docstring.
 
 > ### ☕ BREAK-1 — H+14 — **☕ T1**
 > Clean `down -v` → `up` network off · `run.py` · `isolation_proof` exits 0 ·
 > full suite · **update the slippage ledger** · decide the T1 claim in writing ·
 > tag `v-t1-verified`.
 > **T1 is a hard gate: clear it or not be judged.**
+> **The three T1 checks are green and the matrix is real, so the claim is
+> available at BREAK-1. It is not made in a file yet** — see
+> `context/current-feature.md`.
 
 ## Phase D — Assignment and judging (FEAT-04, 7h)
 
@@ -177,7 +192,9 @@
 
 | | |
 |---|---|
-| **Completed** | 0 of 10 features |
+| **Completed** | **3 of 10 features** — FEAT-01, FEAT-02, FEAT-03 |
 | **Hours planned** | 69 (68 build + 1 held) |
 | **Slippage to date** | see `bible/08` §1c — first entry at BREAK-1 |
-| **Next** | **FEAT-01** — unblocked, environment verified |
+| **Acceptance now** | `run.py` prints **`claimed nothing, verified T1`**, with all three T1 checks PASS |
+| **Next** | **BREAK-1** — the T1 claim, the slippage ledger, and `v-t1-verified` |
+| **Then** | **FEAT-04** rubric, assignment + min-cut, judge console (7h) |

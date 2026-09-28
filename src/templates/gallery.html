@@ -1,0 +1,84 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Judge Judy &middot; {{ event.name|default:"gallery" }}</title>
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+</head>
+<body>
+  <main class="wrap wrap--wide">
+    <p class="eyebrow">DOGFOOD 2026 &middot; {{ tracks|length }} tracks</p>
+    <h1>Judge Judy</h1>
+    <p class="lede">
+      {% if event %}
+        <strong>{{ event.name }}</strong> &mdash; {{ total }} submitted
+        project{{ total|pluralize }}, in submission order, page {{ page }} of
+        {{ page_count }}.
+      {% else %}
+        {{ empty_reason }}.
+      {% endif %}
+    </p>
+
+    <p class="window window--{{ window_state|default:'none' }}">
+      {% if window %}
+        {{ window.explain }}
+        <span class="window-note">
+          The published fixture closes in the past, so this portal is born closed
+          and every submission path refuses. That is the deadline guard working,
+          not a broken form.
+        </span>
+      {% endif %}
+    </p>
+
+    <ul class="projects">
+      {% for project in projects %}
+        <li class="project">
+          <p class="project-title">{{ project.title }}</p>
+          <p class="project-meta">
+            <span class="project-team">{{ project.team.name }}</span>
+            &middot;
+            <span class="project-track">{{ project.track.name }}</span>
+            &middot;
+            <span class="project-id">{{ project.id }}</span>
+          </p>
+          <p class="project-tags">
+            {% for tag in project.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+            <span class="tag tag--count">
+              {{ project.review_count }} review{{ project.review_count|pluralize }}
+            </span>
+          </p>
+        </li>
+      {% empty %}
+        <li class="project project--empty">
+          Nothing to show{% if empty_reason %}: {{ empty_reason }}{% endif %}.
+        </li>
+      {% endfor %}
+    </ul>
+
+    {% if page_count > 1 %}
+      <nav class="pager" aria-label="Gallery pages">
+        {% if page > 1 %}
+          <a href="?page={{ page|add:'-1' }}">&larr; page {{ page|add:"-1" }}</a>
+        {% endif %}
+        <span>page {{ page }} of {{ page_count }}</span>
+        {% if page < page_count %}
+          <a href="?page={{ page|add:'1' }}">page {{ page|add:"1" }} &rarr;</a>
+        {% endif %}
+      </nav>
+    {% endif %}
+
+    <ul class="links">
+      <li><a href="/projects/new">Submit a project</a> &mdash; closed until the deadline moves</li>
+      <li><a href="/healthz">Health check</a> &mdash; what the container polls</li>
+      <li><a href="/admin/">Admin</a> &mdash; Django admin</li>
+    </ul>
+
+    <p class="foot">
+      Judge Judy &mdash; one container, one command, no network, no cloud account.
+      Review counts are public; individual scores are not. Open a page and you
+      see the projects, never another judge's review of one.
+    </p>
+  </main>
+</body>
+</html>
