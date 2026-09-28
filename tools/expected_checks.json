@@ -129,10 +129,22 @@
       "state: claiming T2 and verifying T1 scores as T1, and overclaiming is",
       "the one thing that actually costs points.",
       "",
-      "`claimed = []` today, and that is accurate: the container, the healthcheck",
-      "and the offline guarantee are real, but the gallery, the deadline guard and",
-      "the judge surface are not built, so no tier is complete. The claim is made",
-      "at a verification break against what is green, not in advance."
+        "`claimed = [\"T1\"]` as of BREAK-1 on 2026-09-28, where it was decided",
+        "against what was green: all three T1 checks pass, and pass for the right",
+        "reason (the `submit_refused_by_deadline` probe below). T2 is deliberately",
+        "unclaimed - all four of its checks are 'fail' above, because the judge",
+        "console, the scoped score endpoint and the CSV export are not built.",
+        "",
+        "TWO tests enforce this, and they are not redundant. `tools/run_acceptance.py`",
+        "checks `claimed` against the report's OWN `verified` line, against a",
+        "running container; that branch is mutation-tested. The pytest copy",
+        "(`test_demo_credentials.py::test_the_claim_names_only_tiers_the_gate_can_verify`)",
+        "checks the claim against THIS file's expectations, with no container, so an",
+        "overclaim is caught by `just test` before the gate ever runs. It parses the",
+        "tier split out of run.py rather than typing it, and mirrors run.py's",
+        "prefix lock, so a claim of T2 with a failing T1 check fails for the same",
+        "reason run.py would give."
+
     ],
     "enforce": true
   }

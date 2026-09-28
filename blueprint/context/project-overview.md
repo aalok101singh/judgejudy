@@ -10,8 +10,9 @@ DOGFOOD 2026, built to be forked and run for a decade. Not a demo.
 **Window:** 69 hours, one person, solo. Freeze H+69.
 **Status:** FEAT-01, FEAT-02 and FEAT-03 built and verified. 24 models across 12
 apps; the isolation primitive, the loader, the public gallery and the deadline
-guard are in place. **`run.py` prints `claimed nothing, verified T1`.** Next:
-**BREAK-1** — the T1 claim, the slippage ledger, the tag.
+guard are in place. **`run.py` prints `claimed T1, verified T1`, and
+`v-t1-verified` is tagged.** Next: **FEAT-04** — rubric, assignment + min-cut,
+judge console.
 
 ---
 
@@ -203,17 +204,24 @@ test instead of quietly weakening the document.
 
 ## 10. Open blockers
 
-- **No git repository (F-14, P2) — the only blocker left.** The findings and the
-  correction log are the Write Up Quest material and none of it is versioned.
-- **The ambient `python` is 3.14.6 with no Django (F-38, P2).** The venv is
-  3.13.13; the container is 3.13.15. Use `.venv\Scripts\python.exe` explicitly —
-  Django 5.2.17's `Requires-Python: >=3.10` has no upper bound, so the pin will
-  not save you.
+**None.** The two entries that used to be here are both closed, and the section
+kept its heading — see **F-57**, which is the same defect in a second file.
+
+- ~~**No git repository (F-14, P2) — the only blocker left.**~~ **Closed.** The
+  repository exists, on `main` at `github.com/aalok101singh/judgejudy`, with the
+  findings ledger and the correction log versioned — which is the Write Up Quest
+  material F-14 existed to protect.
+- ~~**The ambient `python` is 3.14.6 with no Django (F-38, P2).**~~ **Closed at
+  FEAT-01**, and still true, which is why it is kept as a live warning rather
+  than dropped: the venv is 3.13.13, the container is 3.13.15, and a bare
+  `python` is still 3.14.6 with no Django. Use `.venv\Scripts\python.exe`
+  explicitly — Django 5.2.17's `Requires-Python: >=3.10` has no upper bound, so
+  the pin will not save you. `just doctor` names the interpreter it resolved.
 
 **Docker is no longer a blocker (F-13 closed).** 29.6.2 on WSL2, Compose v5.3.1,
-`just` 1.58.0, `python:3.13-slim` pre-pulled. One trap remains: it is installed
-**per-user**, so `docker` was on no PATH at all until F-34 was fixed. A stale
-shell still will not see it.
+`just` 1.58.0, `python:3.13-slim` pre-pulled — all re-verified at BREAK-1. One
+trap remains: it is installed **per-user**, so `docker` was on no PATH at all
+until F-34 was fixed. A stale shell still will not see it.
 
 ## 11. Where the depth lives
 
@@ -255,17 +263,19 @@ shell still will not see it.
 across 12 apps, one initial migration per app plus one correction,
 `Review.objects.for_actor()` with its scope receipt, a hash-chained
 `AuditEntry`, a lint rule that fails the build on an unscoped `Review` read, an
-idempotent loader, the public gallery and the deadline guard. **Next action:
-BREAK-1** — decide the T1 claim in writing and tag `v-t1-verified`.
+idempotent loader, the public gallery and the deadline guard. **BREAK-1 is
+closed:** the T1 claim was decided in writing and `v-t1-verified` is tagged, with
+the slippage ledger's first entry written. **Next action: FEAT-04** — rubric,
+assignment + min-cut, judge console, reviews.
 
 | | |
 |---|---|
-| Findings | **56** — **0 open blocking, 0 open**, 1 fixed (F-51, a question deferred to FEAT-05), 1 unverified (F-27), 10 accepted by decision, 32 closed |
+| Findings | **59** — **0 open blocking, 1 open** (F-59, P3), 1 fixed (F-51, a question deferred to FEAT-04/05), 1 unverified (F-27), 10 accepted by decision, 34 closed |
 | Open questions | **0.** Two answered, thirteen self-answered, one DM dropped |
 | Contributions upstream | 5 (`bible/README.md` U-1…U-5), incl. a corrected spec figure |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
 | Spec layer | audited against the given inputs 2026-09-27; five errors found and closed (F-28…F-32) |
-| Gate at FEAT-03 | `just check` **green**, `verified T1` · `prove-offline` **8.0 s** · `mutation-test` **18/18** · spec 67/67 · **291 tests** · cold start **11.6 s** |
+| Gate at FEAT-03 | `just check` **green**, `verified T1` · `prove-offline` **8.0 s** · `mutation-test` **18/18** · spec 67/67 · **291 tests** · cold start **11.8 s** measured 2026-09-28 |
 
 **The number that changed the shape of the project:** FEAT-03 was the first
 feature to run our code against the organizers' *data* rather than data we

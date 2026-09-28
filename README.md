@@ -24,10 +24,10 @@ built yet.
 
 | | State |
 |---|---|
-| `docker compose up` → serving page | ✅ **11.6 s** from an empty volume, budget 60 s |
+| `docker compose up` → serving page | ✅ **11.8 s** from an empty volume, budget 60 s, measured 2026-09-28 |
 | Boots with `--network none` | ✅ **proved** — healthy at **8.0 s**, four probes pass |
 | Healthcheck from a clean volume | ✅ green |
-| **Acceptance: T1** (gallery public · fixture projects shown · closed event refuses) | ✅ **3 of 3 PASS** — `run.py` prints `claimed nothing, verified T1` |
+| **Acceptance: T1** (gallery public · fixture projects shown · closed event refuses) | ✅ **3 of 3 PASS** — `run.py` prints `claimed T1, verified T1` |
 | Acceptance: T2 (judge console, peer refusal, export) | ❌ **not built** (FEAT-04/05) |
 | Judge console, rubric, assignment | ❌ **not built** (FEAT-04) |
 | Isolation enforcement, exports | ❌ **not built** (FEAT-05) |

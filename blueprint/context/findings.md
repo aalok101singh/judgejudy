@@ -58,8 +58,9 @@ sentence about why: this was the first feature that ran our own code against
 the organizers' *data* rather than against data we built. Four of the eight are
 values that agreed with what we expected and disagreed with what the file said.
 
-F-48 stays in the *Open* section below because it is a live tooling defect that
-a reviewer can still trip over until the next session reads the justfile comment.
+F-48 is `closed` and was re-verified at BREAK-1: `just accept` prints the report
+and `just coldstart` measures to a serving page. It stays in the *Open* section
+below only as a historical placement, corrected as **F-57**.
 
 ### F-49 [P1] closed - 123 accounts with an empty password, and an empty password authenticates
 
@@ -668,7 +669,9 @@ instead of silently invalidating every derived number.
 
 ## Open — non-blocking
 
-*One entry. Everything else in this section was closed at FEAT-02.*
+*Three entries, all found at BREAK-1's verification pass and none of them P0 or
+P1, so nothing here blocks the break. F-48 is here as a misplacement, not as
+live work — see **F-57**.*
 
 ### F-48 [P2] closed - `just accept` and `just coldstart` had never been runnable
 
@@ -700,7 +703,108 @@ variadic; `*args="{}"` is a parameter whose value happens to be two braces.
 **Resolution:** **Fixed 2026-09-28.** `*args` on all three recipes, with the
 reason recorded beside `coldstart` so the default is not "helpfully" restored.
 Both commands re-run: `just accept` prints the report, `just coldstart` measures
-**11.6 s** to a serving page against the 60 s budget.
+**11.6 s** to a serving page against the 60 s budget. *(Re-measured at BREAK-1
+at **11.8 s**; see **F-58** on why the tenths are not a project number.)*
+
+### F-57 [P3] closed - The ledger's own "Open" section held a closed finding, and said it was live
+
+**File:** `blueprint/context/findings.md`
+**Found:** 2026-09-28, at BREAK-1, while re-running the whole Phase 0 pass
+**Why it matters:** The section header read *"One entry. Everything else in this
+section was closed at FEAT-02."* and the FEAT-03 preamble above said F-48
+*"stays in the Open section because it is a live tooling defect a reviewer can
+still trip over."* The entry itself was marked `closed`, said **"Fixed
+2026-09-28"**, and quoted both commands re-running.
+
+All three statements cannot be true. Re-run at BREAK-1: **`just accept` prints
+the report and `just coldstart` measures to a serving page** — the repair is
+real, so "live tooling defect" was stale prose that outlived its own fix.
+
+This is the ledger's own version of the rule it exists to police. A section
+headed *Open* that contains nothing open trains the reader to skim it, and the
+day it does hold a real open finding, it is the one heading they stop reading.
+**It is also the second time this file has been the thing that was wrong** —
+F-52 was this ledger's own mass arithmetic.
+
+**The same defect, in a second file, found in the same pass.**
+`project-overview.md` §10 was headed **"Open blockers"** and held two entries,
+one of them *"No git repository (F-14) — the only blocker left"* — with **F-14
+already closed** and the repository in use, and F-38 also closed. Two closed
+findings presented as the project's remaining blockers, in the one section a
+reader consults to answer "is anything wrong?". Same root cause: **a heading
+outliving its contents.** Both are repaired.
+
+That is two instances from one sweep, and it says something worth recording:
+the finding class is not "the ledger is wrong", it is **"a status heading is
+written once and never revisited when the thing under it changes."** Nothing in
+the spec gate checks a heading against its contents, and a machine cannot
+easily. The defence is the break sweep itself — which is the argument for
+re-running Phase 0 at every break rather than trusting the previous session's
+numbers.
+**Suggested fix:** Move closed work out of an *Open* section, or mark the
+placement inline as historical.
+**Resolution:** **Closed 2026-09-28.** Ledger header and preamble corrected and
+the entry annotated as a misplacement; `project-overview.md` §10 rewritten to
+name both findings closed, with the live F-38 warning kept because the trap is
+still live.
+
+### F-58 [P3] closed - The one mechanically-measured number is the only one with no regeneration path
+
+**File:** `AGENTS.md`, `blueprint/history/features/03-…md`, F-48 above
+**Found:** 2026-09-28, at BREAK-1, re-measuring the cold start
+**Why it matters:** The cold start is the **only figure in this project measured
+by an instrument rather than estimated** — `tools/coldstart.py` times it and
+fails if it breaches 60 s. And it is quoted to a tenth of a second, in three
+shipped documents, from a single historical run:
+
+```
+AGENTS.md          cold start 11.6 s against the 60 s budget
+FEAT-03 archive    11.6 s to a serving page, budget 60 s
+F-48 entry         just coldstart measures 11.6 s
+```
+
+Re-measured at BREAK-1: **11.8 s**, healthcheck green at 11.7 s. Nothing is
+false — 11.6 s was a real measurement — but **0.2 s of run-to-run jitter is now
+indistinguishable from a transcription error**, which is precisely the failure
+mode the "generated, not transcribed" rule exists to prevent. That rule is
+enforced everywhere else by `verify_spec.py` (67 checks) and by the census being
+recomputed from `fixtures.json`; the cold start has no such path, because nothing
+regenerates the documents that quote it.
+**Suggested fix:** Quote it as a measurement with a date and a budget, not a
+figure to the tenth, and let `tools/coldstart.py` be the only place the exact
+number appears.
+**Resolution:** **Closed 2026-09-28.** The three documents now read as a
+measurement with a date against the budget, and the tenths are attributed to the
+run rather than asserted as the project's number.
+
+### F-59 [P3] open - No check that a command named in a document is a command that can be typed
+
+**File:** `tools/verify_spec.py`, `justfile`
+**Found:** 2026-09-28, at BREAK-1, running the recipe audit by hand
+**Why it matters:** **F-47 and F-48 were the same defect twice** — `just
+prove-offline` and `just mutation-test` named in four documents with no recipe
+behind them (F-47), then three recipes that existed and were broken (F-48). F-56
+was a third variant: the recipes existed and `just --list` misdescribed them.
+**Three findings, one missing check.** All three were found *by hand*, in three
+separate sessions, by whoever remembered to run the audit.
+
+`verify_spec.py` has 67 checks and **not one of them is "every `just` recipe
+named in a document exists."** The audit is cheap and mechanical — at BREAK-1 it
+took one pass: extract `just <word>` from every markdown file outside `bible/`
+and assert each name is a recipe. It found 15 real recipe names, all present,
+plus 5 English false positives (*"just status"*, *"just counted"*) that a
+recipe-name allow-list rejects for free.
+**Why it is open and not closed in this pass:** adding a check to the spec layer
+is new work, and this is a break, not a feature. `ai-interaction.md` §6 is
+explicit about that.
+**Suggested fix:** ~15 lines in `verify_spec.py` — parse the recipe names out of
+the `justfile`, extract `just <recipe>` from the shipped markdown, and fail on
+any name that is not a recipe. Prefer requiring the match to start a line or sit
+inside a fenced block, which kills the false positives without an English
+allow-list.
+**Resolution:** Open. **Recommended for FEAT-04** — it is ~15 minutes and it
+mechanically prevents a fourth instance of a defect class that has now cost three
+findings.
 
 ## Resolved — environment verification, 2026-09-27
 

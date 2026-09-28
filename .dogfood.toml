@@ -19,14 +19,34 @@ base_url = "http://localhost:8080"
 [tiers]
 # Honest claims only, and they are checked against what the program can verify.
 #
-# `claimed = []` and that is still the accurate statement: the gallery, the
-# deadline guard and the census are real, but the judge surface, the export and
-# the public layer are not built, so no tier is complete. Claiming T1 here would
-# mean claiming T2 checks we cannot pass.
+# **`claimed = ["T1"]`, decided at BREAK-1 on 2026-09-28** — the first scheduled
+# verification break, against what was actually green at the time, and not in
+# advance.
+#
+# T1 is earned because all three of its checks PASS, and — the part that decides
+# it — they pass *for the right reason*. `run.py` accepts any 4xx for "closed
+# event refuses submissions", so before FEAT-03 a 404, a 405, a CSRF rejection
+# and a 401 for an unrecognised credential each reported PASS with the deadline
+# never consulted (F-40). The acceptance gate now re-sends the checker's own
+# request, with the same credential read out of the same file, and requires
+# `assert_open_for_submission` in the response body. A wrong-reason refusal can no
+# longer stand in for the guard, and an emptied [auth] block is caught before a
+# request is sent.
+#
+# **T2 is deliberately NOT claimed.** It is four checks and none of them runs:
+# the judge console, the scoped score endpoint and the CSV export arrive in
+# FEAT-04 and FEAT-05, and until they do, those checks fail with real URLs.
+#
+# The gap is named in the same breath as the claim, because `run.py` prints
+# `claimed` against `verified`: `verified` is prefix-locked over
+# ["T1","T2","T3","T4"] and there are no T3 or T4 checks at all, so even a
+# flawless build would print `verified T1 T2` (bible/03 §2). Claiming T1 here
+# makes the report read `claimed T1, verified T1`, which is exactly the sentence
+# we want a panelist to read.
 #
 # The claim is made at a scheduled verification break, against what is actually
 # green — not in advance, and not in a README.
-claimed = []
+claimed = ["T1"]
 pitch = "Self-hostable hackathon submission and judging platform. One command, offline, no cloud."
 
 [auth]

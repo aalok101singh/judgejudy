@@ -88,9 +88,11 @@
 > full suite · **update the slippage ledger** · decide the T1 claim in writing ·
 > tag `v-t1-verified`.
 > **T1 is a hard gate: clear it or not be judged.**
-> **The three T1 checks are green and the matrix is real, so the claim is
-> available at BREAK-1. It is not made in a file yet** — see
-> `context/current-feature.md`.
+> **DONE 2026-09-28.** All three T1 checks PASS, `just check` GATE GREEN on a
+> clean volume, offline 8.0 s, 18/18 mutations, 291 tests, 67/67 spec. The claim
+> was decided here and written to `.dogfood.toml` as `claimed = ["T1"]` with the
+> reason beside it. **`v-t1-verified` tagged.** T2 deliberately unclaimed: all
+> four T2 checks fail with real URLs. See `context/current-feature.md`.
 
 ## Phase D — Assignment and judging (FEAT-04, 7h)
 
@@ -194,7 +196,8 @@
 |---|---|
 | **Completed** | **3 of 10 features** — FEAT-01, FEAT-02, FEAT-03 |
 | **Hours planned** | 69 (68 build + 1 held) |
-| **Slippage to date** | see `bible/08` §1c — first entry at BREAK-1 |
-| **Acceptance now** | `run.py` prints **`claimed nothing, verified T1`**, with all three T1 checks PASS |
-| **Next** | **BREAK-1** — the T1 claim, the slippage ledger, and `v-t1-verified` |
-| **Then** | **FEAT-04** rubric, assignment + min-cut, judge console (7h) |
+| **Slippage to date** | see `bible/08` §1c — first entry written at BREAK-1: A ≈4h, B ≈5h, C ~6h (**+1**) |
+| **Acceptance now** | `run.py` prints **`claimed T1, verified T1`**, with all three T1 checks PASS |
+| **Tag** | **`v-t1-verified`** (BREAK-1, 2026-09-28) |
+| **Next** | **FEAT-04** rubric, assignment + min-cut, judge console (7h) |
+| **Then** | **FEAT-05** isolation enforced, dashboard, exports (8h), then BREAK-2 ☕ T2 |

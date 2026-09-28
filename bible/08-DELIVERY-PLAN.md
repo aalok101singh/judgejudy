@@ -150,9 +150,9 @@ break protocol real rather than ceremonial.
 
 | Block | Planned | Actual | Δ | Why |
 |---|---|---|---|---|
-| A | 4.0 | | | |
-| B | 5.0 | | | |
-| C | 5.0 | | | |
+| A | 4.0 | ~4 | ≈0 | Skeleton, image, compose, healthcheck. On plan. `compose up` served in 6.2 s, and the two costs that would have overrun it did not happen: a 1.9 s seed and a PATH problem that was not a missing install (F-13/F-34) |
+| B | 5.0 | ~5 | ≈0 | Schema, 24 models / 12 apps, `for_actor()`, scope receipt, hash-chained audit, the JJ01 lint rule. On plan, and the scope receipt landed in the estimate rather than on top of it |
+| C | 5.0 | ~6 | **+1** | **The first block to meet the organizers' data instead of ours, and it cost the hour.** Eight findings, three of them P1 (F-49, F-50, F-55), every one a value that agreed with what we expected and disagreed with what the file said. F-40 was also discharged here: two of the seven checks had been passing for the wrong reason, and the fix was a new *kind* of precondition, not a patch |
 | D | 7.0 | | | |
 | E | 8.0 | | | |
 | F | 10.0 | | | |
@@ -163,6 +163,25 @@ break protocol real rather than ceremonial.
 > every row is negative teaches the reader nothing, and the most useful entry in
 > the whole write-up will be the block where something took two hours instead of
 > one and we found out at a break.
+
+**BREAK-1, 2026-09-28 — first entry, so the format is set here.** Three
+concessions, stated up front because they weaken the table above:
+
+1. **The actuals are estimates, not a stopwatch.** A, B and C are the
+   `**Actual:**` figures each feature archive recorded when it was written
+   (`~4h`, `~5h`, `~6h`). They are honest judgements written after the fact, not
+   measurements. A reader should treat the ± as "within the hour", not as a
+   figure to the tenth. **Nothing in this project has ever been timed against a
+   clock; the one number we *do* measure mechanically is the cold start, and it
+   is measured by `tools/coldstart.py`.**
+2. **Three rows of zeros is a suspicious shape**, and the rule below exists
+   because of it. Blocks A and B going to plan is the *expected* result, not
+   evidence that the estimates are good; the first honest test of the estimating
+   is block C, and block C ran over. One over in three is not a trend.
+3. **Δ is against the plan, not against the budget.** The 69 hours do not move
+   because block C overran; they move because blocks D–H are still unstarted, so
+   the overrun is absorbed by the ~1.5 h × 4 breaks already budgeted, or it is
+   not absorbed at all. Which of those is true is decided at BREAK-2, not here.
 
 ---
 

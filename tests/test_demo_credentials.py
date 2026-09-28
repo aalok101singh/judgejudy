@@ -43,6 +43,28 @@ CONFIG = REPO / ".dogfood.toml"
 #: a committed file is one more thing to keep true.
 CHECKER_KEYS = ("organizer", "judge_a", "judge_b", "participant")
 
+#: The tier order `run.py` prefix-locks over, read from its own source below.
+#: Written here only as the parse target; if run.py ever reorders its tiers this
+#: constant is wrong and `test_the_claim_names_only_tiers_the_gate_can_verify`
+#: fails rather than passing quietly.
+_TIER_ORDER = ("T1", "T2", "T3", "T4")
+
+
+def _checks_by_tier_from_run_py() -> dict[str, str]:
+    """``{check label: tier}``, parsed out of the organizers' ``run.py``.
+
+    ``run.py`` is UNMODIFIED and must stay that way, so this reads it rather than
+    importing it. It builds its check list with literal ``Check("T1", "label")``
+    calls, which is the whole of the surface we need and is the same thing
+    ``tools/verify_spec.py`` derives for its 67 checks.
+    """
+    import re
+
+    source = (REPO / "run.py").read_text(encoding="utf-8")
+    pairs = re.findall(r'Check\(\s*"(T\d)"\s*,\s*"([^"]+)"\s*\)', source)
+    assert pairs, "run.py declares no Check(...) literals; the parse is broken"
+    return {label: tier for tier, label in pairs}
+
 
 @pytest.fixture(scope="module")
 def fixture() -> dict:
@@ -221,9 +243,67 @@ class TestCommittedConfig:
         for name in ("gallery", "submit"):
             assert resolve(config[name].split("?")[0]) is not None, name
 
-    def test_the_claimed_tier_list_is_still_empty(self):
-        """The claim is made at a break, against what is green. Not here."""
-        assert read_config()["tiers"]["claimed"] == []
+    def test_the_claim_names_only_tiers_the_gate_can_verify(self):
+        """The claim must be earned. This is the test that makes that structural.
+
+        **It used to be `assert claimed == []`,** and that version was right for
+        exactly one milestone. Pinning the *value* rather than the *rule* meant it
+        failed for the wrong reason the moment a break legitimately changed the
+        claim, and would have failed again at BREAK-2, BREAK-3 and BREAK-4 --
+        three times teaching a reader that the claim is not allowed to change
+        rather than that it has to be earned. A test that cannot fail for the
+        right reason is the F-41 defect.
+
+        So the rule is asserted instead: **every tier named in ``claimed`` must
+        have all of its checks expected to pass**, in ``tools/expected_checks.json``
+        -- the file that already has to stay in step with the build, and that the
+        gate fails on when it goes stale in either direction.
+
+        Two properties make this more than an identity:
+
+        * The tier of each check is **parsed out of ``run.py``**, not typed here.
+          ``run.py`` is the organizers' file and owns the tier split; a second copy
+          of "3 in T1, 4 in T2" in a test is exactly the transcription this
+          project has now caught five of. The same technique is what
+          ``tools/verify_spec.py`` does, and it was mutation-tested before being
+          trusted (F-33).
+        * ``verified`` is **prefix-locked** in ``run.py``: a tier only counts if
+          every tier below it passed. This test mirrors that, so a claim of T2
+          with a failing T1 check fails here for the reason ``run.py`` would give.
+
+        The live, stronger version of this rule is in ``tools/run_acceptance.py``,
+        which checks ``claimed`` against the report's own ``verified`` line; that
+        branch is mutation-tested. This one runs in pytest, with no container, and
+        therefore catches the overclaim at ``just test`` -- before the gate.
+        """
+        expected = json.loads(
+            (REPO / "tools" / "expected_checks.json").read_text(encoding="utf-8")
+        )["checks"]
+
+        tiers = _checks_by_tier_from_run_py()
+        # A check run.py declares but the expectations file does not name would
+        # make this test silently check less than it appears to. Say so.
+        assert set(tiers) == set(expected), (
+            "run.py and expected_checks.json disagree about which checks exist; "
+            "the claim test would be asserting against a stale file"
+        )
+
+        # Mirror run.py: a tier is verified when every one of its checks passes,
+        # and the prefix breaks at the first tier with no passing check.
+        verified = []
+        for tier in _TIER_ORDER:
+            owned = [label for label, t in tiers.items() if t == tier]
+            if not owned or not all(expected[label]["expect"] == "pass" for label in owned):
+                break
+            verified.append(tier)
+
+        claimed = read_config()["tiers"]["claimed"]
+        assert set(claimed) <= set(_TIER_ORDER), f"unknown tier claimed: {claimed}"
+        for tier in claimed:
+            assert tier in verified, (
+                f"claimed {tier} but the gate cannot verify it: verified is "
+                f"{verified or ['nothing']}. Build the tier, or do not claim it."
+            )
 
 
 # ---------------------------------------------------------------- the backend

@@ -1,6 +1,6 @@
 DOGFOOD 2026 acceptance report
 portal: http://localhost:8080
-claimed: nothing
+claimed: T1
 fixtures: fixtures.json
 
 T1  gallery is public ................. PASS
@@ -23,4 +23,4 @@ T2  csv export works .................. FAIL
        sent as organizer
        got 404, wanted 200
 
-claimed nothing, verified T1
+claimed T1, verified T1
