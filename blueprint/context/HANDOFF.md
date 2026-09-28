@@ -68,21 +68,22 @@ whether it is intended before you touch it.
    not to fix. Check anything touching the files you are about to touch. Note
    the statuses: `fixed` blocks completion **on purpose**, and a repair is not
    done until a review has looked at the result.
-5. `blueprint/history/features/03-loader-gallery-deadline-guard.md` — the most
-   recent archive. What was actually built, what it cost, and the things the
-   next session would otherwise re-derive.
+5. `blueprint/history/features/04-assignment-and-judge-console.md` — the most
+   recent archive. What was actually built, what it cost, and the two P1s that
+   were in our own reasoning rather than in the data.
 6. `blueprint/build-plan.md` — the acceptance line for the current feature.
 
 DO NOT read the `bible/` folder. It is 330KB of research. The overview names the
 section for every kind of question; open that one section. For the next feature
-you will want `bible/05` (schema, the isolation primitive) and `bible/06`
-(assignment, normalization).
+(FEAT-05, the T2 surface) you will want `bible/07` (the threat model, including
+what we did not stop) and `bible/05` §9 (the API surface). `bible/06` is still
+worth its §2 if you touch the assignment engine again.
 
 ## PHASE 0 — verify the build before you extend it
 
 **Do this first, in this order, and report what you measured.** The previous
 session's numbers are in `AGENTS.md` §Current state, in `README.md` and in the
-FEAT-03 archive. Regenerate them. Where a document disagrees with a run, **the
+FEAT-04 archive. Regenerate them. Where a document disagrees with a run, **the
 run wins and the document is a finding** — write it into `findings.md`.
 
     just doctor            # which interpreter, which docker, which tools
@@ -102,8 +103,11 @@ Two things to check that a gate does **not** cover, and both have bitten:
 
 - **A document that names a command has to be a command that can be typed.**
   Three recipes in this repository were once named in four documents and did not
-  exist, and later three existed and were still broken. Run `just --list` and
-  compare it against the recipes the documents tell a reader to run.
+  exist, and later three existed and were still broken. **This is now a
+  mechanical check** — `verify_spec.py`'s `every 'just' recipe named in a
+  document exists` covers it, so you no longer have to remember to run the audit
+  (F-59). Run `just --list` against the recipes the documents name anyway, once,
+  and do not re-derive it every session.
 - **A committed `acceptance-report.txt` must be reproducible.** Run
   `just report` and diff it. It is generated and must never be hand-edited.
 
@@ -112,24 +116,40 @@ of a known-red one is not a green gate.
 
 ## Where the build is
 
-FEAT-01 (skeleton + container), FEAT-02 (schema + isolation primitive) and
-FEAT-03 (loader, gallery, deadline guard) are **done and committed.** Read
-`blueprint/context/current-feature.md` for what is in flight — it was rewritten
-at the end of the last session and it is the authority on this, not the paragraph
-below.
+FEAT-01 (skeleton + container), FEAT-02 (schema + isolation primitive),
+FEAT-03 (loader, gallery, deadline guard) and **FEAT-04 (assignment engine,
+min-cut certificate, judge console)** are **done, verified and committed** at
+`3e78d78`. **BREAK-1 is closed**: the T1 claim was decided in writing and
+`v-t1-verified` is tagged. Read `blueprint/context/current-feature.md` for what
+is in flight — it is the authority on this, not the paragraph below.
 
-Two things about the state you should know before you plan:
+Three things about the state you should know before you plan.
 
-**The next step may not be a feature.** The plan puts a scheduled verification
-break immediately after FEAT-03, and a break is an hour where a **tier claim is
-decided in writing** against what is actually green. `current-feature.md` has
-the protocol and the measured evidence. **A tier claim is a decision for the
-human, not for you** — do not write one into `.dogfood.toml` on your own
-initiative, and do not claim a tier whose checks are not green.
+**The next step is FEAT-05, the T2 surface**, and it is the tier that matters.
+All four T2 checks have been failing with real URLs since the first commit, and
+FEAT-05 is what makes them pass. The trap is live and unchanged: **denial must be
+a literal 403 with an empty body, never a 302** — `run.py` follows redirects, so
+a redirect returns 200 and fails a scored check while looking correct in a
+browser. `tools/expected_checks.json` already carries a precondition for the
+judge-scores route; **flipping an expectation to `pass` is only correct when the
+feature that owns it is done and its acceptance line has passed.**
 
-**One finding is deliberately left `fixed` rather than `closed`,** and
-`fixed` blocks completion on purpose. `findings.md` says which and why. Read it
-before touching the file in question.
+**One finding is deliberately left `fixed` rather than `closed`,** and `fixed`
+blocks completion on purpose. `findings.md` says which and why. It is **F-51**:
+should a judge who *also* organises be refused their own peers' scores? The
+accessor refuses (the safe reading) and the docstring says so. **It is a product
+decision, not a code decision** — say it once with the consequence, then follow
+the human's answer. FEAT-05 builds the routes that reach it.
+
+**The next session should expect no new P1 in the data, and should say so
+out loud if it finds one.** FEAT-03 was the first feature to meet the organizers'
+*data* and opened three P1s in one go. FEAT-04 opened **none**, because its data
+was already loaded and verified twice. What FEAT-04 found instead were two P1s
+in **our own reasoning** (F-60, F-61) — both found by *executing* something
+rather than reading it. The rate tracks how much genuinely new input meets the
+code, and FEAT-05 is mostly new code over old data. **Look for F-64's shape: a
+rule the fixture cannot reach is a rule with no coverage, and the suite must say
+so rather than let a green gate imply otherwise.**
 
 ## The gate
 
@@ -209,6 +229,41 @@ one run (F-49).
 `process_view`, so wrapping a view in the middleware and returning its result
 verifies **nothing**, silently.
 
+**12. A CSRF rejection and a scope rejection are both 403, and a test that
+passes `enforce_csrf_checks=True` without a token proves nothing.** CSRF fires
+in middleware *before* the view runs, so a strict client with no token gets a 403
+for the wrong reason and the isolation assertion passes without the scope ever
+being consulted. The fix is a **same-client GET then POST** — a fresh client has
+no CSRF *cookie* at all and is rejected before the token is even compared — and a
+control test that pins down the two refusals are distinguishable. This is trap 9
+again, one level in, and it is why
+`tests/test_judge_console.py::test_a_strict_client_with_no_token_is_refused_by_csrf_not_by_scope`
+exists next to the test it protects.
+
+**13. A feature that returns structurally valid output containing nothing is
+indistinguishable from a feature that works.** `bible/06` §2.3 says the min-cut
+certificate should name "the judge nodes on the sink side of the cut". On the
+network §2.2 itself describes, **that set is empty** — the canonical cut's source
+side is reached through the projects that went *un*covered, whose judge edges are
+untouched and therefore fully residual, so a deficient track's judges are on the
+**source** side. The certificate printed a deficiency with nobody on it (F-61).
+The right reading is the same cut one arc later: **the bottleneck judges are the
+eligible judges whose capacity is exhausted.** The general trap: an empty
+collection is a valid value, so a test asserting `== ()` passes forever. Assert
+that something is **named**, and mutate the code to empty the collection and
+watch the test fail.
+
+**14. Textbooks are not evidence.** The min-cost flow in
+`src/reviewer/assignment/flow.py` was written the standard way — successive
+shortest paths with **incrementally updated** Johnson potentials — and it returns
+**feasible but non-minimal** flows without ever raising, because a node that drops
+out of reachability keeps a stale potential and Dijkstra then runs on a negative
+reduced cost (F-60). It was caught by testing the solver against a **second,
+independently written algorithm** over 1,500 random instances. That is the general
+move: when you implement an algorithm, the cheapest proof is a differential test
+against another implementation of the same specification. Recomputing potentials
+from Bellman-Ford every augmentation costs 0.15 ms at this size and is correct.
+
 ## The rules, which are not negotiable
 
 - **Every number in a shipped document is GENERATED, not transcribed.** Six of our
@@ -228,7 +283,11 @@ verifies **nothing**, silently.
   and were only found by mutation testing (F-41).
 - **A check that cannot fail is worse than no check.** If a census assertion is
   computed from the same list it just counted, it is an identity — say so rather
-  than presenting it as verification.
+  than presenting it as verification. **An empty collection is a valid value**,
+  so `assert found == []` passes forever and asserts nothing (F-61, F-65).
+  **Prove a new test can fail: break the code on purpose and watch it go red.**
+  FEAT-04 ran 16 deliberate corruptions across its two new modules, 8 against the
+  engine and 8 against the console, each naming the test that must notice.
 - **Do not re-litigate a decision.** D-01…D-15 in the overview are settled; the
   cut ledger in `bible/08` §13 records the rejected items with reasons. If you
   think one is wrong, say so **once, in a paragraph, with the consequence**, and
@@ -238,7 +297,9 @@ verifies **nothing**, silently.
   honest gap reporting and penalises inflation; `run.py` prints `claimed` against
   `verified` and the panel runs the identical program.
 - **The tier claim is made at a scheduled break against what is actually green** —
-  not in advance, and not in a README.
+  not in advance, and not in a README. It is **the human's decision**: do not
+  write one into `.dogfood.toml` on your own initiative, and do not claim a tier
+  whose checks are not green.
 - **Commit as yourself (`aalok101singh`) only.** No collaborators, no build
   files in the repository. Commit the file structure, source, tests and docs
   only. Push to `main` when a feature is verified.
@@ -249,6 +310,13 @@ Update `current-feature.md`, update `findings.md`, write the archive in
 `history/features/`, and commit. **A repair is not done when the code changes —
 it is done when a review has looked at the result.** `fixed` blocks completion in
 the findings ledger on purpose.
+
+**Re-run Phase 0 before you commit, not after.** Every number in the archive and
+in the state files has to be the number you measured in *this* session — and
+editing `project-overview.md` changes its own byte size, which is a spec-gate
+check, so expect one `just spec-quiet` failure at the end and fix the quoted size
+in `AGENTS.md`. Also keep the overview **under 20,000 bytes**: it is loaded at the
+start of every session, and the gate fails if it goes over.
 
 ## Report back
 
