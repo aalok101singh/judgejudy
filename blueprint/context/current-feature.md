@@ -81,7 +81,8 @@ real.
 | **Status** | **ready** — FEAT-02 verified green |
 | **Started** | — |
 | **Elapsed** | 0h of 5h |
-| **Last touched** | FEAT-02 verified; `just check` green end to end, `prove-offline` 5.8 s, `mutation-test` 15/15, spec 67/67, 160 tests (`../history/features/02-schema-and-isolation.md`) |
+| **Fresh session?** | **Paste `HANDOFF.md`** — it is a self-contained prompt (read-in order, verified state, the eight traps) and is 9,710 bytes, so it loads whole. Anything in it that contradicts a file it points at is a bug in `HANDOFF.md` |
+| **Last touched** | FEAT-02 verified and pushed; `just check` green end to end, `prove-offline` 5.4 s, `mutation-test` 15/15, spec 67/67, 160 tests (`../history/features/02-schema-and-isolation.md`) |
 | **Next action** | write `load_fixtures`, run it twice, and prove the second run changed nothing |
 
 ---
