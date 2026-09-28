@@ -258,6 +258,45 @@ right for now and the docstring now matches it, but the underlying question —
 deferred to FEAT-05, which owns the judge console and the route that reaches
 the accessor. Closing it now would be closing a question, not a defect.
 
+### F-56 [P3] closed — `just --list` rendered every recipe's last comment line, so the recipe list lied
+
+**File:** `justfile`
+**Found:** 2026-09-28, after FEAT-03, while writing the cross-session handoff
+**Why it matters:** `just --list` is the answer to "what can I run?", and this
+repository makes that its **default target** for exactly that reason. Every
+recipe's doc comment here was written summary-first, wrapped across two or three
+lines, with the consequence that `just` — which displays the **last** line of a
+doc comment, not the first — printed the trailing fragment:
+
+| recipe | advertised itself as |
+|---|---|
+| `accept` | "never actually run. See the same note on `coldstart`." |
+| `check` | "has to reach for is worth more than one somebody might leave on." |
+| `default` | "repository is always \"what can I run?\"" |
+| `prove-offline` | "spec, and the first numbered disqualification." |
+| `coldstart` | "default at all." |
+
+`accept` is the sharp one: the fragment is **advice not to run the command**, on
+the command that produces `acceptance-report.txt` and is named in `AGENTS.md`,
+in the README and in `.dogfood.toml`. A fresh session told to check the recipe
+list against the documented commands would have found two plausible reasons to
+distrust the gates. It is F-35/F-48's shape one layer out — *a command's own
+documentation, contradicting the command* — and it survived every gate in this
+repository, because no gate reads `just --list`.
+
+**Resolution:** The summary is now the last line of a comment block that is
+contiguous with the recipe name, and the convention is written at the top of the
+file so the next person does not have to rediscover it. Both halves matter: a
+blank line between the comment and the name discards the doc comment entirely
+and leaves a **blank** description, which is the same defect quieter — that
+variant shipped for `down`, `up`, `spec`, `spec-quiet`, `coldboot`,
+`lint-isolation` and `prove-offline` in the first attempt at this fix, and was
+caught by reading the output of the very command being fixed.
+
+The behaviour was **executed, not recalled**: a two-line comment in a scratch
+justfile renders its second line. Asserting that from memory is how F-11
+happened.
+
 ### F-47 [P2] closed - `just prove-offline` and `just mutation-test` were named in four documents and did not exist as commands
 
 **File:** `justfile`

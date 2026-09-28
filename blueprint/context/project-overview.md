@@ -260,7 +260,7 @@ BREAK-1** — decide the T1 claim in writing and tag `v-t1-verified`.
 
 | | |
 |---|---|
-| Findings | **55** — **0 open blocking, 0 open**, 1 fixed (F-51, a question deferred to FEAT-05), 1 unverified (F-27), 10 accepted by decision, 31 closed |
+| Findings | **56** — **0 open blocking, 0 open**, 1 fixed (F-51, a question deferred to FEAT-05), 1 unverified (F-27), 10 accepted by decision, 32 closed |
 | Open questions | **0.** Two answered, thirteen self-answered, one DM dropped |
 | Contributions upstream | 5 (`bible/README.md` U-1…U-5), incl. a corrected spec figure |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |

@@ -77,26 +77,50 @@ pyguard := pyq + " tools/guard_interpreter.py --expect 3.13"
 compose_base := pyq + " tools/docker.py compose -f docker-compose.yml"
 
 # ------------------------------------------------------------------ recipes ---
+#
+# DOC COMMENT CONVENTION. `just --list` renders the LAST line of a recipe's doc
+# comment, not the first. A comment block written summary-first therefore shows
+# its final wrapped fragment, so `accept` advertised itself as "never actually
+# run" and `check` as "has to reach for is worth more than one somebody might
+# leave on" (F-56). Verified empirically, not recalled: a two-line comment
+# renders its second line.
+#
+# So every recipe below puts its one-sentence summary on the LAST line of a
+# comment block that is CONTIGUOUS with the recipe name. A blank line between
+# the comment and the name discards the doc comment entirely, so a recipe with
+# prose and no summary shows up in `just --list` with a BLANK description --
+# which is the same defect wearing a different hat. A long comment is fine. A
+# summary that is not the last line is a defect, and the way to catch one is to
+# read `just --list` and see whether the list is a lie.
 
-# List the recipes. The default target, because the first question about a
-# repository is always "what can I run?"
+# The first question about a repository is always "what can I run?", so listing
+# the recipes is the default target.
+#
+# List the recipes, and show the first help.
 default:
     @just --list --unsorted
 
-# Confirm the toolchain before anything is built on it, and name what is
-# missing. This is the difference between "Docker is not installed" (wrong,
-# twice on this project) and "docker is on no PATH" (right).
+# The difference between "Docker is not installed" (wrong, twice on this
+# project) and "docker is on no PATH" (right). Run this before anything is
+# built on the toolchain.
+
+# Confirm the toolchain, and name what is missing.
 doctor:
     @{{pyq}} tools/doctor.py
 
-# The spec-layer gate. Stdlib only: no venv, no Docker, no network. It runs
-# now, before any application code exists, and it EXITS NON-ZERO, unlike
-# run.py. Run it after any edit to blueprint/ or AGENTS.md.
+# The spec layer: the plan against the organizers' files. Stdlib only, so it
+# needs no venv, no Docker and no network. Run after ANY edit to blueprint/ or
+# AGENTS.md, and unlike run.py it EXITS NON-ZERO on failure, so unlike run.py it
+# can actually gate.
+#
+# The spec gate: the plan against the organizers' files.
 spec:
     @python tools/verify_spec.py
 
-# Only the spec gate's failures. This is the one to use while editing, because
-# 67 passing lines is noise and one failing line is the whole message.
+# Only the failures, because 67 passing lines is noise while editing and one
+# failing line is the entire message.
+#
+# The spec gate's failures, and nothing else.
 spec-quiet:
     @python tools/verify_spec.py -q
 
@@ -106,19 +130,26 @@ spec-quiet:
 build:
     {{compose_base}} build
 
-# Start in the background and wait for the healthcheck to pass. This is the
-# command the acceptance criteria name.
+# The command the acceptance criteria name, run in the background until the
+# healthcheck passes, which is a different failure from a server that came up
+# and is serving 500s.
+#
+# Start the container and wait for the healthcheck.
 up:
     {{compose_base}} up -d --wait --wait-timeout 120
     @echo "portal healthy: http://localhost:8080/"
 
-# Stop and remove. `down` keeps the volume; `clean` does not.
+# `down` KEEPS the volume, which is what makes it cheap; `clean` is the one that
+# deletes it, and the two are not interchangeable.
+#
+# Stop and remove, keeping the data.
 down:
     {{compose_base}} down
 
-# Stop, remove, AND delete the volume. This is the reset the break protocol and
-# the acceptance criteria both start from, because "it works from a warm
-# volume" is not the claim being made.
+# The reset both the break protocol and the acceptance criteria start from,
+# because "it works from a warm volume" is not the claim being made.
+
+# Stop, remove, AND delete the volume.
 clean:
     {{compose_base}} down -v --remove-orphans
 
@@ -140,11 +171,16 @@ clean:
 # never worked. A named verification command that cannot be typed is F-47 again
 # one layer out, and it is the reason the recipes below take `*args` with no
 # default at all.
+
+# Cold start from a clean volume, timed against the budget.
 coldstart *args:
     @{{pyq}} tools/coldstart.py {{args}}
 
 # Cold start without rebuilding, to separate "the build is slow" from "the boot
-# is slow". Run the full one first; this is the follow-up when it fails.
+# is slow". Run the full one first; this is the follow-up when it fails, and the
+# two together are what turn one timing number into a diagnosis.
+#
+# Cold start WITHOUT rebuilding, to separate build time from boot time.
 coldboot *args:
     @{{pyq}} tools/coldstart.py --skip-build {{args}}
 
@@ -165,6 +201,8 @@ sh *args:
 # F-48: this recipe's variadic used to default to the literal string `{}`, so
 # `just accept` -- named in AGENTS.md, in the README and in .dogfood.toml -- had
 # never actually run. See the same note on `coldstart`.
+
+# The organizers' checker, unmodified, against the running container.
 accept *args:
     @{{pyq}} run.py .dogfood.toml {{args}}
 
@@ -196,6 +234,8 @@ accept *args:
 # FEAT-05 brings back the same class of problem for the judge-scores routes.
 # What changed is that the gate no longer needs it — and an escape hatch nobody
 # has to reach for is worth more than one somebody might leave on.
+
+# THE GATE. One command, from a clean volume, that proves a checkpoint.
 check:
     @echo "=========================================================="
     @echo " 1/6  spec layer (67 checks, no Docker)"
@@ -229,46 +269,49 @@ check:
     @echo "GATE GREEN — every step above actually ran."
     @echo "Not covered here, and run at every break: just prove-offline, just mutation-test."
 
-# Generate acceptance-report.txt. The brief says commit it whatever it says,
-# and never hand-edit it: the panel runs the identical program.
+# The brief says commit acceptance-report.txt whatever it says, and never
+# hand-edit it: the panel runs the identical program.
+
+# Regenerate acceptance-report.txt.
 report:
     @{{pyq}} run.py .dogfood.toml > acceptance-report.txt
     @type acceptance-report.txt
 
 # --- local development --------------------------------------------------------
 
-# Run the test suite on the host against the pinned versions. The container is
-# the deliverable; this is the fast inner loop. It is NOT a substitute — the
-# break protocol runs against the container.
+# The container is the deliverable; this is the fast inner loop, and it is NOT
+# a substitute -- the break protocol runs against the container.
+
+# The suite on the host, against the pinned versions.
 test *args:
     @{{pyq}} -m pytest {{args}}
 
-# Lint. The unscoped-`Review.objects.all()` rule is a deliverable, not
-# hygiene, and it is a separate program (`tools/check_isolation.py`) rather
-# than a ruff plugin: ruff's plugin API is Rust, and a banned-API string in
-# pyproject.toml can only ban an exact dotted path -- which would allow
-# `Review.objects.filter(...)`, the same leak by another name. JJ01 is also a
-# separate step rather than a ruff rule so that `just lint-isolation` can be run
 # on its own, and so the rule's own tests can invoke it.
+
+# Lint: ruff check, ruff format --check, and the isolation rule.
 lint:
     @{{pyq}} -m ruff check src tests tools
     @{{pyq}} -m ruff format --check src tests tools
     @{{pyq}} tools/check_isolation.py
 
-# The real gate on migrations: the models and the migration must not have
-# drifted. Migrations are excluded from ruff's style pass (see pyproject.toml,
 # and the reason there), so this is the check that stands in for it.
+
+# Are the models and the migrations still in step?
 lint-migrations:
     @{{pyq}} src/manage.py makemigrations --check --dry-run
     @echo "migrations are in step with the models"
 
-# Just the isolation rule. Cheap enough to run on every save once the primitive
-# exists, which is the point of a syntactic rule.
+# The isolation rule alone, which is cheap enough to run on every save once the
+# primitive exists -- and that is the point of a syntactic rule, as opposed to
+# a test you run when you remember.
+#
+# The unscoped-`Review` rule on its own.
 lint-isolation:
     @{{pyq}} tools/check_isolation.py
 
-# Prove the isolation primitive, against the local database. The container
-# equivalent is step 5 of `just check`, which runs the same command.
+# The container equivalent is step 5 of `just check`, same command.
+
+# Prove the isolation primitive against the local database.
 proof:
     @{{pyq}} src/manage.py isolation_proof
 
@@ -294,12 +337,16 @@ reset-local:
 # way to produce that evidence did not exist as a command. Finding F-44.
 
 # Boot the portal under `--network none` and probe it. Requirement 1 of 5 in the
-# spec, and the first numbered disqualification.
+# spec, and the first numbered disqualification, so it is the one that is worth
+# proving before anything else in this file.
+#
+# Prove the portal boots and serves with no network at all.
 prove-offline:
     @{{pyq}} tools/prove_offline.py
 
-# Deliberately corrupt fifteen things and assert every one is caught. A checker
-# that has only ever passed is not evidence of anything (F-33), so this proves
-# the gates can fail before we trust them at a break.
+# A checker that has only ever passed is not evidence of anything (F-33), so
+# this proves the gates can fail before we trust them at a break.
+
+# Corrupt things on purpose, and assert every corruption is caught.
 mutation-test:
     @{{pyq}} tools/mutation_test.py
