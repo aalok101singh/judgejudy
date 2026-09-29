@@ -1,0 +1,52 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Judge Judy &middot; your ballot</title>
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+</head>
+<body>
+  <main class="wrap">
+    <p class="eyebrow">DOGFOOD 2026 &middot; {{ actor.label }}</p>
+    <h1>Your ballot</h1>
+
+    {#- D-12's caveat is in the MARKUP, not only in a docstring. A page showing a
+        randomised order without saying what it does is read as "position bias
+        solved", and the harness says in terms that it is zero-MEAN. -#}
+    <p class="lede">{{ caveat }}</p>
+
+    {#- The seed, rendered. An order that cannot be reproduced is an order nobody
+        can check, and this is what makes it reproducible to a reader. -#}
+    <p class="scope-receipt">
+      <strong>Ballot seed:</strong> <span class="project-id">{{ ballot.seed }}</span>
+      &middot; {{ ballot.order|length }} projects
+      &middot; shown in a fixed order for you, different from every other voter's.
+    </p>
+
+    <ol class="ballot">
+      {% for project in projects %}
+        <li class="ballot-item" data-position="{{ forloop.counter }}">
+          <span class="project-title">{{ project.title }}</span>
+          <span class="project-id">{{ project.id }}</span>
+          <span class="project-track">{{ project.track.name }}</span>
+        </li>
+      {% empty %}
+        <li>No projects are on the ballot.</li>
+      {% endfor %}
+    </ol>
+
+    <ul class="links">
+      <li><a href="/">Gallery</a></li>
+      <li><a href="/healthz">Health check</a></li>
+    </ul>
+
+    <p class="foot">
+      The order is a permutation of all {{ total }} projects, stored against your
+      identity so a refresh returns the same ballot rather than a fresh roll. The
+      seed above reproduces it: the harness in <code>manage.py bias_attack</code>
+      measures this exact function.
+    </p>
+  </main>
+</body>
+</html>

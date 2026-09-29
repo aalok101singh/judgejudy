@@ -22,10 +22,22 @@ from django.contrib import admin
 from django.urls import path
 
 from judge_judy import views
+from reviewer.ballots import views as ballot_views
 from reviewer.projects import views as project_views
 from reviewer.projects.views import current_event
 from reviewer.reviews import api as api_views
 from reviewer.reviews import console as console_views
+
+
+def _ballot(request):
+    """Resolve the event, then delegate. One event per install, by design.
+
+    Shares `_console`'s "no event is a 403, not a 404" reasoning: the acceptance
+    gate's route-existence probes cannot tell a 404 from a mistyped URL, and a
+    portal with no event has nothing to vote on rather than a page that is
+    missing.
+    """
+    return ballot_views.ballot(request, current_event())
 
 
 def _console(request, **kwargs):
@@ -131,6 +143,13 @@ urlpatterns = [
     # concentrated the support is *before* deciding to publish, so gating it
     # behind publication would turn a preventive report into a post-mortem.
     path("api/v1/influence", _influence, name="influence"),
+    # REQ-T3-04. The randomised ballot order. The PERMUTATION is not written
+    # here -- it is `presentation_order`, the same function the bias-attack
+    # harness measures, so the claim and the shipped code cannot drift apart.
+    # `ballot` is not gated on role, because a public vote is the point; it is
+    # gated on the voting window and on having a derivable identity, and both
+    # refusals are literal 403s with empty bodies.
+    path("vote/", _ballot, name="ballot"),
     # The healthcheck polls this. It must stay unauthenticated, cheap and
     # database-free -- see the docstring in judge_judy/views.py.
     path("healthz", views.healthz, name="healthz"),

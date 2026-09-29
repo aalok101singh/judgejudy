@@ -249,16 +249,69 @@ Then `just report` and `git diff acceptance-report.txt`. The header must read
 
 **Do not** edit the report by hand to make the two lines agree.
 
+## Increment 4 — randomised ballot order as a PRODUCT path (REQ-T3-04)
 
+**Built:** `ballots/order.py`, `ballots/views.py`, `/vote/`, `src/templates/ballots/ballot.html`. **24 tests**, **4 new mutations**.
 
-- **Randomized ballot order as a product path** — seeded per voter, stable across
-  requests. **The function the harness attacks exists and is tested**
-  (`presentation_order`), so the claim and the implementation are the same code;
-  what is missing is the ballot surface that calls it.
+**The constraint that shaped the increment: the surface must CALL
+`presentation_order`, not reimplement it.** The harness attacks that function, so
+a second copy of the seed formula is a second thing that can drift — and the
+drift would be *invisible*, because the harness would keep reporting zero-mean
+against a permutation the product stopped using. A test
+(`test_the_surface_calls_presentation_order`) monkeypatches the symbol and
+asserts it was called, so a re-implementation is caught rather than assumed away.
+
+**The decision worth arguing about: the order is stored, and it did not have to
+be.** `presentation_order` is a pure function of the identity, so stateless is
+possible and simpler — no row, no constraint, no migration. Rejected because the
+guarantee D-12 rests on is that a voter **cannot re-roll by refreshing**, and a
+pure function of a *cookie* is only stable while the cookie survives.
+`Ballot`'s `UniqueConstraint(event, voter_key)` is the enforcement; the seed is
+stored beside the order so it is reproducible rather than merely asserted to have
+existed. In the cut ledger, with two more entries beside it.
+
+**`/vote/` renders the order and does not accept a ranking.** Disclosed, not
+hidden — the cut ledger says so and `README.md` names it. Shipping the ranking
+would have meant shipping the aggregation, which is REQ-T3-01.
+
+### F-83 — a permutation keyed on a NULLABLE column
+
+The permutation was first keyed on `Project.source_key`: D-11's portable natural
+key, and **`NULL` for every project the portal created itself**
+(`SourceKeyMixin` says so in its own docstring). So a self-submitted project
+would have put a `None` into the order — structurally valid, renders, satisfies
+every shape assertion, **ranks nothing**. The sixth appearance of F-80's class.
+
+Caught by the tests on their first run, and **by luck**: one test sorts the
+order and `[None] < [None]` raises. The shape assertions would all have passed.
+The test that pins the class asserts `None not in order` **and** that the
+self-submitted project is present — a fix that dropped the project instead of
+re-keying it would pass the first and fail the second.
+
+### The sabotage run, and why the second one matters
+
+| Sabotage | Red |
+|---|---|
+| replace the permutation with the base order | **17 of 24** |
+| **make the seed a constant** | **3 of 24** |
+
+The second is the one that matters. **A constant order is perfectly stable per
+voter**, so every "the same voter gets the same order twice" test stayed green
+and only the *discrimination* tests went red. That is F-80's shape exactly — "does
+the guarantee hold" is half the question — and it is why
+`TestTheOrderActuallyVariesAcrossVoters` exists, asserts **counts** rather than
+pairwise inequality, and carries its own slot-1 control. Both sabotages are now
+mutations, so a re-introduction is caught by name.
+
+### What is NOT started
+
 - **Voting** with amplitude inside an identity budget, and mandatory attributable
-  abstention.
-- **Comments**, and results hiding as a *public* surface (the API is done; the
-  public pages are not).
+  abstention. `Vote` ships with its constraints and indexes; nothing writes one.
+- **Comments** on gallery projects (the model and its constraints ship; the
+  surface does not).
+- **Results hiding as a *public* surface** — the API refusal is built and tested;
+  the public pages are not.
+- **Rate limiting and a signed ballot cookie**, both cut and disclosed in `bible/08` §13.
 
 ### The two questions, and neither is mine to answer
 
@@ -271,9 +324,9 @@ Then `just report` and `git diff acceptance-report.txt`. The header must read
 
 ### Do not
 
-- **Do not claim T2.** It is earned and unclaimed, and the claim is made at
-  BREAK-2, in writing, by the human. `.dogfood.toml` still says
-  `claimed = ["T1"]`, which is correct.
+- **Do not claim T2 without the human.** It is earned, BREAK-2 is done, and the
+  exact `.dogfood.toml` diff is in this file — but the claim is applied by the
+  human, not on initiative. `.dogfood.toml` still says `claimed = ["T1"]`.
 - **Do not move `submissions_close`.** It is in the past because that is what
   makes the deadline check meaningful.
 - **Do not edit `acceptance-report.txt` by hand.** It is generated.
@@ -285,7 +338,7 @@ Then `just report` and `git diff acceptance-report.txt`. The header must read
 
 | | |
 |---|---|
-| **Status** | **FEAT-06 in progress** — the three matrix columns, the audit chain, the influence report and the bias-attack harness are done. **Both acceptance clauses of the feature are now built.** Voting, randomised ballot order as a product path, comments and public result hiding are not started. The feature is NOT complete |
+| **Status** | **FEAT-06 in progress** — the three matrix columns, the audit chain, the influence report, the bias-attack harness and **the randomised ballot as a product path** are done. **Both acceptance clauses are built and REQ-T3-04 is now real.** Voting, comments and public result hiding are not started. The feature is NOT complete |
 | **Started** | 2026-09-29 |
-| **Last touched** | FEAT-06 increment 3 — **the bias-attack harness**, the acceptance line's first clause, with the claim stated as zero-**mean** and the spread reported beside it. Four findings, all about verification (F-78…F-81). `479 tests`, `68/68` mutations, spec green, lint clean, `just check` **GREEN** at 7 of 7 |
-| **Next action** | **randomised ballot order as a product path** — `presentation_order` exists and is what the harness attacks, so the surface that calls it is all that is missing. Then voting, then comments |
+| **Last touched** | FEAT-06 increment 4 — **the randomised ballot as a product path**, `/vote/`, calling the function the harness attacks so the claim and the code cannot drift. **F-83** (a permutation keyed on a nullable column) and the constant-seed sabotage, which stayed green on every stability test. `503 tests`, `72/72` mutations, spec 72/72, lint clean, `just check` **GREEN** at 7 of 7 |
+| **Next action** | **voting** — `Vote` ships with its constraints and the per-voter budget index, and the Borda estimator the harness attacks is `schwartzian`, so what is missing is the write path and the ranking. Then comments, then public result hiding |

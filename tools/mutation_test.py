@@ -1271,6 +1271,79 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    # --- ballots/order.py: the PRODUCT surface (FEAT-06, T3a) --------------------
+    # Four mutations, and three of them exist because the sabotage run during
+    # development said the obvious ones were not enough. A constant SEED is the
+    # important one: it is perfectly stable per voter, so every "the same voter
+    # gets the same order twice" test keeps passing, and only a test that
+    # asserts the order VARIES catches it. That is F-80's shape exactly, and it
+    # is why the discrimination tests are not optional garnish.
+    (
+        "src/reviewer/ballots/order.py",
+        '    seed = _digest(event, "order", voter_key)[:SEED_HEX_CHARS]',
+        '    seed = "00000000"',
+        "the seed becomes a constant, so every voter gets the IDENTICAL order. Every "
+        "per-voter-stability test still passes -- a constant order is trivially stable "
+        "-- and the ballot silently stops being randomised at all. This is the F-80 "
+        "shape one level up: a test that checks the guarantee fires does not check the "
+        "instrument can see anything else. Caught only by the discrimination tests.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_ballot_order.py::TestTheOrderActuallyVariesAcrossVoters",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/order.py",
+        "    order = [keys[i] for i in positions]",
+        "    order = list(keys)",
+        "the permutation is computed and then thrown away, so the ballot renders in base "
+        "order. Every stability test passes and every shape test passes -- a base order "
+        "IS a permutation of the projects -- so the only thing that notices is the test "
+        "asserting the ballot is not in base order.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_ballot_order.py::TestTheOrderIsNotSortedOrder",
+            "tests/test_ballot_order.py::TestTheOrderActuallyVariesAcrossVoters",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/order.py",
+        "    keys = [p.pk for p in projects]",
+        "    keys = [p.source_key for p in projects]",
+        "the ballot is keyed on source_key again. That column is NULL for every project "
+        "the portal created itself, so a self-submitted project puts a None into the "
+        "permutation: structurally valid, renders, ranks nothing. F-83.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_ballot_order.py::TestTheOrderIsNotSortedOrder"
+            "::test_a_self_submitted_project_with_no_source_key_still_appears",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/views.py",
+        "    if not voting_open(event):\n        return refusal.deny(REFUSED_BY_VOTING_CLOSED)",
+        "    if False:\n        return refusal.deny(REFUSED_BY_VOTING_CLOSED)",
+        "a closed event serves a ballot instead of refusing. The shipped fixture is born "
+        "closed, so this is not a hypothetical surface -- it is the first state a judge "
+        "meets, and a page that rendered anyway would be a ballot nobody may legitimately "
+        "cast. D-02: the refusal must stay a 403 with an empty body, never a redirect.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_ballot_order.py::TestVotingWindowRefuses",
+            "-q",
+        ],
+    ),
 ]
 
 

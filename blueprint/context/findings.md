@@ -177,6 +177,46 @@ projects above 1% reach, and the best below 100% — and reach is *measured* by 
 helper rather than asserted from memory, because it is a property of the noise
 model and a transcribed figure is exactly the habit F-72…F-75 exist to prevent.
 
+### F-83 [P2] fixed - The ballot permutation was keyed on a NULLABLE column, so a self-submitted project put a `None` in the order
+
+**File:** `src/reviewer/ballots/order.py`, `tests/test_ballot_order.py`
+**Found:** 2026-09-29, at FEAT-06 increment 4, by the tests on their first run
+**Why it matters:** `ballot_order` originally keyed the permutation on
+`Project.source_key`, which is the obvious choice -- it is D-11's portable
+natural key and it is what the gallery and the export print. **`SourceKeyMixin`
+says in its own docstring that it is "Null for rows this portal created".** So
+every project submitted through `/projects/new` would have contributed a `None`
+to the permutation, and a ballot of `None`s is **structurally valid and contains
+nothing**: it stores, it renders, it satisfies every shape assertion, and it
+ranks no project at all.
+
+**This is F-80's shape one level down, and it is the sixth appearance of the
+defect in five media.** The class is a feature returning output whose *values* are
+empty while every *structural* property holds. A permutation needs a total order,
+and a nullable column is not one.
+
+**The tests caught it, not the gate, and not by reading the code** -- one of them
+sorts the order, and `[None] < [None]` raises `TypeError`. That is luck, and the
+honest version of the story is that the *shape* assertions would all have passed.
+The test that now pins the class is
+`test_a_self_submitted_project_with_no_source_key_still_appears`, which asserts
+`None not in order` **and** that the self-submitted project is present -- because
+a fix that dropped the project instead of re-keying it would satisfy the first
+assertion and fail the second.
+
+**Fixed by keying on `Project.id`**, the primary key, which is present for
+fixture rows and portal-created rows alike.
+
+**And the sabotage run earned its own finding.** Breaking the seed to a constant
+was the mutation chosen to prove the suite was load-bearing, and the result is
+the interesting part: **a constant order is perfectly stable per voter**, so all
+four stability tests stayed green and only the three *discrimination* tests went
+red. That is precisely the F-80 shape -- "does the guarantee hold" is half the
+question -- and it is why `TestTheOrderActuallyVariesAcrossVoters` exists and why
+it asserts *counts* rather than pairwise inequality. Both sabotages are now
+mutations in `tools/mutation_test.py`, so a re-introduction of either is caught
+by name.
+
 ### F-82 [P2] fixed - The README's route count was wrong twice, and the second "repair" invented a breakdown that did not sum over its own table
 
 **File:** `README.md`, `tools/verify_spec.py`
