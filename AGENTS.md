@@ -147,17 +147,18 @@ engine with its min-cut certificate, the judge console, the scoped score
 endpoint and the CSV export are in place, and **`run.py` prints
 `claimed T1, verified T1 T2` with all 7 checks PASS.** T2 is **earned and not
 yet claimed** — the claim is made at BREAK-2, by the human, in writing. Next:
-**FEAT-06** — **both acceptance clauses are built and verified**: the influence
-report (D-13) and the bias-attack harness, which shows the estimator is
-zero-**mean** under position bias and reports the spread beside the mean so the
-claim is not overstated. Ballot order as a product surface, voting and comments
-are not started, so the feature is **not** done.
+**FEAT-06** — **COMPLETE. All five REQ-T3 requirements ship and are tested:**
+community voting with an identity budget and a Borda tally (01), moderated
+plain-text comments (02), results hidden on **both** the API and the public page
+(03), randomised ballot order as a product surface (04), and the influence report
+(05). **The T3 claim is now AVAILABLE and BREAK-3 has not been run** — the
+decision, and the naming of the cut controls, is the human's.
 
 | | |
 |---|---|
 | Findings | **90** — **0 open blocking**, 0 open, 17 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 62 closed |
 | Acceptance | **T1 and T2 green** — **7 of 7 checks pass**, `claimed T1, verified T1 T2`. The `verified` ceiling is arithmetic in `run.py`, not a gap: there are no T3 or T4 checks at all |
-| Suite | **575 tests**, 76/76 mutations, spec layer green (it prints its own tally) |
+| Suite | **575 tests**, 86/86 mutations, spec layer green (it prints its own tally) |
 | Container | cold start **11.8–20 s** observed 2026-09-29 against the 60 s budget (a range, not a value — F-68); `prove-offline` passes |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
 

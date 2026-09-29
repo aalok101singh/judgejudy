@@ -8,11 +8,12 @@
 **What this is:** a self-hostable hackathon submission and judging platform for
 DOGFOOD 2026, built to be forked and run for a decade. Not a demo.
 **Window:** 69 hours, one person, solo. Freeze H+69.
-**Status:** FEAT-01 to FEAT-05 built and verified; **`run.py` prints
+**Status:** FEAT-01 to FEAT-06 built and verified; **`run.py` prints
 `claimed T1, verified T1 T2` with all 7 checks PASS.** T2 is **earned and not yet
-claimed** — the claim is made at BREAK-2, by the human, in writing. Next:
-**FEAT-06** — the **influence report (D-13) and the bias-attack harness are
-built**; randomised ballot order, voting and comments are not.
+claimed** — BREAK-2 is done and the exact `.dogfood.toml` diff is prepared, but
+the claim is the human's to apply. **FEAT-06 is complete: all five REQ-T3
+requirements ship**, so the T3 claim is *available* for BREAK-3, which has not
+been run.
 
 ---
 
@@ -267,9 +268,10 @@ question; open that one section.
 
 ## 13. Current state
 
-**FEAT-01 to FEAT-05 built and verified; BREAK-2 is next and T2 is earned and
-unclaimed; FEAT-06 is the in-flight feature**, and the **influence report is
-built** while the bias-attack harness is not. The narrative, the per-feature
+**FEAT-01 to FEAT-06 built and verified; BREAK-2 is done, T2 is earned and
+unclaimed pending the human's diff, and FEAT-06 is COMPLETE — all five REQ-T3
+requirements ship.** The T3 claim is therefore *available* and BREAK-3 has not
+been run. The narrative, the per-feature
 verification and the counts live in `AGENTS.md` §Current state,
 `context/current-feature.md` and `history/features/`.
 
