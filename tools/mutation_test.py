@@ -1042,6 +1042,235 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    # --- bias_attack.py (FEAT-06, acceptance clause 1) -------------------------
+    # Nine here, and the reason they are the ones chosen is the pair of traps this
+    # project earned in the session before: a metric that has not been shown to
+    # DISCRIMINATE is a tunable constant with a decimal point (F-76), and a fixture
+    # that cannot separate its subject from its control produces green output that
+    # means nothing (F-77). Every mutation below removes one of the three things
+    # that make this harness an instrument rather than a number generator.
+    (
+        "src/reviewer/ballots/bias_attack.py",
+        "        head = first if shown[first] < shown[second] else second\n",
+        "        head = orders[index][0]\n",
+        "the primacy model is replaced by 'promote whatever is in slot 1' -- the "
+        "FIRST draft's model, which measures rank transfer rather than position. It "
+        "would report a large drift for a RANDOMISED order, so the harness would "
+        "'confirm' D-12 with a number that was never about randomisation. F-76 one "
+        "level up: a metric that reads as a detector and measures something else.\n\n"
+        "This mutation was reported NOT DETECTED on its first run, which turned out "
+        "to be a defect in THIS harness rather than in the tests: the description and "
+        "the detector had been wired to each other's tuple, so the corruption was "
+        "applied and then checked with `TestTheControlCannotFire`, which correctly "
+        "passed. The identical corruption was caught the moment it was pointed at the "
+        "class that tests the model. A mutation whose detector is mis-wired is worse "
+        "than no mutation, because it reports a false failure.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bias_attack.py::TestPositionBiasIsModelledAsPrimacyNotAsAPromotion",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/bias_attack.py",
+        "QUALITY_SPREAD = 0.45",
+        "QUALITY_SPREAD = 0.875",
+        "the quality ladder goes back to spanning 0-1, which leaves the bottom four "
+        "projects in NOBODY's top two -- so the primacy model cannot move them at all "
+        "and they become structurally constant rows in a table of measurements. This "
+        "is the F-77 shape at the level of the fixture.\n\n"
+        "This mutation was reported NOT DETECTED on its first run, which is the "
+        "finding: with a steep ladder project 2 is still shortlisted by 13% of voters "
+        "and still shows a detected drift, so every 'is the attack detected' "
+        "assertion kept passing. **A test that checks the attack fires does not check "
+        "the field is contested**, and the harness degenerates into a one-project "
+        "instrument while every test in the file is green. "
+        "`test_the_ladder_leaves_a_contested_field_rather_than_one_winner` was added "
+        "in response and is what catches it now.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bias_attack.py::TestTheDriftScalesWithHowOftenAProjectIsShortlisted"
+            "::test_the_ladder_leaves_a_contested_field_rather_than_one_winner",
+            "tests/test_bias_attack.py::TestTheAttackIsDetected"
+            "::test_pinning_a_reachable_contender_is_also_detected",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/bias_attack.py",
+        """            "randomised_is_zero_mean": all(
+                arm["ci"] is not None and arm["spans_zero"] for arm in arms["randomised"].values()
+            ),
+""",
+        """            "randomised_is_zero_mean": all(
+                arm["ci"] is not None and arm["spans_zero"] for arm in arms["fixed"].values()
+            ),
+""",
+        "the zero-mean verdict is read off the FIXED arm instead of the randomised "
+        "one. The feature's entire claim is about the randomised design, so the "
+        "verdict now describes a different arm than the table prints beside it -- a "
+        "report whose summary and whose table disagree. Detectable precisely because "
+        "the fixed arm's CI EXCLUDES zero, so the verdict flips to False and the "
+        "feature reports a failure it has earned.\n\n"
+        "The first version hardcoded the verdict to `True`, and the harness correctly "
+        "reported it NOT DETECTED: the honest computation also returns True, so a "
+        "hardcoded True is indistinguishable from a correct one by any test that only "
+        "checks the verdict. **A verdict can only be pinned by cross-checking it "
+        "against a measurement that disagrees.** Replacing a mutation with an "
+        "undetectable equivalent, and recording why here, is better than leaving a "
+        "green tally that means nothing.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bias_attack.py::TestTheClaimIsZeroMeanAndNotZero"
+            "::test_the_whole_harness_reports_all_four_verdicts_as_passing",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/bias_attack.py",
+        '        "randomised_is_not_zero": all('
+        'arm["sd"] for arm in arms["randomised"].values()),\n',
+        '        "randomised_is_not_zero": False,\n',
+        "the 'not zero' half of the claim is inverted, so the harness would report a "
+        "pass while stating the effect is zero -- which is the exact overclaim D-12 "
+        "and bible/06 6.3 exist to prevent, and the one a reviewer can falsify in a "
+        "single search.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bias_attack.py::TestTheClaimIsZeroMeanAndNotZero"
+            "::test_the_whole_harness_reports_all_four_verdicts_as_passing",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/bias_attack.py",
+        "        scores[design] = schwartzian(\n"
+        "                cast_ballots(\n"
+        "                    rankings,\n"
+        "                    orders,\n"
+        "                    biased=False,\n"
+        "                    beta=beta,\n"
+        "                    brng=random.Random(7_700_000 + rep),\n"
+        "                ),\n"
+        "                n_projects,\n"
+        "            )\n",
+        "        scores[design] = schwartzian(\n"
+        "                cast_ballots(\n"
+        "                    rankings,\n"
+        "                    orders,\n"
+        "                    biased=True,\n"
+        "                    beta=beta,\n"
+        "                    brng=random.Random(7_700_000 + rep),\n"
+        "                ),\n"
+        "                n_projects,\n"
+        "            )\n",
+        "the CONTROL stops being a control: it runs the position-biased path, so the "
+        "orders reach the tally and the 'no bias means the order cannot matter' check "
+        "reports non-identity. Every other number in the table would then be reported "
+        "by an instrument that had never been shown able to read zero.\n\n"
+        "The first version of this mutation narrowed the comparison to one project "
+        "and divided by 1000, and the harness correctly reported it NOT DETECTED: "
+        "with no bias the orders genuinely do not matter, so degrading the arithmetic "
+        "changed nothing. Attacking the control's PREMISE is the part that can "
+        "actually break.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bias_attack.py::TestTheControlCannotFire",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/bias_attack.py",
+        "        if not (biased and brng.random() < beta):\n",
+        "        if not (biased and brng.random() < beta * 0.0):\n",
+        "beta is multiplied by zero, so no voter is ever position-biased and the "
+        "attack arm measures nothing. Every 'spans zero' verdict would then be "
+        "trivially true -- the harness would 'confirm' D-12 by not running the attack "
+        "at all, which is the most dangerous shape available: green output meaning "
+        "nothing.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bias_attack.py::TestTheAttackIsDetected",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/bias_attack.py",
+        "        first = (voter + replication) % n_projects\n",
+        "        first = 0\n",
+        "the balanced order stops cycling its slot-1 project, so EVERY voter sees "
+        "project 0 first. The balanced design is the null -- it is the one that "
+        "favours nobody -- and without this it becomes a second fixed order wearing a "
+        "control's name, which is how the null stops being a null.\n\n"
+        "The first version of this mutation dropped the `voter` term from the "
+        "shuffle SEED rather than from the slot-1 choice, and the harness reported it "
+        "NOT DETECTED: with the tail shuffled identically, slot 1 still cycles and the "
+        "balance property still holds, so the corruption was near-equivalent. **A "
+        "mutation that cannot be detected is a mutation that was aimed at the wrong "
+        "line**, and the fix is to attack the property rather than the code that "
+        "happens to compute it.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bias_attack.py::TestTheOrderIsSeededPerVoterAndCannotBeReRolled"
+            "::test_a_balanced_order_puts_every_project_in_slot_one_equally_often",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/bias_attack.py",
+        "    return math.ceil((z_alpha * math.sqrt(p0q0)"
+        " + z_power * math.sqrt(p1q1)) ** 2 / (p1 - p0) ** 2)\n",
+        "    return math.ceil((z_alpha * math.sqrt(p0q0)"
+        " + z_power * math.sqrt(p1q1)) ** 2 / (p1 - p0) ** 2 * 4)\n",
+        "the power table is quietly multiplied by four, which is precisely the error "
+        "bible/06 6.3 made (F-78) and the direction that makes a panel look less able "
+        "than it is. The table is generated, so this is the only thing standing "
+        "between a four-fold overstatement and the shipped output.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bias_attack.py::TestTheStatisticsAreComputedAndAsserted",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/management/commands/bias_attack.py",
+        """            self.stdout.write(
+                f"      spread     = sd {_fmt(arm['sd'])}, range "
+                f"[{arm['min']:+.1f}, {arm['max']:+.1f}] -- NOT zero"
+            )
+""",
+        '            self.stdout.write("      spread     = zero. The bias is eliminated.")\n',
+        "the rendered output claims the bias is ELIMINATED -- the overclaim bible/06 "
+        "6.3 says is false, which the literature refutes in one citation, and which "
+        "would cost the 25% Judging Integrity criterion. The module's own output is "
+        "the sentence a panelist reads, and this is the only thing stopping that edit.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bias_attack.py::TestTheClaimIsNotOverstatedAnywhere"
+            "::test_the_interpretation_does_not_claim_removal",
+            "tests/test_bias_attack.py::TestTheCommandRendersTheClaimAndItsCaveat"
+            "::test_the_command_states_zero_mean_and_not_zero_in_so_many_words",
+            "-q",
+        ],
+    ),
 ]
 
 

@@ -100,7 +100,7 @@ ignore = [
 # not a leaked credential, and a subprocess call in a test is not a shell
 # injection. S101 (assert) and S603/S607 are noise in this directory.
 # tests/** and run.py are the organizers' file...
-"tests/**" = ["S101", "S105", "S106", "S603", "S607"]
+"tests/**" = ["S101", "S105", "S106", "S603", "S607", "S311"]
 # The demo credentials are hardcoded password LITERALS, and that is the design
 # rather than a leak: `bible/04` §5.2 and §3.2 both record them as published,
 # non-secret demo passwords, because the portal is a single-tenant self-hosted
@@ -121,6 +121,18 @@ ignore = [
 # create pressure to modify it. That would invalidate every result in
 # acceptance-report.txt.
 "run.py" = ["ALL"]
+# The bias-attack harness is a SIMULATION, and a seeded Mersenne Twister is the
+# correct instrument for it rather than a compromise: the whole deliverable is
+# that two runs of the same seed produce the same numbers, and that a
+# replication is a pure function of (seed, replication, voter). A cryptographic
+# RNG cannot give reproducibility from a small integer seed at all, so silencing
+# S311 here is not suppressing a warning that applies -- it is suppressing a
+# warning about the one property the harness is built to have.
+#
+# Worth stating where it would otherwise read as sloppiness: the *product* code
+# that draws a real voter's ballot order is a different file and is NOT
+# exempted, because there the same rule would be a real defect.
+"src/reviewer/ballots/bias_attack.py" = ["S311"]
 # The gates shell out to docker deliberately; that is their entire job.
 "tools/docker.py" = ["S603", "S607"]
 "tools/coldstart.py" = ["S603", "S607"]

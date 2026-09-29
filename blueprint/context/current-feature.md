@@ -74,8 +74,8 @@ influence report renders for a synthetic attack.
 
 ### What is built so far, and what is not
 
-**Done in FEAT-06 — the three `?` columns of the isolation matrix, and now the
-influence report (increment 2).**
+**Done in FEAT-06 — the three `?` columns of the isolation matrix, the influence
+report (increment 2), and now the bias-attack harness (increment 3).**
 
 | Column | Now | How |
 |---|---|---|
@@ -146,16 +146,67 @@ been the wrong order.
 with `clustered 12`, and every organic project reads `clustered 0`. The
 full table is in `history/features/06-influence-report.md`.
 
+## Increment 3 — the bias-attack harness, the acceptance line's FIRST clause
+
+**Built:** `ballots/bias_attack.py` and `manage.py bias_attack`. **51 tests**,
+**9 new mutations**. The harness takes three attempts, and the failures are the
+interesting part.
+
+| Arm | Reads | Means |
+|---|---|---|
+| **control** — no position bias | **exactly 0** | the instrument can see nothing when there is nothing |
+| **`fixed`** — one project pinned to slot 1 | **+27.64 / +7.39, CI EXCLUDES zero** | **the attack is detected** |
+| **`randomised`** — per-voter seeded permutation | **−0.53 / −0.26, CI spans zero, sd 9.9 / 14.6** | **zero-MEAN, not zero** |
+| `balanced` — everyone in slot 1 equally often | spans zero | the null |
+
+**Both acceptance clauses are now built.** The report renders for a synthetic
+attack (increment 2); the harness shows the estimator is zero-mean under position
+bias (increment 3). Observed in the container on a clean volume.
+
+**The claim is stated exactly and the spread is reported beside the mean.** The
+confidence interval spans zero; the standard deviation does not. A harness
+reporting only the interval would let a reader conclude the bias was *removed*,
+which `bible/06` §6.3 says is false and one citation refutes.
+
+**Four findings, and every one is about verification, not logic:**
+
+- **F-79 [P1]** — the first model of a position-biased voter promoted
+  *whatever* was in slot 1, which measures **rank transfer**, not position: it
+  read **−48 for the best project and +47 for the worst** under a *randomised*
+  order, and would have "confirmed" D-12 for the wrong reason. **F-76 one level
+  up.** Found by prototyping before writing the module.
+- **F-80 [P2]** — a quality ladder of 1.0→0.12 left projects 5 and 7 in
+  **nobody's** top two, so they were **structurally constant rows in a table of
+  measurements**, and the harness measured exactly one project. **All 48 tests
+  still passed with the ladder restored** — *a test that checks the attack fires
+  does not check the field is contested.* Found by the mutation harness reporting
+  its own mutation **NOT DETECTED**.
+- **F-78 [P2]** — `bible/06` §6.3's power table does **not reproduce** from the
+  formula it names (5.8× off, near-constant ratio). The error is conservative, so
+  the conclusion survives, but the correction **narrows** it: 5 points needs 783
+  comparisons, and §6.3's own range reaches 1,000. Now **generated** and pinned.
+- **F-81 [P3]** — a mutation's description and detector were wired to each
+  other's tuple, so the harness reported a **false failure**. Two other mutations
+  were genuinely undetectable and now attack the property, each recording why.
+
+**The control refused to pass, twice, and both refusals were right.** The first
+version differenced a no-bias population against the pooled reference and read
+`+0.051`; that is the *reference's* sampling noise, not the order's influence, and
+the command said so. It is now an **exact** comparison — the same population under
+three orders must score bit-identically.
+
+**The full table is in `history/features/06-bias-attack-harness.md`.**
+
 ### What is NOT started
 
+- **Randomized ballot order as a product path** — seeded per voter, stable across
+  requests. **The function the harness attacks exists and is tested**
+  (`presentation_order`), so the claim and the implementation are the same code;
+  what is missing is the ballot surface that calls it.
 - **Voting** with amplitude inside an identity budget, and mandatory attributable
   abstention.
 - **Comments**, and results hiding as a *public* surface (the API is done; the
   public pages are not).
-- **Randomized ballot order** — seeded per voter, stable across requests, and the
-  claim is **zero-*mean*, not zero**.
-- **The bias-attack harness** — the acceptance line's first clause, and the
-  reason the report went first.
 
 ### The two questions, and neither is mine to answer
 
@@ -182,7 +233,7 @@ full table is in `history/features/06-influence-report.md`.
 
 | | |
 |---|---|
-| **Status** | **FEAT-06 in progress** — the three matrix columns, the audit chain and **the influence report** are done; a Phase-0 sweep repaired four wrong figures (F-72…F-75) and the report increment opened two more (F-76, F-77). Voting, comments, ballot order and **the bias-attack harness** are not started |
+| **Status** | **FEAT-06 in progress** — the three matrix columns, the audit chain, the influence report and the bias-attack harness are done. **Both acceptance clauses of the feature are now built.** Voting, randomised ballot order as a product path, comments and public result hiding are not started. The feature is NOT complete |
 | **Started** | 2026-09-29 |
-| **Last touched** | FEAT-06 increment 2 — **the influence report (D-13)**, with the acceptance line observed in the container and the empty case refusing to be a table of zeros. `428 tests`, `59/59` mutations, spec green, lint clean, `just check` **GREEN** at 7 of 7 |
-| **Next action** | **the bias-attack harness** — the acceptance line's remaining clause, which the report exists to make visible. Then ballot order, then voting |
+| **Last touched** | FEAT-06 increment 3 — **the bias-attack harness**, the acceptance line's first clause, with the claim stated as zero-**mean** and the spread reported beside it. Four findings, all about verification (F-78…F-81). `479 tests`, `68/68` mutations, spec green, lint clean, `just check` **GREEN** at 7 of 7 |
+| **Next action** | **randomised ballot order as a product path** — `presentation_order` exists and is what the harness attacks, so the surface that calls it is all that is missing. Then voting, then comments |

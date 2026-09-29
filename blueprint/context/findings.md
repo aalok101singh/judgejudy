@@ -51,14 +51,158 @@ findings are almost all values that agreed with what we expected.
 
 ## Resolved — found in FEAT-06, 2026-09-29 (in progress)
 
-*Seven findings. **Four were found by re-running Phase 0 on a tree nobody had
-touched** (F-72…F-75) and **two by the feature's own mutation harness and by
-running the report in the real container** (F-76, F-77) — not one by reading the
-code. **Five of the seven are about a number or a test that could not be
-trusted**, and the two newest are about a *fixture* that could not discriminate,
-which is the F-41 defect reached from the other direction. F-71, from the
-previous increment, is the seventh. The remaining FEAT-06 work — voting, ballot
-order, comments and the bias-attack harness — is not started.*
+*Ten findings. **Four were found by re-running Phase 0 on a tree nobody had
+touched** (F-72…F-75), **two by the influence report's own mutation harness and by
+running the report in the real container** (F-76, F-77), and **three by the
+bias-attack harness refusing to separate its own arms** (F-78…F-80) — not one by
+reading the code. **Seven of the ten are about a number or a test that could not
+be trusted**, and three are about a *fixture* or a *model* that could not
+discriminate, which is the F-41 defect reached from the other direction. F-71,
+from the previous increment, is the tenth. The remaining FEAT-06 work — voting,
+ballot order and comments — is not started.*
+
+### F-78 [P2] fixed - `bible/06` §6.3's power table does not reproduce from the formula it names, and the honest threshold is NARROWER than the published claim
+
+**File:** `src/reviewer/ballots/bias_attack.py` (`POWER_TABLE`,
+`comparisons_required`), `tests/test_bias_attack.py`
+**Found:** 2026-09-29, at FEAT-06, by generating the table and comparing it with
+the one §6.3 quotes
+**Why it matters:** §6.3 publishes the sample a real event would need to detect
+residual position bias: **28,573 / 4,556 / 1,125 / 490** comparisons for side
+preferences of 0.52 / 0.55 / 0.60 / 0.65, and the sentence *"a real event has on
+the order of 100–1,000 votes, we therefore cannot measure residual position bias."*
+
+Fleiss' one-sample proportion formula, which is the formula §6.3 says it is
+using, gives **4,904 / 783 / 194 / 85**. The ratio is **5.83, 5.82, 5.80, 5.76** —
+near-constant across four independent rows, which is the signature of **one wrong
+convention rather than four slips**. Solving for the `(z_alpha, z_power)` pair the
+quoted numbers imply gives `z_alpha = 4.098` (a two-sided alpha of 0.000083) and
+`z_power = 2.665` (power 0.9962), which is not the stated pair (1.9600, 0.8416).
+**There is no standard convention that produces the quoted table.**
+
+**The error is in the conservative direction, and the correction NARROWS the
+claim rather than reversing it.** This is the part worth being careful about,
+because "the document overstated" and "the document understated" have opposite
+consequences:
+
+* §6.3 says 4,556 comparisons to detect a 5-point preference, which puts it far
+  beyond any real panel and makes *"we cannot measure this"* safe.
+* The generated figure is **783**, so a 5-point preference **is** resolvable at
+  n = 1,000 — at the very top of the plausible range.
+* A 2-point preference still needs **4,904**, and a 10-point one needs **194**.
+
+So the published conclusion survives for every realistic panel size and **fails at
+the upper edge of its own stated range**. The shipped output says what the
+measurement supports: 2 and 3 points are out of reach everywhere, 5 points is out
+of reach below ~800, and only a 10-point preference is comfortably measurable.
+
+**Resolution:** **Fixed 2026-09-29.** The table is **generated** by
+`comparisons_required` on every run, never transcribed, and
+`test_the_power_table_is_generated_and_never_transcribed` recomputes all four
+entries and fails if any differs. A second test asserts the **conclusion**, in
+both directions, so a future edit that made small effects look unmeasurable would
+fail rather than quietly strengthen the claim. The first version of that test got
+it wrong in the other direction — it asserted `comparisons_required(0.55) > 1000`
+and failed, which is how the narrowing above was found rather than assumed.
+
+**This is F-67 with a table attached.** Six of twelve early findings were census
+errors in our own documents, two of them *after* a correction log about the first
+four had been published. A planning document's number is no more trustworthy than
+a test's number until something derives it.
+
+### F-79 [P1] closed - The first bias-attack harness measured RANK TRANSFER, not position bias, and would have "confirmed" D-12 with a number that was never about randomisation
+
+**File:** `src/reviewer/ballots/bias_attack.py` (`cast_ballots`)
+**Found:** 2026-09-29, at FEAT-06, by prototyping the harness and reading the
+numbers before writing any shipped code
+**Why it matters:** The first model of a position-biased voter was "promote
+whatever is in slot 1, regardless of quality". Measured, it reported a drift of
+**−48 for the best project and +47 for the worst** under a *randomised* order.
+
+**That is not a position effect.** The model transfers points from good projects
+to bad ones, so it is a statement about rank transfer, and a harness using it
+would have shown a large number for randomised order and thereby "confirmed" that
+randomisation works — **for the wrong reason, with a number that was never about
+the order.** The claim under test is about the order, with the bias held fixed, so
+a model that changes the *bias* cannot test it at all.
+
+The shipped model is the **serial-position effect**: a position-biased voter
+**resolves its own top two by which is displayed first**. That is also the
+defensible reading — serial position is an effect on choices *between presented
+alternatives*, so a voter who never shortlists a project cannot be moved by where
+it is displayed. The two models are pinned by
+`TestPositionBiasIsModelledAsPrimacyNotAsAPromotion`, including the assertion that
+a voter never promotes a project outside its own top two.
+
+**This is F-76 one level up.** The `lift` metric was structurally *constant*; this
+model was structurally *wrong*. Both read as detectors. **The generalisable check
+is the same one: point the instrument at a case it should report and a case it
+should not, and if it fires equally on both, it is measuring something you did not
+name.** Found by prototyping before writing the module, which is the cheapest
+place to find this class and the only place the first version of the harness still
+existed.
+
+### F-80 [P2] closed - The quality ladder made the harness a ONE-PROJECT instrument, and every "is the attack detected" test still passed
+
+**File:** `src/reviewer/ballots/bias_attack.py` (`_quality_ladder`,
+`QUALITY_SPREAD`)
+**Found:** 2026-09-29, at FEAT-06, by the mutation harness reporting its own
+mutation **NOT DETECTED**
+**Why it matters:** The population's true qualities were laid out on a ladder from
+1.0 to 0.12. Measured at 200 voters: project 0 was in *some* voter's top two
+**100%** of the time, project 2 **13%**, and projects 5 and 7 **never**.
+
+**The primacy model can only move a project a voter has shortlisted**, so pinning
+the bottom of the ladder produced a drift of **−0.317 against a spread of 4.69** —
+a **structurally constant row sitting in a table of measurements**. That is F-61's
+seventh appearance and F-76's shape at the level of the *fixture*: the harness was
+measuring exactly one project and reporting it as a study of position bias.
+
+**The revealing part is that all 48 tests passed.** Setting the spread back to
+0.875 and re-running the whole suite left every "is the attack detected"
+assertion green, because project 2 was still reachable enough to move. **A test
+that checks the attack fires does not check the field is contested.**
+
+It was found because the mutation harness reported a corruption as **not
+detected** — which is the direction that matters, and which the pytest suite
+cannot produce on its own.
+
+**Resolution:** **Fixed 2026-09-29.** `QUALITY_SPREAD = 0.45`, so the top three
+projects are reachable (94% / 63% / 25% at 120 voters) and pinning the third gives
+a fixed-order drift of **+7.39 with a CI excluding zero** while randomised order
+spans zero. **The harness now discriminates at two points on the quality ladder
+rather than one.** The property is now asserted directly by
+`test_the_ladder_leaves_a_contested_field_rather_than_one_winner` — at least three
+projects above 1% reach, and the best below 100% — and reach is *measured* by a
+helper rather than asserted from memory, because it is a property of the noise
+model and a transcribed figure is exactly the habit F-72…F-75 exist to prevent.
+
+### F-81 [P3] fixed - A mutation's description and detector were wired to each other's tuple, so the harness reported a false failure
+
+**File:** `tools/mutation_test.py`
+**Found:** 2026-09-29, at FEAT-06, by a mutation reporting NOT DETECTED that a
+manual replication proved was caught
+**Why it matters:** The primacy mutation (F-79's corruption) was reported
+**MISSED** by the harness. The identical corruption, applied by hand to a sandbox
+copy, **failed the tests as it should**. The cause: the description and the
+detector command had ended up in each other's tuple, so the corruption was applied
+and then checked with `TestTheControlCannotFire` — which correctly passed, because
+the control genuinely is silent.
+
+**A mutation whose detector is mis-wired is worse than no mutation**, because it
+reports a confident false failure, and the response to a red mutation gate is
+normally to go looking at the test rather than at the harness. The harness already
+separates "pattern not found" from "not detected" (F-46), which is the same
+instinct: a mutation that was never applied is a different defect from a gate that
+survived one.
+
+**Two of the three genuinely-undetectable mutations were also recorded rather than
+deleted.** A hardcoded-`True` verdict is indistinguishable from a correct one, and
+a mutation of the balanced order's *shuffle seed* is near-equivalent because
+slot-1 balance still holds. Both now attack the **property** rather than the
+arithmetic that computes it, and both record in their own description why the
+first attempt could not work. **A mutation list where every entry is caught is
+worth less than one that records the two that were not and why.**
 
 ### F-76 [P2] fixed - A metric I invented for the influence report was degenerate, and the synthetic attack scored it at exactly 1.0
 

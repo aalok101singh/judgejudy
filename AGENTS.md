@@ -12,7 +12,7 @@ order. It is short on purpose.
 
 | # | File | Bytes | When |
 |---|---|---|---|
-| 1 | **`blueprint/context/project-overview.md** | **19,948** | **Always. This is the whole project in one load.** |
+| 1 | **`blueprint/context/project-overview.md`** | **under 20,000 bytes** | **Always. This is the whole project in one load.** |
 | 2 | `blueprint/context/current-feature.md` | — | Find the in-flight scope. Exactly one. |
 | 3 | `blueprint/context/findings.md` | — | What is known broken, and what was chosen not to fix. Check anything touching the files you are about to touch. |
 | 4 | `blueprint/context/ai-interaction.md` | — | How to work here. Read once per session. |
@@ -147,14 +147,17 @@ engine with its min-cut certificate, the judge console, the scoped score
 endpoint and the CSV export are in place, and **`run.py` prints
 `claimed T1, verified T1 T2` with all 7 checks PASS.** T2 is **earned and not
 yet claimed** — the claim is made at BREAK-2, by the human, in writing. Next:
-**FEAT-06** — the influence report is built and verified; **the bias-attack
-harness**, ballot order, voting and comments are not.
+**FEAT-06** — **both acceptance clauses are built and verified**: the influence
+report (D-13) and the bias-attack harness, which shows the estimator is
+zero-**mean** under position bias and reports the spread beside the mean so the
+claim is not overstated. Ballot order as a product surface, voting and comments
+are not started, so the feature is **not** done.
 
 | | |
 |---|---|
-| Findings | **77** — **0 open blocking**, 0 open, 6 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 60 closed |
+| Findings | **81** — **0 open blocking**, 0 open, 8 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 62 closed |
 | Acceptance | **T1 and T2 green** — **7 of 7 checks pass**, `claimed T1, verified T1 T2`. The `verified` ceiling is arithmetic in `run.py`, not a gap: there are no T3 or T4 checks at all |
-| Suite | **428 tests**, 59/59 mutations, spec layer green (it prints its own tally) |
+| Suite | **479 tests**, 68/68 mutations, spec layer green (it prints its own tally) |
 | Container | cold start **11.8–20 s** observed 2026-09-29 against the 60 s budget (a range, not a value — F-68); `prove-offline` passes |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
 

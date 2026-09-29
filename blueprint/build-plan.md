@@ -164,27 +164,36 @@
   - **Verify:** a bias-attack harness shows the estimator is zero-mean under
     position bias; the influence report renders for a synthetic attack
 
-> ### Progress — FEAT-06 in progress; the second clause is DONE, the first is not
+> ### Progress — FEAT-06 in progress; **BOTH acceptance clauses are built**
 >
 > - **DONE — the influence report.** `ballots/influence.py`, `manage.py
 >   influence_report`, `GET /api/v1/influence`. Vote-mass Gini + identical-ballot
 >   clusters, **no thresholds anywhere**, the caveat printed in the output, and
 >   the empty case saying "NOT a finding" rather than printing zeroes. **Observed
 >   in the container:** a 12-voter brigade ranks first with `clustered 12` and
->   every organic project reads `clustered 0`. `428 tests`, `59/59` mutations.
->   See `history/features/06-influence-report.md`.
+>   every organic project reads `clustered 0`. See
+>   `history/features/06-influence-report.md`.
+> - **DONE — the bias-attack harness.** `ballots/bias_attack.py`, `manage.py
+>   bias_attack`. **Observed in the container:** a fixed order pinning a project
+>   to slot 1 gives **+27.64** with a CI **excluding** zero, the no-bias control
+>   is **exactly 0**, and a per-voter seeded permutation gives **−0.53** with a CI
+>   **spanning** zero and **sd 9.87** — **zero-MEAN, not zero**, which is the
+>   claim D-12 makes and the one that must not be overstated. `479 tests`,
+>   `68/68` mutations. See `history/features/06-bias-attack-harness.md`.
 > - **DONE — the three `?` columns of the isolation matrix** (`aggregate`,
 >   `export`, `audit`), and the audit chain has a writer that real traffic fills.
-> - **NOT DONE — the bias-attack harness.** This is the acceptance line's
->   *first* clause, and it is precisely why the report went first: the harness
->   needs an attack to be visible against, and the report is what makes it
->   visible.
-> - **NOT STARTED** — voting, comments, randomized ballot order, public result
->   hiding.
+> - **NOT STARTED** — voting, comments, randomised ballot order as a product
+>   surface, public result hiding. **The feature is not done.**
 > - **A metric was cut rather than shipped (F-76).** The `lift` detector is
 >   structurally constant, scored the synthetic attack at exactly 1.0, and is
 >   pinned shut by a test. **Do not re-add it**; the arithmetic is in the module
 >   docstring.
+> - **Three claims were narrowed by measurement, not by argument.** `bible/06`
+>   §6.3's power table does not reproduce (F-78) and is now generated; the
+>   quality ladder that made the harness a one-project instrument is fixed
+>   (F-80); and the first bias model measured rank transfer rather than position
+>   (F-79). **All three were found by the harness failing to separate its own
+>   arms, not by reading the code.**
 
 > ### ☕ BREAK-3 — H+40 — **☕ T3**
 > Same protocol. Claim, tag `v-t3-verified`.

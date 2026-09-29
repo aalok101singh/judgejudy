@@ -11,8 +11,8 @@ DOGFOOD 2026, built to be forked and run for a decade. Not a demo.
 **Status:** FEAT-01 to FEAT-05 built and verified; **`run.py` prints
 `claimed T1, verified T1 T2` with all 7 checks PASS.** T2 is **earned and not yet
 claimed** — the claim is made at BREAK-2, by the human, in writing. Next:
-**FEAT-06** — the **influence report is built** (D-13); the **bias-attack
-harness**, ballot order, voting and comments are not.
+**FEAT-06** — the **influence report (D-13) and the bias-attack harness are
+built**; randomised ballot order, voting and comments are not.
 
 ---
 
@@ -91,7 +91,7 @@ Ed25519 sign/verify **with tamper rejection**.
 | D-09 | **No Merkle transparency log.** Publish one chain head; replicate it into every signed judge record | CT's value is *witnessing* and we have no witness. The chain head in N signed records is strictly stronger for a third of the code |
 | D-10 | **Signed records: Ed25519 in an in-toto Statement v1 inside a DSSE envelope.** Keys on their own volume | DSSE signs bytes, so no third party reimplements our canonicalisation |
 | D-11 | **`source_key` on every importable table.** Round-trip is byte-identical *including natural keys* | "Modulo generated IDs" is not a testable property — a dropped column passes |
-| D-12 | **Voting claims cost amplification inside an identity budget, not Sybil resistance.** Randomized order makes bias zero-*mean*, not zero | The mechanism-design literature is explicit; claiming otherwise is falsifiable in one search |
+| D-12 | **Voting claims cost amplification inside an identity budget, not Sybil resistance.** Randomized order makes bias zero-*mean*, not zero — **and the harness now measures the spread as well as the mean, because the spread is what makes the claim honest** | The mechanism-design literature is explicit; claiming otherwise is falsifiable in one search |
 | D-13 | **Anti-abuse = the published influence report**, not a fancier ballot | The brief asks for *"an answer to people trying to cheat it"* and an answer is a report |
 | D-14 | **Webhooks cut.** Models + 501 stub + audit events ship | 2h, zero points on all four criteria, and SSRF is a real bug class under time pressure |
 | D-15 | **No LLM scoring.** Measured and closed | Laya scores 0.35 vs a 0.318 random baseline; Jev needs a hosted API. Also: it deletes the thing 25% of the score is about |
@@ -212,19 +212,17 @@ test instead of quietly weakening the document.
 
 ## 10. Open blockers
 
-**None.** The two entries that used to be here are both closed, and the section
-kept its heading — see **F-57**, which is the same defect in a second file, and
-**F-66**, which found it a third time in `build-plan.md`.
+**None.** The section kept its heading because **F-57** found the same
+"empty section, delete the heading" defect in a second file and **F-66** in a
+third.
 
 - **No git repository (F-14)** — **closed.** The repository exists, on `main` at
   `github.com/aalok101singh/judgejudy`, with the findings ledger and the
   correction log versioned — the Write Up Quest material F-14 existed to protect.
 - **The ambient `python` is 3.14.6 with no Django (F-38)** — **closed at FEAT-01**,
-  and **still true**, so it stays a live warning: the venv is 3.13.13, the
-  container 3.13.15, and a bare `python` is still 3.14.6 with no Django. Use
-  `.venv\Scripts\python.exe` explicitly — Django 5.2.17's `Requires-Python:
-  >=3.10` has no upper bound, so the pin will not save you. `just doctor` names
-  the interpreter it resolved.
+  and **still true**, so it stays a live warning: use `.venv\Scripts\python.exe`
+  explicitly. Django 5.2.17's `Requires-Python: >=3.10` has no upper bound, so the
+  pin will not save you. `just doctor` names the interpreter it resolved.
 
 **Docker is no longer a blocker (F-13 closed).** 29.6.2 on WSL2, Compose v5.3.1,
 `just` 1.58.0, `python:3.13-slim` pre-pulled. One trap remains: it is installed
@@ -233,28 +231,32 @@ shell still will not see it.
 
 ## 11. Where the depth lives
 
+**Do not read `bible/` (330KB).** This file names the section for every kind of
+question; open that one section.
+
 | Need | Read |
 |---|---|
-| Why we win or lose, scoring → tactics, T4 risk | `bible/01` |
-| 60 traceability IDs (23 tier + the rest); assumptions log | `bible/02` |
-| `run.py` reverse-engineered, 7 traps, checklist | `bible/03` |
-| Fixture census, invariants, the 8 edge cases | `bible/04` |
-| **Schema, indexes, isolation primitive, escape hatch** | `bible/05` |
-| **Assignment, normalization, proof, pairwise** | `bible/06` |
-| **Threat model, what we did not stop** | `bible/07` |
-| Hour map, break protocol, slippage ledger, **cut ledger** | `bible/08` |
+| Scoring function, tactics, T4 risk | `bible/01` |
+| 60 traceability IDs; assumptions log | `bible/02` |
+| `run.py` reverse-engineered, 7 traps | `bible/03` |
+| Fixture census, invariants, edge cases | `bible/04` |
+| **Schema, indexes, the isolation primitive** | `bible/05` |
+| **Assignment, normalization, pairwise, ballot** | `bible/06` |
+| Threat model, what we did not stop | `bible/07` |
+| Hour map, break protocol, cut ledger | `bible/08` |
 | Installed versions, the per-user Docker path | `bible/ENVIRONMENT.md` |
-| Discord questions — all closed | `bible/DISCORD-QUESTIONS.md` |
+| Organizer questions — all closed | `bible/DISCORD-QUESTIONS.md` |
 
 ## 12. Working rules
 
 - **Every number in a shipped document is generated, not transcribed** — and now
   also **re-derivable by running the command that produced it**. Six of twelve
   early findings were hand-typed census errors, two found *after* a correction log
-  was published; F-67 is the same class attached to a *command*.
+  was published; F-67 is the same class attached to a *command*, and F-78 is the
+  same class attached to a *table*.
 - **Every claim about library behaviour is executed, not recalled.** F-11 was a
-  documented DRF default that was backwards. FEAT-05's biggest near-miss was the
-  same: a DRF viewset would have made **three T2 checks green for the wrong
+  documented DRF default that was backwards, and FEAT-05's biggest near-miss was
+  the same: a DRF viewset would have made **three T2 checks green for the wrong
   reason** rather than red.
 - **Never tune to a published target.** `k = 0` scores better than the value we
   ship. The whole curve is published beside the point.
@@ -262,9 +264,6 @@ shell still will not see it.
   status, a different explanation surfaced to the user.
 - **State the honest number.** The brief rewards honest gap reporting and
   penalises inflation; `run.py` prints `claimed` against `verified`.
-- **Refusal to cut is not a virtue.** The cut ledger in `bible/08` §13 has eleven
-  rejected items, two with "yes, slightly" in the regret column, because a ledger
-  where everything says "no" teaches nothing.
 
 ## 13. Current state
 
@@ -276,10 +275,10 @@ verification and the counts live in `AGENTS.md` §Current state,
 
 | | |
 |---|---|
-| Findings | **77** — **0 open blocking**, 0 open, 6 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 60 closed |
+| Findings | **81** — **0 open blocking**, 0 open, 8 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 62 closed |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
-| Gate (FEAT-06) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **59/59** · spec layer green · **428 tests** · lint clean |
-| Next | **the bias-attack harness** — the acceptance line's remaining clause |
+| Gate (FEAT-06) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **68/68** · spec layer green · **479 tests** · lint clean |
+| Next | **randomised ballot order** (the mechanism the harness attacks is now measured but the product path is unbuilt), then voting and comments |
 
 **Two things that changed the shape of the project.**
 
@@ -293,7 +292,7 @@ fewer findings, not fewer bugs.
 returning structurally valid output containing nothing** — a min-cut certificate
 naming no judges (F-61), 126 empty export cells (F-69), an audit chain with
 `count() == 0` (F-71), and at FEAT-06 a **structurally constant metric that read
-as a detector** (F-76) and a **fixture whose control was itself a brigade**
-(F-77). **The rule: assert values, not shapes — and assert that a control does
-not fire.** A fixture that cannot separate its subject from its control produces
-green output that means nothing.
+as a detector** (F-76) and a **quality ladder that made a harness measure exactly
+one project** (F-80). **The rule: assert values, not shapes — and assert that a
+control does not fire.** A fixture that cannot separate its subject from its
+control produces green output that means nothing.
