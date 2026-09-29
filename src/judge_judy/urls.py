@@ -24,6 +24,7 @@ from django.urls import path
 from judge_judy import views
 from reviewer.projects import views as project_views
 from reviewer.projects.views import current_event
+from reviewer.reviews import api as api_views
 from reviewer.reviews import console as console_views
 
 
@@ -56,6 +57,20 @@ def _organizer_assignments(request):
     return console_views.organizer_assignments(request, event)
 
 
+def _judge_scores(request):
+    event = current_event()
+    if event is None:
+        return api_views.deny(api_views.REFUSED_BY_ROLE)
+    return api_views.judge_scores(request, event)
+
+
+def _csv_export(request):
+    event = current_event()
+    if event is None:
+        return api_views.deny(api_views.REFUSED_BY_EXPORT)
+    return api_views.csv_export(request, event)
+
+
 urlpatterns = [
     # T1-1 and T1-2. Server-rendered, public, first page in FIXTURE ORDER --
     # `run.py` slices `projects[:3]` positionally, so the ordering is load
@@ -74,6 +89,15 @@ urlpatterns = [
     path("judge/", _console, name="judge_console"),
     path("judge/review/<int:assignment_id>/", _review_form, name="judge_review"),
     path("organizer/assignments/", _organizer_assignments, name="organizer_assignments"),
+    # The T2 surface, and the four checks that have been failing with real URLs
+    # since the first commit. `judge_scores` is a plain Django view rather than a
+    # DRF viewset, and `reviewer/reviews/api.py` explains why at length: DRF
+    # populates `request.user` from its own authentication classes and would
+    # ignore the `request.user` our credential middleware assigns, so every
+    # header-only request would arrive anonymous -- and three of the four T2
+    # checks want a 403. That is a false pass, not a red check.
+    path("api/v1/judge/scores", _judge_scores, name="judge_scores"),
+    path("api/v1/export.csv", _csv_export, name="csv_export"),
     # The healthcheck polls this. It must stay unauthenticated, cheap and
     # database-free -- see the docstring in judge_judy/views.py.
     path("healthz", views.healthz, name="healthz"),

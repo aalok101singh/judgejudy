@@ -125,25 +125,51 @@ class ReviewQuerySet(ScopedQuerySetMixin, models.QuerySet):
         brief names. Making the peer case a differently-named method means the
         call site has to say out loud that it is asking about someone else.
 
-        **Who falls through, stated precisely, because this sentence used to be
-        wrong (F-51).** The guard is ``actor.is_judge``, so:
+        **Who falls through, and why a judge who also organises now does too
+        (F-51).** The guard is ``actor.is_judge and not actor.can_read_all_reviews``:
 
         * a visitor, a participant, an organizer or an admin who is **not** also
           a judge falls through to ``for_actor`` -- an organizer's subject
           parameter is ignored, which is the organizer role working;
-        * a **judge who is also an organizer is refused.** ``for_actor`` alone
-          would hand that user the whole event, so the two accessors disagree,
-          and the docstring used to claim they did not.
+        * a **judge who is also an organizer now falls through too.** It did not
+          until FEAT-05 decided F-51, and the decision went the other way from
+          the interim code.
 
-        The strict reading is kept deliberately. It is the safe one, and nothing
-        can reach this accessor until FEAT-05 builds the route that does -- so
-        widening an access rule to match a sentence in a comment is the wrong
-        repair at this hour. Which of the two is *correct* is a real question and
-        it is recorded as F-51 for the feature that owns the judge console. The
-        two tests that pin this are
+        **Why the overlap resolves in the organizer's favour, and it is not
+        "widen it to match the comment".** The interim code refused a
+        judge-organizer here while ``for_actor`` handed that same user all 126
+        reviews -- so the peer-blindness was real for a pure judge and *cosmetic*
+        for the one person it most plausibly matters about. Worse, the refusal
+        protected nothing: the organizer-scoped ``/api/v1/export.csv`` contains
+        every score in the event, so a judge-organizer read all of them anyway by
+        a documented route. **A rule that the export already defeats is not a
+        security control, it is a sentence in a docstring.**
+
+        The alternative -- narrowing so that organizers cannot read peer scores --
+        was the only reading under which the refusal means anything, and it was
+        rejected because it costs more than the sentence: it forces
+        ``can_read_all_reviews`` to split into "may read all scores" against "may
+        staff this event", and it has to restrict the export too, which is the
+        route T2-7 scores. Decided at FEAT-05, by the human, in writing. A judge
+        who organises is the ordinary case at a hackathon, not a misconfiguration
+        -- the premise F-45 and F-51 were both found on -- and the organizer's
+        authority is event-wide *by design*: an organizer who cannot read a peer's
+        review cannot investigate a conflict of interest.
+
+        The consequence to be honest about: **a judge-organizer is not a peer-
+        blind actor, and this accessor is not what makes them one.** They are
+        refused the leaderboard *while judging is open* by a different rule
+        (FEAT-06), and until that rule exists they can read every score. Stating
+        that here is the point of recording F-51 rather than closing it quietly.
+        The tests that pin both halves are
         ``tests/test_isolation_invariants.py::TestP2NoCrossEvasion``.
         """
-        if actor.is_judge and subject is not None and subject.pk != getattr(actor.user, "pk", None):
+        if (
+            actor.is_judge
+            and not actor.can_read_all_reviews
+            and subject is not None
+            and subject.pk != getattr(actor.user, "pk", None)
+        ):
             return (
                 self.filter(event_id=actor.event.pk)
                 .none()

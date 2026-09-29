@@ -39,6 +39,26 @@ extend-exclude = [
     # spec layer", and honouring it for `ruff check` while letting `ruff format`
     # rewrite the same file would be honouring it in name only.
     "tools/verify_spec.py",
+    # ---- F-70: the ORGANIZERS' files, and the research record ----------------
+    # `run.py` is the acceptance program **the panel runs**. It is a GIVEN input,
+    # not ours, and a submission that ships a reformatted copy of it is claiming
+    # to run "the identical program" while shipping a different one. The same
+    # reasoning extends to `bible/`, which F-53 already established is a research
+    # document whose prose is the planning record -- corrections belong in the
+    # findings ledger, not in a silent reformat.
+    #
+    # This exclusion exists because `ruff format` run with **no path argument**
+    # reformatted `run.py` (54 lines) and three documents during FEAT-05, and
+    # nothing failed. Every gate stayed green, because the reformatting is
+    # semantically identical -- which is the worst property a defect can have
+    # here: it is invisible to every check we have, and it is the one change that
+    # a panelist would be entitled to call tampering with their own tool.
+    "run.py",
+    "bible",
+    # Markdown: ruff 0.16 formats Python fenced blocks inside .md, which
+    # silently rewrites code examples in documents nobody asked it to touch.
+    # `JUDGING.md` lost three spaces in a code block this way.
+    "*.md",
 ]
 
 [tool.ruff.lint]

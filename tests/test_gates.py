@@ -221,26 +221,33 @@ class TestAcceptanceWrapper:
         # for no benefit, since the real protection is "do not edit it" plus
         # review of the diff.
 
-    def test_counts_a_fail_and_fails_the_gate(self) -> None:
-        """A report whose failures are ALL expected is a green gate.
+    def test_an_all_passing_report_is_a_green_gate(self) -> None:
+        """**Restated at FEAT-05, and the milestone change is the point.**
 
-        Five of the seven checks legitimately fail at this milestone, so a bare
-        "any FAIL is fatal" rule would be red from the first commit — and a
-        gate that is always red is a gate nobody reads. The expectation file is
-        what makes "green" mean "nothing regressed" rather than "everything
-        works yet".
+        This used to be "a report whose failures are ALL expected is a green
+        gate", over a synthetic report with four T2 FAILs -- true while the T2
+        checks were expected to fail, and **a regression the moment they were
+        not**. So the test had to move with the ratchet rather than be deleted,
+        because the property it proves is still the one the gate needs: "green"
+        means "nothing regressed", not "everything works yet".
+
+        All seven checks now pass, so the honest green report is an all-PASS one
+        and the honest test of the ratchet is the *other* direction --
+        `test_a_t2_check_that_fails_is_now_a_regression` below. Deleting this
+        would have quietly removed the only assertion that a clean report is
+        accepted, which is the half of the gate a reviewer relies on.
         """
         fake = fake_checker(
             "T1  gallery is public ................. PASS\n"
             "T1  project from fixtures shown ....... PASS\n"
             "       none of them appeared in the response body\n"
             "T1  closed event refuses submissions .. PASS\n"
-            "T2  judge sees own scores ............. FAIL\n"
-            "T2  judge cannot see peer scores ...... FAIL\n"
-            "T2  participant blocked ............... FAIL\n"
-            "T2  csv export works .................. FAIL\n"
+            "T2  judge sees own scores ............. PASS\n"
+            "T2  judge cannot see peer scores ...... PASS\n"
+            "T2  participant blocked ............... PASS\n"
+            "T2  csv export works .................. PASS\n"
             "\n"
-            "claimed nothing, verified nothing"
+            "claimed T1, verified T1 T2"
         )
         try:
             result = run_tool(
@@ -254,11 +261,55 @@ class TestAcceptanceWrapper:
             Path(fake).unlink(missing_ok=True)
 
         assert result.returncode == 0, (
-            "The gate failed even though every failing check is expected to "
-            f"fail at this milestone.\n{result.stdout}"
+            f"The gate failed on a fully passing report.\n{result.stdout}"
         )
-        assert "3 passed, 4 failed, of 7 checks" in result.stdout
+        assert "7 passed, 0 failed, of 7 checks" in result.stdout
         assert "GATE OK" in result.stdout
+
+    def test_a_t2_check_that_fails_is_now_a_regression(self) -> None:
+        """**The ratchet's other direction, and the reason the entry above moved.**
+
+        The same synthetic report that used to be green is now RED, because
+        `csv export works` is marked `pass`. That is the expectations file doing
+        the only thing it is allowed to do: when a feature ships, its check stops
+        being "expected to fail" and starts being "must not fail".
+
+        This is the assertion that makes the flip auditable. Without it, changing
+        four entries from `fail` to `pass` would be indistinguishable from
+        deleting the gate, and "we made the checks pass" and "we made the gate
+        stop looking" produce the same green output.
+        """
+        fake = fake_checker(
+            "T1  gallery is public ................. PASS\n"
+            "T1  project from fixtures shown ....... PASS\n"
+            "       none of them appeared in the response body\n"
+            "T1  closed event refuses submissions .. PASS\n"
+            "T2  judge sees own scores ............. PASS\n"
+            "T2  judge cannot see peer scores ...... PASS\n"
+            "T2  participant blocked ............... PASS\n"
+            "T2  csv export works .................. FAIL\n"
+            "       GET http://localhost:8080/api/v1/export.csv\n"
+            "       got 403, wanted 200\n"
+            "\n"
+            "claimed T1, verified T1"
+        )
+        try:
+            result = run_tool(
+                "run_acceptance.py",
+                ".dogfood.toml",
+                "--runner",
+                fake,
+                "--skip-preconditions",
+            )
+        finally:
+            Path(fake).unlink(missing_ok=True)
+
+        assert result.returncode != 0, (
+            "A T2 check marked 'pass' that FAILED must be a regression. If this is "
+            "green, the expectations file has stopped gating.\n" + result.stdout
+        )
+        assert "REGRESSION" in result.stdout
+        assert "'csv export works' is expected to pass" in result.stdout
 
     def test_a_regression_fails_the_gate(self) -> None:
         """The ratchet's first direction: expected to pass, did not.
@@ -313,18 +364,32 @@ class TestAcceptanceWrapper:
         expectation teaches a reader to discount the file — and the next time it
         is genuinely wrong about a regression, they discount that too.
 
-        The stale check here is `csv export works`, which FEAT-05 still owns. It
-        used to be `project from fixtures shown`, which FEAT-03 flipped to
-        `pass`; using the flipped one would have made this test assert that the
-        ratchet never moves, which is the opposite of what a ratchet is for.
+        **Restated at FEAT-05 against a TEMPORARY expectations file, and that is
+        a real change of method rather than a convenience.** The shipped file now
+        marks all seven checks `pass`, so there is no entry left to make stale —
+        the branch became unreachable against the real file. The two obvious
+        repairs are both bad: deleting the test leaves the branch untested, and
+        flipping a real entry back to `fail` to make it fire would edit the one
+        file the panel's verdict is derived from, in a test.
+
+        So the staleness is produced in a copy. The branch is still exercised, the
+        real file is not touched, and the test keeps working at whatever milestone
+        the project is at when the next person reads it.
         """
+        import json as _json
+
+        expectations = _json.loads((TOOLS / "expected_checks.json").read_text(encoding="utf-8"))
+        expectations["checks"]["csv export works"]["expect"] = "fail"
+        stale = REPO / "tools" / "_tmp_stale_expectations.json"
+        stale.write_text(_json.dumps(expectations, indent=2), encoding="utf-8")
+
         fake = fake_checker(
             "T1  gallery is public ................. PASS\n"
             "T1  project from fixtures shown ....... PASS\n"
             "T1  closed event refuses submissions .. PASS\n"
-            "T2  judge sees own scores ............. FAIL\n"
-            "T2  judge cannot see peer scores ...... FAIL\n"
-            "T2  participant blocked ............... FAIL\n"
+            "T2  judge sees own scores ............. PASS\n"
+            "T2  judge cannot see peer scores ...... PASS\n"
+            "T2  participant blocked ............... PASS\n"
             "T2  csv export works .................. PASS"
         )
         try:
@@ -333,10 +398,13 @@ class TestAcceptanceWrapper:
                 ".dogfood.toml",
                 "--runner",
                 fake,
+                "--expectations",
+                str(stale),
                 "--skip-preconditions",
             )
         finally:
             Path(fake).unlink(missing_ok=True)
+            stale.unlink(missing_ok=True)
 
         assert result.returncode == 1
         assert "'csv export works' is marked 'fail'" in result.stdout, (
@@ -481,10 +549,10 @@ class TestAcceptanceWrapper:
             "T1  gallery is public ................. PASS\n"
             "T1  project from fixtures shown ....... PASS\n"
             "T1  closed event refuses submissions .. PASS\n"
-            "T2  judge sees own scores ............. FAIL\n"
-            "T2  judge cannot see peer scores ...... FAIL\n"
-            "T2  participant blocked ............... FAIL\n"
-            "T2  csv export works .................. FAIL"
+            "T2  judge sees own scores ............. PASS\n"
+            "T2  judge cannot see peer scores ...... PASS\n"
+            "T2  participant blocked ............... PASS\n"
+            "T2  csv export works .................. PASS"
         )
         try:
             unreachable = run_tool(
@@ -639,10 +707,10 @@ class TestAcceptanceWrapper:
             "T1  gallery is public ................. PASS\n"
             "T1  project from fixtures shown ....... PASS\n"
             "T1  closed event refuses submissions .. PASS\n"
-            "T2  judge sees own scores ............. FAIL\n"
-            "T2  judge cannot see peer scores ...... FAIL\n"
-            "T2  participant blocked ............... FAIL\n"
-            "T2  csv export works .................. FAIL"
+            "T2  judge sees own scores ............. PASS\n"
+            "T2  judge cannot see peer scores ...... PASS\n"
+            "T2  participant blocked ............... PASS\n"
+            "T2  csv export works .................. PASS"
         )
         try:
             result = run_tool(
@@ -925,10 +993,19 @@ class TestExpectationsFile:
         """A probe with no marker is a status check wearing a probe's clothes.
 
         `run.py` already does the status check. The entire value of a probe is
-        that it asserts on the response BODY, so a probe without
-        `body_must_contain` is a precondition that says nothing the checker did
-        not already say — and it would read as though something more were being
+        that it asserts on something the checker did not look at, so a probe
+        without a marker is a precondition that says nothing the checker did not
+        already say - and it would read as though something more were being
         verified.
+
+        **A marker is a `body_must_contain` OR a `header_must_contain`, and
+        accepting only the first would be the tool being wrong rather than strict.**
+        D-02 requires a refusal to have an *empty body*, so the API refusals
+        added at FEAT-05 cannot name their guard in the body the way the deadline
+        guard's HTML form page does. F-40 requires them to be attributable, so
+        the reason travels in `X-Refused-By` instead. Demanding the body form
+        would force a choice between "the refusal is empty" and "the refusal
+        explains itself", and both of those are non-negotiable.
         """
         spec = json.loads((TOOLS / "expected_checks.json").read_text(encoding="utf-8"))
         rules = {k: v for k, v in spec.get("preconditions", {}).items() if not k.startswith("$")}
@@ -940,13 +1017,54 @@ class TestExpectationsFile:
             if rule.get("probe")
         ]
         assert probes, "the body probe was added in FEAT-03 and must still be declared"
+        assert len(probes) >= 3, (
+            f"only {len(probes)} probe(s) declared; FEAT-05 added a peer-refusal "
+            "and a participant-refusal probe alongside the deadline one"
+        )
 
         for label, key, rule in probes:
             probe = rule["probe"]
-            assert probe.get("body_must_contain"), f"{label}/{key} probes nothing"
+            assert probe.get("body_must_contain") or probe.get("header_must_contain"), (
+                f"{label}/{key} probes nothing"
+            )
             assert probe.get("method", "").upper() in run_acceptance_module.PROBE_METHODS
             assert probe.get("expect_status"), f"{label}/{key} does not say what it wants"
             assert rule.get("why"), f"{label}/{key} has no reason a reviewer can read"
+
+    def test_every_probe_marker_exists_in_the_portal_source(self) -> None:
+        """**A probe marker is a string in two files, and nothing ties them
+        together is how a rename leaves the gate asserting a stale constant.**
+
+        The deadline marker was already checked against the guard's real name in
+        `test_the_declared_probe_matches_this_spec`. The two FEAT-05 markers are
+        ``api.judge_scores.*`` reason strings, so this checks each one appears in
+        ``reviewer/reviews/api.py`` -- which is the same guarantee for a different
+        kind of marker, and it fails loudly rather than turning into a gate that
+        is always red or, worse, one somebody turns off.
+        """
+        source = (REPO / "src" / "reviewer" / "reviews" / "api.py").read_text(encoding="utf-8")
+        spec = json.loads((TOOLS / "expected_checks.json").read_text(encoding="utf-8"))
+        markers = [
+            rule["probe"]["header_must_contain"]
+            # Iterate `.items()` and test the KEY: the `$comment` entry's value
+            # is a list of prose lines, so testing the value with `startswith`
+            # raises before the filter can skip it. And filter the marker itself,
+            # because the deadline probe carries `body_must_contain` and no header
+            # marker -- it is checked against the guard's name in
+            # `test_the_declared_probe_matches_this_spec` instead.
+            for label, entries in spec["preconditions"].items()
+            if not label.startswith("$")
+            for rule in entries.values()
+            if isinstance(rule, dict)
+            and rule.get("probe")
+            and rule["probe"].get("header_must_contain")
+        ]
+        assert markers, "no header markers declared"
+        for marker in markers:
+            assert marker in source, (
+                f"{marker!r} is asserted by the gate but does not appear in api.py. "
+                "Either the reason string was renamed or the probe is stale."
+            )
 
 
 class TestTheDeadlineProbe:
@@ -1106,13 +1224,200 @@ class TestTheDeadlineProbe:
         assert "is not one this tool will send" in why
         assert recorder.requests == []
 
-    def test_the_declared_probe_matches_this_spec(self):
-        """The expectations file and this module must agree on the marker.
 
-        Two places naming the guard's function, and nothing tying them together,
-        is how a rename leaves the gate quietly asserting a string the portal
-        stopped returning -- and a gate that asserts a stale string is a gate
-        that is always red or, worse, one somebody turns off.
+class TestTheApiProbes:
+    """**FEAT-05's addition, and it exists because the machinery was untested.**
+
+    FEAT-05 added `header_must_contain` and `path_suffix` to the probe machinery.
+    Four deliberate corruptions of that machinery were run against this file
+    before this class existed and **three of them produced no failure at all**:
+    removing the `header_must_contain` check, making it always match, and
+    ignoring `path_suffix` all left the suite green.
+
+    That is the project's own lesson, aimed at us. The probes only ever run
+    against a live container inside `just check`, so adding a probe is adding
+    code whose tests do not exist yet -- and a check that cannot fail is worse
+    than no check, because it occupies the slot where a real one should be and
+    reports coverage. `TestTheDeadlineProbe` above is the shape these follow, and
+    these four corruptions are what prove the new class is not that mistake
+    again.
+
+    **Why a header and not a body, restated because it looks like a
+    contradiction.** D-02 requires the refusal body to be EMPTY, and F-40
+    requires the refusal to be attributable. Both hold at once because the reason
+    travels in `X-Refused-By`. A test that demanded a body marker here would be
+    forcing a choice between two non-negotiables.
+    """
+
+    PEER_SPEC = {
+        "method": "GET",
+        "auth": "judge_b",
+        "path_suffix": "?judge=judge_a",
+        "expect_status": "401/403",
+        "header_must_contain": "api.judge_scores.peer_scope",
+        "must_not_have_header": "Location",
+    }
+    ROLE_SPEC = {
+        "method": "GET",
+        "auth": "participant",
+        "expect_status": "401/403",
+        "header_must_contain": "api.judge_scores.role",
+        "must_not_have_header": "Location",
+    }
+    AUTH_BLOCK = {
+        "judge_b": "Authorization: JJ1.deadbeef.judge-b@example.org",
+        "participant": "Authorization: JJ1.deadbeef.participant@example.org",
+    }
+
+    def _probe(self, answer, spec, monkeypatch):
+        recorder = fake_http.install(monkeypatch, answer)
+        outcome = run_acceptance_module.run_probe(
+            "http://portal", "/api/v1/judge/scores", spec, self.AUTH_BLOCK
+        )
+        ok, why = run_acceptance_module.judge_probe(outcome, spec)
+        return ok, why, recorder
+
+    def test_a_peer_refusal_naming_the_scope_passes(self, monkeypatch):
+        ok, why, _ = self._probe(
+            (403, "", {"X-Refused-By": "api.judge_scores.peer_scope"}),
+            self.PEER_SPEC,
+            monkeypatch,
+        )
+        assert ok, why
+        assert "api.judge_scores.peer_scope" in why
+
+    def test_a_refusal_with_an_empty_body_and_no_reason_is_caught(self, monkeypatch):
+        """**The exact false pass these probes exist to prevent.**
+
+        A 403 with an empty body is *correct* under D-02 and it is exactly what
+        a refusal looks like. So the status alone cannot distinguish the
+        isolation layer from CSRF, from a 401, from anything. This is the test
+        that makes the header marker load-bearing rather than decorative.
+        """
+        ok, why, _ = self._probe((403, "", {}), self.PEER_SPEC, monkeypatch)
+
+        assert not ok, "a bare 403 must not satisfy a probe that names a guard"
+        assert "did not come from the mechanism" in why
+        assert "none starting with X-" in why, (
+            "the message must say what headers it DID see, or the reader has to go and look"
+        )
+
+    def test_a_csrf_refusal_is_caught(self, monkeypatch):
+        """The F-11 trap in its API form: 403, an HTML body, and the wrong guard."""
+        ok, why, _ = self._probe(
+            (
+                403,
+                "<h1>Forbidden</h1><p>CSRF verification failed.</p>",
+                {"X-Refused-By": "django.middleware.csrf"},
+            ),
+            self.PEER_SPEC,
+            monkeypatch,
+        )
+
+        assert not ok
+        assert "did not come from the mechanism" in why
+
+    def test_the_role_probe_will_not_accept_the_peer_guard(self, monkeypatch):
+        """**The two guards are different decisions and the gate must tell them apart.**
+
+        A portal that refused participants for the *peer* reason would pass a
+        status-only participant probe while enforcing the wrong policy -- and the
+        wrong policy here is a portal where the participant check is really a
+        second copy of the peer check. The reason strings differ by one segment
+        precisely so this is checkable.
+        """
+        ok, why, _ = self._probe(
+            (403, "", {"X-Refused-By": "api.judge_scores.peer_scope"}),
+            self.ROLE_SPEC,
+            monkeypatch,
+        )
+
+        assert not ok
+        assert "api.judge_scores.role" in why or "did not come from the mechanism" in why
+
+    def test_the_peer_probe_visits_the_peer_url(self, monkeypatch):
+        """**`path_suffix`, and why dropping it would silently weaken the gate.**
+
+        Without the suffix the probe would GET the bare route as judge_b and be
+        refused by the ROLE rule -- a correct refusal, of the wrong check. So the
+        peer-blindness of `for_actor_and_subject` would go unverified by the one
+        gate whose entire job is to verify it, and the gate would still be green.
+        """
+        _, _, recorder = self._probe(
+            (403, "", {"X-Refused-By": "api.judge_scores.peer_scope"}),
+            self.PEER_SPEC,
+            monkeypatch,
+        )
+        sent = recorder.last
+
+        assert sent.get_method() == "GET"
+        assert sent.full_url == "http://portal/api/v1/judge/scores?judge=judge_a", (
+            f"the probe visited {sent.full_url!r}. Without the peer URL it is "
+            "probing the role rule and calling it the peer rule."
+        )
+
+    def test_the_peer_probe_sends_judge_bs_own_credential(self, monkeypatch):
+        """The checker's own credential, read out of the same `.dogfood.toml`."""
+        _, _, recorder = self._probe(
+            (403, "", {"X-Refused-By": "api.judge_scores.peer_scope"}),
+            self.PEER_SPEC,
+            monkeypatch,
+        )
+        assert recorder.last.get_header("Authorization") == "JJ1.deadbeef.judge-b@example.org"
+
+    def test_an_emptied_judge_b_credential_is_caught_before_a_request(self, monkeypatch):
+        """A stale `.dogfood.toml` must not be papered over with a default.
+
+        The T2 version of the deadline probe's most important branch. If
+        `judge_b` is emptied the checker's request goes out as judge_a, gets a
+        200, and the check is red for a reason that has nothing to do with the
+        portal.
+        """
+        recorder = fake_http.install(monkeypatch, (403, "", {}))
+        outcome = run_acceptance_module.run_probe(
+            "http://portal",
+            "/api/v1/judge/scores",
+            self.PEER_SPEC,
+            {"judge_b": "", "participant": "Authorization: JJ1.x.y@example.org"},
+        )
+        ok, why = run_acceptance_module.judge_probe(outcome, self.PEER_SPEC)
+
+        assert not ok
+        assert "is empty in the config" in why
+        assert recorder.requests == []
+
+    def test_a_302_to_a_login_page_is_caught(self, monkeypatch):
+        """**D-02, at the layer where it actually costs points.**
+
+        `must_not_have_header` is what catches a portal that starts refusing by
+        redirecting. `run.py` follows the redirect and gets a 200, so the
+        refusal is invisible to the panel -- while looking entirely correct in a
+        browser, which is why this has to be a property and not a habit.
+        """
+        ok, why, _ = self._probe(
+            (
+                403,
+                "",
+                {
+                    "X-Refused-By": "api.judge_scores.peer_scope",
+                    "Location": "/login/?next=/api/v1/judge/scores",
+                },
+            ),
+            self.PEER_SPEC,
+            monkeypatch,
+        )
+
+        assert not ok
+        assert "follows" in why and "Location" in why
+
+    def test_the_declared_probes_use_these_specs(self):
+        """The specs above and the shipped expectations file must agree.
+
+        Without this, `header_must_contain` could be renamed in `api.py`, the
+        expectations file updated to match, and this class still green -- because
+        it tests `judge_probe`, not the file. The two have to be tied together or
+        the class proves the mechanism works and nothing about which mechanism is
+        in use.
         """
         expectations = json.loads(
             (REPO / "tools" / "expected_checks.json").read_text(encoding="utf-8")
@@ -1123,7 +1428,34 @@ class TestTheDeadlineProbe:
             if not label.startswith("$")
             for key, value in entries.items()
         }
-        probes = [rule["probe"] for rule in rules.values() if rule.get("probe")]
+        assert rules["peer_scores_refused_by_scope"]["probe"] == self.PEER_SPEC
+        assert rules["participant_scores_refused_by_role"]["probe"] == self.ROLE_SPEC
 
-        assert len(probes) == 1
-        assert probes[0]["body_must_contain"] == GUARD == SPEC["body_must_contain"]
+    def test_the_declared_probe_matches_this_spec(self):
+        """The expectations file and this module must agree on the marker.
+
+        Two places naming the guard's function, and nothing tying them together,
+        is how a rename leaves the gate quietly asserting a string the portal
+        stopped returning -- and a gate that asserts a stale string is a gate
+        that is always red or, worse, one somebody turns off.
+
+        **Scoped to the deadline probe by name, not by count.** It used to assert
+        ``len(probes) == 1``, which was true only while the deadline probe was
+        the only one -- so FEAT-05's two header probes broke a test whose subject
+        was the deadline marker. Asserting a count of the wrong thing is a
+        brittle test wearing a specific one's clothes; this now finds *its* probe
+        and checks that.
+        """
+        expectations = json.loads(
+            (REPO / "tools" / "expected_checks.json").read_text(encoding="utf-8")
+        )
+        rules = {
+            key: value
+            for label, entries in expectations["preconditions"].items()
+            if not label.startswith("$")
+            for key, value in entries.items()
+        }
+        deadline = rules.get("submit_refused_by_deadline")
+
+        assert deadline is not None, "the deadline probe disappeared from the expectations"
+        assert deadline["probe"]["body_must_contain"] == GUARD == SPEC["body_must_contain"]

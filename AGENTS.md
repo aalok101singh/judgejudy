@@ -12,7 +12,7 @@ order. It is short on purpose.
 
 | # | File | Bytes | When |
 |---|---|---|---|
-| 1 | **`blueprint/context/project-overview.md** | **19,785** | **Always. This is the whole project in one load.** |
+| 1 | **`blueprint/context/project-overview.md** | **19,934** | **Always. This is the whole project in one load.** |
 | 2 | `blueprint/context/current-feature.md` | — | Find the in-flight scope. Exactly one. |
 | 3 | `blueprint/context/findings.md` | — | What is known broken, and what was chosen not to fix. Check anything touching the files you are about to touch. |
 | 4 | `blueprint/context/ai-interaction.md` | — | How to work here. Read once per session. |
@@ -141,17 +141,19 @@ a test instead of quietly weakening a document.
 
 ## Current state
 
-FEAT-01 to FEAT-04 built and verified. 24 models across 12 apps; the isolation
+FEAT-01 to FEAT-05 built and verified. 24 models across 12 apps; the isolation
 primitive, the loader, the public gallery, the deadline guard, the assignment
-engine with its min-cut certificate, and the judge console are in place, and
-**`run.py` prints `claimed T1, verified T1` with `v-t1-verified` tagged.** Next:
-**FEAT-05** — the T2 surface: scoped scores, isolation refusals, the CSV export,
-the dashboards.
+engine with its min-cut certificate, the judge console, the scoped score
+endpoint and the CSV export are in place, and **`run.py` prints
+`claimed T1, verified T1 T2` with all 7 checks PASS.** T2 is **earned and not
+yet claimed** — the claim is made at BREAK-2, by the human, in writing. Next:
+**FEAT-06** — the public surface: voting, comments, ballot order, the influence
+report.
 
 | | |
 |---|---|
-| Findings | **65** — **0 open blocking, 0 open**, 1 fixed (F-51, a question deferred to FEAT-05), 1 unverified (F-27), 10 accepted by decision, 41 closed |
-| Acceptance | **T1 green** — 3 of 7 checks pass, and the false passes are gone because the gate can now tell a deadline refusal from a CSRF one |
-| Suite | **340 tests**, 18/18 gate mutations + 16/16 on the new modules, 68/68 spec checks |
-| Container | cold start **12.0 s** measured 2026-09-29 against the 60 s budget; `prove-offline` passes |
+| Findings | **70** — **0 open blocking, 0 open**, 1 unverified (F-27), 10 accepted by decision, 47 closed |
+| Acceptance | **T1 and T2 green** — **7 of 7 checks pass**, `claimed T1, verified T1 T2`. The `verified` ceiling is arithmetic in `run.py`, not a gap: there are no T3 or T4 checks at all |
+| Suite | **374 tests**, 44/44 mutations, 68/68 spec checks |
+| Container | cold start **12–20 s** observed 2026-09-29 against the 60 s budget (a range, not a value — F-68); `prove-offline` passes |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |

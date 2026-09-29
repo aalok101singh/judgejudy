@@ -295,6 +295,13 @@ class TestP2NoCrossEvasion(TestCase):
     misconfiguration -- the same premise F-45 was found on. So the invariant is
     stated over the roles it is actually about, and the organizer's case is
     asserted separately below rather than quietly excluded.
+
+    **This counter-example was called "correct behaviour" before it was called
+    anything.** F-51 asked whether it *should* be, kept the code on the strict
+    reading in the meantime, and was decided in this direction at FEAT-05: a
+    judge-organizer resolves to the organizer. The restriction of the strategy to
+    roles below judge is therefore no longer a convenient exclusion -- it is the
+    statement of the rule.
     """
 
     @HYP
@@ -354,20 +361,25 @@ class TestP2NoCrossEvasion(TestCase):
 
     @HYP
     @given(subject_id=st.sampled_from(JUDGE_IDS[1:]))
-    def test_a_judge_who_also_organizes_is_still_refused_about_a_peer(self, subject_id):
-        """**The overlap case, and it is where the docstring used to be wrong.**
+    def test_a_judge_who_also_organizes_resolves_to_the_organizer(self, subject_id):
+        """**The overlap case, decided at FEAT-05 (F-51). Organizer wins.**
 
-        ``for_actor_and_subject`` guards on ``actor.is_judge`` alone, so a user
-        who holds BOTH a judge binding and an organizer binding is refused when
-        they ask about a peer -- even though ``for_actor`` alone would hand them
-        the whole event. The docstring said organizers "fall through"; that is
-        true of an organizer and false of a judge-organizer.
+        The interim code refused a judge-organizer here while ``for_actor`` handed
+        that same user the whole event, so the two accessors disagreed and the
+        peer-blindness was cosmetic for the one person it most plausibly matters
+        about. It was also defeated in practice: the organizer-scoped
+        ``/api/v1/export.csv`` contains every score, so the refusal protected
+        nothing.
 
-        The code is kept and the docstring corrected, because **the strict
-        reading is the safe one and nothing can reach this accessor until
-        FEAT-05 builds the route that does.** Widening an access rule to match a
-        sentence in a comment is the wrong repair; recording the ambiguity for
-        the feature that owns the question is the right one (F-51).
+        Decided in the organizer's favour, so ``for_actor_and_subject`` and
+        ``for_actor`` now agree for this actor. Asserted in **both** directions
+        because a one-directional assertion passes a lot of wrong code: the
+        about-peer result must equal the about-self result must equal ``for_actor``.
+
+        The reason the test can fail at all is the guard's ``not
+        can_read_all_reviews`` clause. A rule that fires on everyone would satisfy
+        the previous version of this test perfectly -- which is why the
+        equivalence, and not merely the non-emptiness, is what is asserted.
         """
         world = build_world()
         actor = actor_for(world, "jdg_01", {ROLE_ORGANIZER, ROLE_JUDGE}, [JUDGE_TRACKS["jdg_01"]])
@@ -378,9 +390,41 @@ class TestP2NoCrossEvasion(TestCase):
 
         assert for_actor.scope.decision == "allow-all"
         assert for_actor.exists(), "for_actor alone sees the whole event"
+
+        assert about_peer.scope.decision == "allow-all"
+        assert about_self.scope.decision == "allow-all"
+
+        peer_rows = set(about_peer.values_list("pk", flat=True))
+        assert peer_rows == set(for_actor.values_list("pk", flat=True)), (
+            "a judge-organizer asking about a peer must get exactly what "
+            "for_actor gives them, or the two accessors disagree again"
+        )
+        assert peer_rows == set(about_self.values_list("pk", flat=True))
+        assert peer_rows, "an empty result would satisfy the equality above"
+
+    @HYP
+    @given(subject_id=st.sampled_from(JUDGE_IDS[1:]))
+    def test_a_pure_judge_is_still_refused_about_a_peer(self, subject_id):
+        """The other half of F-51: widening must not have widened this.
+
+        F-51's repair adds ``not can_read_all_reviews`` to a guard, and a guard
+        that grows a clause is a guard that can grow it the wrong way. The pure
+        judge -- judge binding, no organizer binding -- is the actor T2-5 is
+        actually scored on, and the peer refusal is the whole value of the
+        separate accessor, so it is pinned directly rather than inferred from the
+        test above.
+        """
+        world = build_world()
+        actor = actor_for(world, "jdg_01", {ROLE_JUDGE}, [JUDGE_TRACKS["jdg_01"]])
+
+        about_peer = Review.objects.for_actor_and_subject(actor, world.judges[subject_id])
+
         assert about_peer.scope.decision == "deny"
         assert not about_peer.exists()
-        assert about_self.scope.decision == "allow-all"
+        assert about_peer.query.is_empty(), (
+            "a refused peer query must be an EmptyResultSet, not a filter that "
+            "happens to match nothing"
+        )
 
     @HYP
     @given(subject_id=st.sampled_from(JUDGE_IDS))

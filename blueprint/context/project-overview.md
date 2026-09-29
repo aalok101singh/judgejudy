@@ -1,19 +1,17 @@
 # Project Overview — Judge Judy
 
-> **Loadable context for any agent session. Keep under 20,000 bytes.**
-> Regenerate by editing `blueprint/project-plan.md` and `blueprint/build-plan.md`,
-> never by patching this file by hand.
+> **Loadable context for any agent session. Keep under 20,000 bytes — it is
+> asserted by `verify_spec.py`, because the cap is the only thing keeping this
+> file a *load* rather than a project.**
 > Depth lives in `bible/` (330KB) — read the named section, never the folder.
 
 **What this is:** a self-hostable hackathon submission and judging platform for
 DOGFOOD 2026, built to be forked and run for a decade. Not a demo.
 **Window:** 69 hours, one person, solo. Freeze H+69.
-**Status:** FEAT-01 to FEAT-04 built and verified. 24 models across 12 apps; the
-isolation primitive, the loader, the gallery, the deadline guard, the assignment
-engine with its min-cut certificate, and the judge console are in place.
-**`run.py` prints `claimed T1, verified T1`, `v-t1-verified` tagged.** Next:
-**FEAT-05** — the T2 surface: scoped scores, refusals, the CSV export, the
-dashboards.
+**Status:** FEAT-01 to FEAT-05 built and verified; **`run.py` prints
+`claimed T1, verified T1 T2` with all 7 checks PASS.** T2 is **earned and not yet
+claimed** — the claim is made at BREAK-2, by the human, in writing. Next:
+**FEAT-06** — voting, comments, ballot order, the influence report.
 
 ---
 
@@ -21,15 +19,14 @@ dashboards.
 
 1. **69 hours, solo.** This binds everything. Reject any idea over ~6 hours, and
    say so out loud.
-2. **New code only, in the window.** The `bible/` and `blueprint/` layers are
-   planning documents, not application code. Dependencies and environment setup
-   are explicitly permitted by the spec.
+2. **New code only, in the window.** `bible/` and `blueprint/` are planning
+   documents, not application code. Dependencies and environment setup are
+   explicitly permitted.
 3. **Offline, one command, laptop, network off.** No cloud account, no hosted
    database, no auth provider, no external API, no API keys. A binary
    disqualification if broken.
-4. **Django 5 + DRF + SQLite (WAL), Postgres-portable schema, one container,
-   gunicorn + whitenoise.** Do not propose a stack change unless it is worth
-   more than ~4 hours of build time.
+4. **Django 5 + SQLite (WAL), Postgres-portable schema, one container, gunicorn +
+   whitenoise.** DRF is installed but the `/api/v1` routes are plain Django — §3.
 5. **Every idea must survive a `curl` from a judge with no documentation and no
    patience.**
 
@@ -49,9 +46,10 @@ the 25/20/15%, is read by a human with a rubric. **Build for the reader, not the
 checker.**
 
 There are **no T3 or T4 checks at all**, and `verified` is prefix-locked over
-`["T1","T2","T3","T4"]`, breaking at the first tier that has no passing check.
-So a flawless build still prints `verified T1 T2`. That is arithmetic, not a
-bug — see `bible/03` §2 and F-34.
+`["T1","T2","T3","T4"]`, breaking at the first tier that has no passing check —
+so a flawless build still prints `verified T1 T2`. **That is arithmetic, not a
+bug, and FEAT-05 has now hit the ceiling with 7 of 7 passing** (`bible/03` §2,
+F-34). `README.md` explains it in full; the report is shipped unedited.
 
 Panel: 36 senior engineers, 3 reviews per project, σ = 0.94 on their own scale.
 Marginal improvements do not separate us from the field. Be **decisively** better
@@ -63,15 +61,15 @@ on at least one axis.
 |---|---|---|
 | Python | **3.13.13** | venv. Container `python:3.13-slim` is 3.13.15 — same line, so local == container. **A bare `python` is 3.14.6 with no Django (F-38)** |
 | Django | 5.2.17 | **LTS, not 6.1** — the organizers fork this for a decade |
-| djangorestframework | 3.18.1 | |
-| drf-spectacular | 0.30.0 | API First bonus |
+| djangorestframework | 3.18.1 | **installed but NOT used for `/api/v1` — see the FEAT-05 archive.** DRF would ignore our credential middleware's `request.user` and turn three T2 checks green for the wrong reason |
+| drf-spectacular | 0.30.0 | API First bonus, FEAT-07 |
 | whitenoise · gunicorn · cryptography | 6.12.0 · 26.2.0 · 50.0.1 | gunicorn marked `sys_platform != "win32"` |
 | pytest · pytest-django · hypothesis · ruff | 9.1.1 · 4.14.0 · 6.168.2 · 0.16.9 | dev only, not in the image |
 
 **28 packages, 17 runtime. Deliberately absent, with reasons in
 `requirements.txt`:** numpy, scipy, networkx (measured unnecessary — 126 rows, a
-40-node graph), celery/redis (a second service is a disqualifier), argon2-cffi
-(Django 5's default is correct for this posture), any cloud SDK.
+40-node graph), celery/redis (a second service is a disqualifier), argon2-cffi,
+any cloud SDK.
 
 Verified working: FTS5 gallery search, WAL, JSON1, `CheckConstraint` /
 `JSONField` / composite `UniqueConstraint` portable across both engines, and
@@ -82,7 +80,7 @@ Ed25519 sign/verify **with tamper rejection**.
 | # | Decision | One-line reason |
 |---|---|---|
 | D-01 | **Isolation in the data-access layer.** `Review.objects.for_actor(actor)` returns an already-scoped queryset. No code path from a view to an unscoped `Review`. A lint rule forbids the unscoped form | The spec names this: *"hiding another judge's scores in your template is not refusing"* |
-| D-02 | **Denial is a literal 403, never a 302.** Empty body, no `Location` header | `run.py` follows redirects; a redirect returns 200 and fails T2-5. **Highest-value line in the project** |
+| D-02 | **Denial is a literal 403, never a 302.** Empty body, no `Location` header. **One function** — `reviewer/isolation/refusal.py` — shared by the console and the API | `run.py` follows redirects; a redirect returns 200 and fails T2-5. **Highest-value line in the project** |
 | D-03 | **Two enforcement layers, not three.** Permission *decides* and raises; the queryset *constrains* and cannot. They fail in opposite directions | A third layer is derived, therefore a second source of truth. The lint rule is the exception: it enforces a *syntactic* property, which is mechanically checkable (`bible/07` §2b) |
 | D-04 | **Normalization: robust median/MAD + shrinkage `k=3`, `ε=0.5` as the legible default; empirical-Bayes (`τ²` by moments) as the constant-free estimator whose numbers we report** | EB measured 4.9% better held-out RMSE and has **no tunable constant at all**, which removes our largest exposure |
 | D-05 | **Detectability analysis first.** Is there an effect to remove? | A normalization claim that doesn't test for the effect it removes is a subtraction, not a proof |
@@ -106,24 +104,27 @@ Ed25519 sign/verify **with tamper rejection**.
   the portal is born closed. Never move it.**
 - 8 tracks · 30 judges (21 single-track, 9 dual) · 40 teams · **41 projects** ·
   **126 reviews**. Criteria always `{functionality, innovation, quality}`, values
-  2–5, key **order** is `functionality, quality, innovation`.
+  2–5, key **order** is `functionality, quality, innovation` — the export header
+  (F-04).
 - Reviews per project **8@2, 26@3, 3@4, 4@5** (mass 126) → the mode, 26/41, is
-  the evidence the target is 3.
-- Reviews per judge 1–11. `jdg_07`: 3 reviews, 4/4/4 on `prj_09`, `prj_17`,
-  **`prj_19`** — and `prj_19` is a **2-review project**, so a constant judge is
-  half of its entire score. `jdg_01` and `jdg_23`: n=1.
+  the evidence the target is 3. Reviews per judge 1–11. `jdg_07`: 3 reviews,
+  4/4/4 on `prj_09`, `prj_17`, **`prj_19`** — and `prj_19` is a **2-review
+  project**, so a constant judge is half of its entire score. `jdg_01` and
+  `jdg_23`: n=1.
 - `trk_01` and `trk_08` are **zero-slack, not infeasible** — 18 needed, 18
-  possible. **Provably impossible at per-judge capacity 5.** Three tracks missed
-  the target, five over-covered, net +3 — a global bar hides three local failures.
+  possible, **provably impossible at per-judge capacity 5** (measured, named
+  min-cut, at FEAT-04). Three tracks missed the target, five over-covered, net
+  +3 — a global bar hides three local failures.
 - `prj_07` + `prj_41`: same team, track, title, `repo_url`, 13h28m apart, 5 vs 4
   reviews. Model as `supersedes`, keep both rows, aggregate by team latest-wins,
   carry a `counted` flag in the export.
-- Graph is **one connected component, 71 nodes.** A joint IRT model is identified
-  here (and still loses — F-17); the pairwise disconnected-graph caveat **cannot
-  be demonstrated on this fixture.**
+- Graph is **one connected component, 71 nodes**, so a joint IRT model is
+  identified here (and still loses — F-17) and the pairwise disconnected-graph
+  caveat **cannot be demonstrated here**.
 - **The panel has no detectable judge-severity effect:** between-judge variance
   0.0217 vs a noise floor of 0.0971, permutation **p = 0.234**, detection floor
-  **τ ≈ 0.75**.
+  **τ ≈ 0.75**. *The inconvenient result the normalization section leads with, and
+  a finding rather than a failure.*
 
 ## 6. The four traps that cost the most points
 
@@ -132,46 +133,52 @@ Ed25519 sign/verify **with tamper rejection**.
    `Glass Signal`, `Small Meadow`, `Deep Compass` on the gallery route. Ship all
    three anyway — it is free — but the first gallery page **must be in fixture
    order**, because the slice is positional, not a search.
-2. **Denial must be 403, not 302.** See D-02.
+2. **Denial must be 403, not 302.** See D-02. **FEAT-05 made this a single
+   function** (`reviewer/isolation/refusal.py`) shared by the console and the
+   API, so it cannot drift per surface.
 3. **`verified` is prefix-locked and only T1/T2 have checks.** A flawless build
-   still prints `verified T1 T2`. Explain it in `README.md`; ship the unedited
-   report; commit our own extended suite separately and clearly labelled.
+   still prints `verified T1 T2` — see §2. **FEAT-05 hit that ceiling with 7 of 7
+   passing.** `README.md` explains it; the report ships unedited.
 4. **No seeded timing is tight.** Only the 5 test identities get real password
    hashes; the other ~116 get `UNUSABLE_PASSWORD`. Hashing all 121 costs ~48 s
    against a **10 s** timeout.
 
 ## 7. Build plan — 10 features, 69 hours
 
-| ID | Hours | Feature | Gate |
+**`blueprint/build-plan.md` is the clock's source of truth and carries the
+per-feature acceptance lines.** The hours below are the ones `verify_spec.py`
+parses out of this table and cross-checks, which is why they are not prose.
+
+| ID | h | Feature | Gate |
 |---|---|---|---|
-| FEAT-01 | 4 | Skeleton, Docker, compose, healthcheck, `LICENSE`. `compose up` → serving page <60 s | — |
-| FEAT-02 | 5 | Schema, isolation primitive, `isolation_proof` skeleton, scope receipt | — |
-| FEAT-03 | 5 | Loader, seed identities, gallery, deadline guard, 4 Hypothesis invariants | — |
-| **BREAK-1** | 1 | **☕ T1.** Full verify, slippage ledger, claim, tag `v-t1-verified` | **T1** |
-| FEAT-04 | 7 | Rubric, assignment + min-cut, judge console, reviews | — |
-| FEAT-05 | 8 | Isolation enforcement, dashboard, exports, event editor | — |
-| **BREAK-2** | 1 | **☕ T2.** Tag `v-t2-verified` — the fallback state | **T2** |
-| FEAT-06 | 9 | T3 public: voting, comments, results hiding, ballot order, **influence report** | — |
+| FEAT-01 | 4 | Skeleton, Docker, compose, healthcheck | — |
+| FEAT-02 | 5 | Schema, isolation primitive, `isolation_proof`, scope receipt | — |
+| FEAT-03 | 5 | Loader, seed identities, gallery, deadline guard | — |
+| **BREAK-1** | 1 | **☕ T1.** Full verify, claim, tag `v-t1-verified` | **T1** |
+| FEAT-04 | 7 | Rubric, assignment + min-cut, judge console | — |
+| FEAT-05 | 8 | Scoped scores, refusals, the CSV export — **done** | — |
+| **BREAK-2** | 1 | **☕ T2.** Tag `v-t2-verified` — *the fallback state* | **T2** |
+| FEAT-06 | 9 | Voting, comments, results hiding, ballot order, **influence report** | — |
 | **BREAK-3** | 1 | **☕ T3.** Claim, tag | **T3** |
-| FEAT-07 | 13 | T4: bulk IO + round-trip test, signed records, `results_hash`, widget, OpenAPI | — |
-| **BREAK-4** | 1 | **☕ T4.** How much of T4 is green? Claim. Tag | **T4** |
-| FEAT-08 | 7 | Normalization engine + proof artefact. **Protected; do not displace** | — |
+| FEAT-07 | 13 | T4: bulk IO + round trip, signed records, `results_hash`, widget, OpenAPI | — || **BREAK-4** | 1 | **☕ T4.** How much is green? Claim that. | **T4** |
+| FEAT-08 | 7 | Normalization engine + proof. **Protected** | — |
 | FEAT-09 | 3 | Demo video | recorded |
-| FEAT-10 | 4 | Docs, acceptance report, verification, commit. **Protected** | **FREEZE** |
+| FEAT-10 | 4 | Docs, acceptance report, commit. **Protected** | **FREEZE at H+65** |
 
 **The claim is decided at a break, not at kickoff.** We build to T4; each break
 decides what is actually green. If Break 4 arrives with two T4 items outstanding,
 we claim T3 and name which two. A T4 claim with half-working endpoints scores
-worse than an honest T3 — the brief says so three times.
+worse than an honest T3 — the brief says so three times. **T2 is earned as of
+FEAT-05 and still unclaimed**, which is the rule working rather than aspirational.
 
 **Break protocol (1 hour, fixed):** clean `down -v` → `up` network off ·
-`run.py` · `isolation_proof` must exit 0 · full suite · **update the slippage
-ledger** (`bible/08` §1c) · decide the claim and write it down · tag.
+`run.py` · `isolation_proof` exits 0 · full suite · **update the slippage ledger**
+(`bible/08` §1c) · decide the claim and write it down · tag.
 
 ## 8. Verify — two gates, at different times
 
 ```bash
-python tools/verify_spec.py   # the plan vs the organizers' files. 67 checks. Runs NOW.
+python tools/verify_spec.py   # the plan vs the organizers' files. 68 checks. Runs NOW.
 just check                    # the application. Needs Docker. Runs at every break.
 ```
 
@@ -179,12 +186,10 @@ just check                    # the application. Needs Docker. Runs at every bre
 works before Phase A exists, and it **exits non-zero**, unlike `run.py`. It
 re-derives every count in §5 from `fixtures.json` and every claim about `run.py`
 from its source. **Run it after any edit to this plan, and before trusting any
-number quoted anywhere.** It has already caught five wrong numbers that a
-careful read missed — including `5@5` instead of `4@5` in this very file, and
-"6 demands" where `run.py` runs 7 checks.
-
-The build clock is checked too: 69h exactly, all four breaks on the cumulative
-clock, freeze at H+65, and tier hours agreeing with the features.
+number quoted anywhere.** It has caught more than a dozen wrong numbers that a
+careful read missed, including `5@5` instead of `4@5` in this very file, "6
+demands" where `run.py` runs 7 checks, and a stale feature count in
+`build-plan.md` (F-66).
 
 The proof's published numbers are **asserted in CI** (held-out RMSE, recovery
 RMSE, sensitivity curves), so a refactor that silently changes the method fails a
@@ -193,103 +198,104 @@ test instead of quietly weakening the document.
 ## 9. The three steal-it candidates, ranked
 
 1. **"We measured whether there was anything to fix, and we told you."** The
-   detectability analysis plus parameter recovery. ~2.5 h, near-zero risk, lands
-   on 25% + the Normalization Proof + the $100 prize. **The organizers confirmed
-   this is what the bonus rewards**: *"Showing it recovers a known effect is
-   exactly the kind of rigour the bonus is looking for."*
+   detectability analysis plus parameter recovery — FEAT-08, protected, not
+   displaced. ~2.5 h, near-zero risk, lands on 25% + the $100 prize. **The
+   organizers confirmed this is what the bonus rewards**: *"Showing it recovers a
+   known effect is exactly the kind of rigour the bonus is looking for."*
 2. **"Feasible" and "provably impossible" are different answers, and we hand you
-   the min-cut.** ~1.5 h, and it *removes* a risk — the old claim was false.
+   the min-cut."** **Shipped at FEAT-04**, ~1.5 h, and it *removed* a risk — the
+   old claim was false.
 3. **The scope receipt.** `for_actor()` returns a queryset carrying a
-   human-readable reason and every list view renders it. ~1 h. Makes isolation
-   verifiable by a reader, not just by our tests.
+   human-readable reason; every list view renders it and FEAT-05 exposed it over
+   HTTP. **Shipped at FEAT-02.** Makes isolation verifiable by a reader.
 
 ## 10. Open blockers
 
 **None.** The two entries that used to be here are both closed, and the section
-kept its heading — see **F-57**, which is the same defect in a second file.
+kept its heading — see **F-57**, which is the same defect in a second file, and
+**F-66**, which found it a third time in `build-plan.md`.
 
-- ~~**No git repository (F-14, P2) — the only blocker left.**~~ **Closed.** The
-  repository exists, on `main` at `github.com/aalok101singh/judgejudy`, with the
-  findings ledger and the correction log versioned — which is the Write Up Quest
-  material F-14 existed to protect.
-- ~~**The ambient `python` is 3.14.6 with no Django (F-38, P2).**~~ **Closed at
-  FEAT-01**, and still true, which is why it is kept as a live warning rather
-  than dropped: the venv is 3.13.13, the container is 3.13.15, and a bare
-  `python` is still 3.14.6 with no Django. Use `.venv\Scripts\python.exe`
-  explicitly — Django 5.2.17's `Requires-Python: >=3.10` has no upper bound, so
-  the pin will not save you. `just doctor` names the interpreter it resolved.
+- **No git repository (F-14)** — **closed.** The repository exists, on `main` at
+  `github.com/aalok101singh/judgejudy`, with the findings ledger and the
+  correction log versioned — the Write Up Quest material F-14 existed to protect.
+- **The ambient `python` is 3.14.6 with no Django (F-38)** — **closed at FEAT-01**,
+  and **still true**, so it stays a live warning: the venv is 3.13.13, the
+  container 3.13.15, and a bare `python` is still 3.14.6 with no Django. Use
+  `.venv\Scripts\python.exe` explicitly — Django 5.2.17's `Requires-Python:
+  >=3.10` has no upper bound, so the pin will not save you. `just doctor` names
+  the interpreter it resolved.
 
 **Docker is no longer a blocker (F-13 closed).** 29.6.2 on WSL2, Compose v5.3.1,
-`just` 1.58.0, `python:3.13-slim` pre-pulled — all re-verified at BREAK-1. One
-trap remains: it is installed **per-user**, so `docker` was on no PATH at all
-until F-34 was fixed. A stale shell still will not see it.
+`just` 1.58.0, `python:3.13-slim` pre-pulled. One trap remains: it is installed
+**per-user**, so `docker` was on no PATH at all until F-34 was fixed, and a stale
+shell still will not see it.
 
 ## 11. Where the depth lives
 
 | Need | Read |
 |---|---|
 | Why we win or lose, scoring → tactics, T4 risk | `bible/01` |
-| 60 traceability IDs (23 tier + rules/deliverables/scoring/bonus); assumptions log | `bible/02` |
+| 60 traceability IDs (23 tier + the rest); assumptions log | `bible/02` |
 | `run.py` reverse-engineered, 7 traps, checklist | `bible/03` |
 | Fixture census, invariants, the 8 edge cases | `bible/04` |
 | **Schema, indexes, isolation primitive, escape hatch** | `bible/05` |
 | **Assignment, normalization, proof, pairwise** | `bible/06` |
 | **Threat model, what we did not stop** | `bible/07` |
 | Hour map, break protocol, slippage ledger, **cut ledger** | `bible/08` |
-| Installed versions, verified claims, the per-user Docker path | `bible/ENVIRONMENT.md` |
+| Installed versions, the per-user Docker path | `bible/ENVIRONMENT.md` |
 | Discord questions — all closed | `bible/DISCORD-QUESTIONS.md` |
 
 ## 12. Working rules
 
-- **Every number in a shipped document is generated, not transcribed.** Six of
-  twelve findings were hand-typed census errors, two found *after* we published
-  a correction log about the first four.
+- **Every number in a shipped document is generated, not transcribed** — and now
+  also **re-derivable by running the command that produced it**. Six of twelve
+  early findings were hand-typed census errors, two found *after* a correction log
+  was published; F-67 is the same class attached to a *command*.
 - **Every claim about library behaviour is executed, not recalled.** F-11 was a
-  documented DRF default that was backwards, and it would have made the deadline
-  check pass without testing the deadline.
+  documented DRF default that was backwards. FEAT-05's biggest near-miss was the
+  same: a DRF viewset would have made **three T2 checks green for the wrong
+  reason** rather than red.
 - **Never tune to a published target.** `k = 0` scores better than the value we
   ship. The whole curve is published beside the point.
 - **A denied request is a refusal, not a filter.** Different code path, different
-  status, and now a different explanation surfaced to the user.
+  status, a different explanation surfaced to the user.
 - **State the honest number.** The brief rewards honest gap reporting and
-  penalises inflation; `run.py` prints `claimed` against `verified` and the panel
-  runs the identical program.
-- **Refusal to cut is not a virtue.** The cut ledger in `bible/08` §13 is
-  pre-populated with eleven rejected items, two of them with "yes, slightly" in
-  the regret column, because a ledger where everything says "no" teaches nothing.
+  penalises inflation; `run.py` prints `claimed` against `verified`.
+- **Refusal to cut is not a virtue.** The cut ledger in `bible/08` §13 has eleven
+  rejected items, two with "yes, slightly" in the regret column, because a ledger
+  where everything says "no" teaches nothing.
 
 ## 13. Current state
 
-**FEAT-01 to FEAT-04 are built, verified and committed.** 24 models across 12
-apps, one initial migration per app plus two corrections,
-`Review.objects.for_actor()` with its scope receipt, a hash-chained
-`AuditEntry`, a lint rule that fails the build on an unscoped `Review` read, an
-idempotent loader, the gallery, the deadline guard, **a min-cost assignment engine
-with a named min-cut certificate**, and the judge console. **BREAK-1 is closed** —
-the T1 claim decided in writing and `v-t1-verified` tagged. **Next: FEAT-05** —
-the T2 surface: scoped scores, refusals, the CSV export, the dashboards.
+**FEAT-01 to FEAT-05 built and verified; BREAK-2 is next and T2 is earned and
+unclaimed; FEAT-06 is the in-flight feature.** The narrative, the per-feature
+verification and the counts live in `AGENTS.md` §Current state,
+`context/current-feature.md` and `history/features/`.
 
 | | |
 |---|---|
-| Findings | **65** — **0 open blocking, 0 open**, 1 fixed (F-51, a question deferred to FEAT-05), 1 unverified (F-27), 10 accepted by decision, 41 closed |
-| Open questions | **0.** Two answered, thirteen self-answered, one DM dropped |
-| Contributions upstream | 5 (`bible/README.md` U-1…U-5), incl. a corrected spec figure |
+| Findings | **70** — **0 open blocking**, 0 open, 1 unverified (F-27), 10 accepted by decision, 47 closed |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
-| Spec layer | audited against the given inputs 2026-09-27; five errors found and closed (F-28…F-32) |
-| Gate now (FEAT-04) | `just check` **green** (now including `verify_assignment`), `claimed T1, verified T1` · `mutation-test` **18/18** + **16/16** new · spec **68/68** · **340 tests** · cold start **12.0 s** measured 2026-09-29 |
+| Gate (FEAT-05) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **44/44** · spec **68/68** · **374 tests** · lint clean |
 
-**The number that changed the shape of the project:** FEAT-03 was the first
-feature to run our code against the organizers' *data* rather than data we
-built, and it opened **three P1s in one feature** — 123 blank-password accounts
-(F-49), a `UNIQUE` constraint their own fixture violates (F-50), and a
-credential format that could never verify (F-55). All three are closed.
+| Next | **BREAK-2 ☕ T2** — tag `v-t2-verified`; the claim is made there, in writing |
 
-**FEAT-04 found no new P1 in the data, and that is itself the finding.** The rate
-tracks how much *genuinely new* input meets our code, and FEAT-04's data was
-already loaded and verified twice. What it found instead was two defects in **our
-own reasoning**: a min-cost solver returning feasible but **non-minimal** flows
-(F-60), and a min-cut certificate that named **no judges at all**, because
-`bible/06` §2.3's "the sink side of the cut" is the empty set on this network
-(F-61). **A feature returning structurally valid output containing nothing is
-indistinguishable from a feature that works.** Carry that to FEAT-05, whose data
-is also not new.
+**Two things that changed the shape of the project.**
+
+**FEAT-03 was the only feature that met genuinely new input** — the organizers'
+data rather than ours — and it opened **three P1s at once** (F-49, F-50, F-55).
+Every feature since has found its serious defect in *our own reasoning*, because
+the data was already loaded and verified twice. **The rate tracks how much new
+input meets the code**, so expect fewer findings, not fewer bugs.
+
+**And the same defect has appeared three times in three media: a feature
+returning structurally valid output containing nothing.** A min-cut certificate
+naming no judges (F-61). A leaderboard refused for the wrong reason. And the CSV
+export's first column — **126 empty cells**, because `Review` inherits
+`source_key` from D-11 and the loader never writes it (F-69): a perfect-looking
+export, correct header, 200 from the checker.
+
+**The rule for FEAT-06 is the one the third instance earned: assert values, not
+shapes.** The test that missed the empty column asserted the CSV *header* — a
+test that asserts the header is testing the header. What caught it asserted every
+*cell* against the database.

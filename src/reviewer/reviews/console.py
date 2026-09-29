@@ -40,7 +40,7 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 
-from reviewer.isolation import Actor
+from reviewer.isolation import Actor, refusal
 from reviewer.reviews.models import (
     REVIEW_ASSIGNED,
     REVIEW_IN_PROGRESS,
@@ -52,7 +52,14 @@ from reviewer.reviews.models import (
 
 #: The header every refusal carries. Its value is a *function* name, so it names
 #: the guard that refused rather than the resource that was asked for.
-REFUSED_BY_HEADER = "X-Refused-By"
+#:
+#: Re-exported rather than defined: the header and the response builder now live
+#: in `reviewer.isolation.refusal`, because FEAT-05 added a second surface that
+#: refuses and two implementations of D-02 is one too many. The name stays
+#: importable from here because the mutation harness, the tests and
+#: `judge_judy/urls.py` all reach for `console.REFUSED_BY_*`, and renaming them
+#: would be churn on a working gate.
+REFUSED_BY_HEADER = refusal.REFUSED_BY_HEADER
 
 REFUSED_BY_CONSOLE = "judge_console.deny"
 REFUSED_BY_ASSIGNMENT = "judge_console.assignment_scope"
@@ -60,16 +67,16 @@ REFUSED_BY_ROLE = "judge_console.role"
 
 
 def _deny(refused_by: str, *, status: int = 403) -> HttpResponse:
-    """A refusal. Literal status, empty body, no ``Location``.
+    """A refusal, through the portal's single refusal primitive.
 
-    **Written out longhand rather than with a redirect or a template** because
-    the three properties that make it a refusal -- the status, the empty body and
-    the absence of ``Location`` -- are all things a convenience helper is likely
-    to change. A test asserts each of them separately.
+    **Why this is an alias rather than a definition.** D-02 is only worth
+    anything if there is one implementation of it, and this module is not that
+    implementation any more -- `reviewer.isolation.refusal.deny` is, shared with
+    the API surface. What is left here is the name the rest of the portal already
+    calls, so the 403-an-empty-body contract is asserted once and inherited
+    everywhere rather than re-derived per view.
     """
-    response = HttpResponse(status=status)
-    response[REFUSED_BY_HEADER] = refused_by
-    return response
+    return refusal.deny(refused_by, status=status)
 
 
 def _actor(request, event) -> Actor:

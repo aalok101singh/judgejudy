@@ -43,24 +43,24 @@
       "flips_at": "FEAT-03, verified"
     },
     "judge sees own scores": {
-      "expect": "fail",
-      "reason": "FEAT-04/FEAT-05. Needs the judge console and the scoped accessor. Depends on load_fixtures providing the five seeded identities.",
-      "flips_at": "FEAT-05"
+      "expect": "pass",
+      "reason": "FEAT-05. `GET /api/v1/judge/scores` as judge_a returns 200 with a scope receipt reading `allow-own, 3 of 126`, and every row in it carries judge_a's own `source_key`. The endpoint is a plain Django view rather than a DRF viewset, and that is load-bearing rather than a style choice: DRF populates `request.user` from its own authentication classes and would ignore the one our credential middleware assigns, so every header-only request would arrive anonymous and be refused. Three of the four T2 checks want a 403, so that mistake would have produced three GREEN checks for a reason that has nothing to do with isolation -- F-40, in the most expensive shape available. The `judge_scores_route_exists` precondition below is what makes a 200 here mean something.",
+      "flips_at": "FEAT-05, verified"
     },
     "judge cannot see peer scores": {
-      "expect": "fail",
-      "reason": "FEAT-05. THE one that matters most. A 404 is currently a pass for the wrong reason - the route does not exist, so there is nothing to leak. It only counts once the URL returns judge_a's scores to judge_a and a LITERAL 403, empty body, no Location header, to judge_b. A 302 to a login page returns 200 through run.py's redirect following and fails while looking correct in a browser.",
-      "flips_at": "FEAT-05"
+      "expect": "pass",
+      "reason": "FEAT-05, and the one that matters most. The route returns judge_a's scores to judge_a, and `?judge=judge_a` sent as judge_b is a LITERAL 403 with an empty body and no Location header, produced by the peer-blind accessor `Review.objects.for_actor_and_subject` -- not a redirect, because run.py follows redirects and a 302 would come back as a 200 and fail this while looking correct in a browser. A 404 is no longer accepted for the wrong reason: the `judge_scores_route_exists` precondition asserts the owner gets a 200, and the `peer_scores_refused_by_scope` probe re-sends the checker's OWN request with its OWN credential and requires the refusal to name the guard that produced it, so a 403 from CSRF or from an unrecognised credential can no longer stand in for the isolation layer.",
+      "flips_at": "FEAT-05, verified"
     },
     "participant blocked": {
-      "expect": "fail",
-      "reason": "FEAT-05. Same 404-for-the-wrong-reason caveat as above.",
-      "flips_at": "FEAT-05"
+      "expect": "pass",
+      "reason": "FEAT-05. `GET /api/v1/judge/scores` as the participant is a 403 with an empty body, no Location, and `X-Refused-By: api.judge_scores.role`. The `participant_scores_refused_by_role` probe asserts the guard, so this is a refusal by the role rule rather than by CSRF -- and the same request on a client with `enforce_csrf_checks=True` is a separate test in `tests/test_api.py`, because a CSRF rejection and a scope rejection are both 403 and only the header tells them apart.",
+      "flips_at": "FEAT-05, verified"
     },
     "csv export works": {
-      "expect": "fail",
-      "reason": "FEAT-05. Needs the export view. The header must be functionality, quality, innovation - the KEY ORDER in the fixture, not the order the values appear in a row. Getting this backwards transposes two columns in every export (F-04).",
-      "flips_at": "FEAT-05"
+      "expect": "pass",
+      "reason": "FEAT-05. `GET /api/v1/export.csv` as the organizer returns 200 and 126 data rows plus a header. **The header is the fixture's KEY order, `functionality, quality, innovation`** -- neither alphabetical nor the order the values appear in any row (F-04). Getting it backwards transposes two columns in every row of every export and nothing else catches it, because a CSV with the right number of columns in the wrong order is perfectly well formed, so the assertion compares against the order derived from `fixtures.json` and a second test checks every exported value against the database per criterion key, since a correct header with positionally paired values is the same defect with the evidence removed. The export is read through `for_actor(actor)` and refused to a judge with a 403, so it is not a second unscoped path to every score in the portal.",
+      "flips_at": "FEAT-05, verified"
     }
   },
 
@@ -110,14 +110,44 @@
     "judge cannot see peer scores": {
       "judge_scores_route_exists": {
         "why": "A 404 is a 401/403, so this check passes while there is nothing to leak. Isolation that is enforced by absence is not isolation. Assert the route returns 200 to the legitimate owner before believing the PASS.",
-        "flips_at": "FEAT-05"
+        "flips_at": "FEAT-05, satisfied"
+      },
+      "peer_scores_refused_by_scope": {
+        "why": "The route existing is not enough, and neither is a 403. A CSRF rejection, a 401 for an unrecognised credential and a genuine peer refusal are the SAME status code, so a probe that only checked the status would be satisfied by a refusal that never consulted the isolation layer -- which is F-40, filed about this gate. This probe repeats the checker's own GET on the peer URL, carrying the [auth] judge_b header out of the very .dogfood.toml run.py read, and requires the response to NAME the guard that refused it. If the credential does not verify, the probe cannot see the marker and the gate goes red, which is the point. It also requires no Location header, so a 302-to-login -- the D-02 failure mode, and the one that returns 200 to run.py -- is caught here rather than by run.py reporting a mysterious FAIL.",
+        "flips_at": "FEAT-05, satisfied",
+        "probe": {
+          "method": "GET",
+          "auth": "judge_b",
+          "path_suffix": "?judge=judge_a",
+          "expect_status": "401/403",
+          "header_must_contain": "api.judge_scores.peer_scope",
+          "must_not_have_header": "Location"
+        }
       }
     },
 
     "participant blocked": {
       "judge_scores_route_exists": {
         "why": "Same as above: 404 is in the accepted set, so this passes before the route exists.",
-        "flips_at": "FEAT-05"
+        "flips_at": "FEAT-05, satisfied"
+      },
+      "participant_scores_refused_by_role": {
+        "why": "The same false-pass, one route over. A 404 is a 4xx and satisfies the checker's expectation for a route that does not exist, and a 403 from anything at all satisfies it too. So this probe re-sends the checker's own request with the [auth] participant header and requires the refusal to name the ROLE rule -- not the peer rule, and not CSRF. The two guards being distinguishable is the point: they are different decisions, and a portal that refused participants for the peer reason would pass this check while enforcing the wrong policy.",
+        "flips_at": "FEAT-05, satisfied",
+        "probe": {
+          "method": "GET",
+          "auth": "participant",
+          "expect_status": "401/403",
+          "header_must_contain": "api.judge_scores.role",
+          "must_not_have_header": "Location"
+        }
+      }
+    },
+
+    "csv export works": {
+      "csv_export_route_exists": {
+        "why": "The organizer row of this one is a 200, so a 404 fails it honestly and this precondition is belt-and-braces rather than a rescue. It is here because the other two T2 routes each needed one for the opposite reason, and a reader should not have to work out which preconditions are load-bearing.",
+        "flips_at": "FEAT-05, satisfied"
       }
     }
   },

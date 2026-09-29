@@ -96,7 +96,7 @@
 
 ## Phase D — Assignment and judging (FEAT-04, 7h)
 
-- [ ] **FEAT-04 Rubric, assignment, judge console, reviews** — 7h
+- [x] **FEAT-04 Rubric, assignment, judge console, reviews** — 7h
   - Weighted rubric, `functionality` heaviest. `ε = 0.5` as the legible default
   - Assignment: one flow over all tracks, min-max capacity by search, load
     imbalance + seeded tiebreak, min-cut certificate
@@ -105,22 +105,52 @@
   - Judge console: assignments, read rubric, submit review, save draft
   - **Verify:** a feasible instance assigns; the capacity-5 instance reports
     infeasible with a named min-cut; the seeded tiebreak reproduces byte-for-byte
+  - **Done 2026-09-29.** All three clauses pass on a clean volume; 340 tests;
+    18/18 mutations plus 16 on the new modules; 68/68 spec. See
+    `history/features/04-assignment-and-judge-console.md`.
+  - **Note (F-60):** the textbook SSP solver returned feasible but **non-minimal**
+    flows because it updated Johnson potentials incrementally. Potentials are now
+    recomputed from Bellman-Ford every augmentation; 1,500/1,500 random instances
+    agree with an independently written oracle.
+  - **Note (F-61/F-62):** `bible/06` §2.3's "sink side of the cut" names **no
+    judges** on this network; the bottleneck judges are the eligible judges **whose
+    capacity is exhausted**. And §2.2's "77 edges" is **199** over 81 nodes.
 
 ## Phase E — Isolation enforced (FEAT-05, 8h)
 
-- [ ] **FEAT-05 Isolation enforcement, dashboard, exports, event editor** — 8h
+- [x] **FEAT-05 Isolation enforcement, the T2 surface, the CSV export** — 8h
   - Every T2 access path through the accessor. Denials are 403, empty body, no
     `Location`
-  - Judge dashboard, organizer dashboard, admin event editor
-  - CSV export with the criteria **key order** preserved — the header is
-    `functionality, quality, innovation` (F-04)
+  - `GET /api/v1/judge/scores` — scoped scores, a scope receipt, and a peer
+    parameter that is **refused rather than filtered**
+  - `GET /api/v1/export.csv` — CSV export with the criteria **key order**
+    preserved (F-04), read through `for_actor(actor)`
   - **Verify:** `run.py` passes T2-4 and T2-5; the T1/T2 `verified` ceiling is
     expected and explained in the README
+  - **Done 2026-09-29.** **7 of 7 checks PASS**, `claimed T1, verified T1 T2`,
+    which is the ceiling `run.py` can print. 374 tests, 44/44 mutations, 68/68
+    spec, lint clean. See `history/features/05-t2-surface-and-export.md`.
+  - **Note:** the two routes are **plain Django, not DRF**, and that is
+    load-bearing. DRF populates `request.user` from its own authentication
+    classes and would ignore the one our credential middleware assigns, so every
+    header-only request would arrive anonymous and be refused — turning three
+    checks that want a 403 green for the wrong reason.
+  - **Note (F-51):** the judge-organizer overlap resolves to the **organizer**.
+    The strict reading was the incoherent one, because the export already granted
+    the same authority.
+  - **Note (F-69):** `Review.source_key` is inherited from D-11 and never written
+    by the loader, so the export's first column was 126 empty cells until a test
+    that checks every *cell* caught it. The natural-key fallback is a workaround;
+    populating the column belongs to FEAT-07.
 
 > ### ☕ BREAK-2 — H+30 — **☕ T2**
 > Same protocol. **Tag `v-t2-verified` — this is our fallback state, and the tag
 > is the most important thing we produce all day.** T2 green is a genuinely
 > defensible submission.
+> **T2 is EARNED and NOT YET CLAIMED.** All four T2 checks pass on a clean
+> volume, so the claim is available; it is made here, in writing, against what is
+> green, and not before. `.dogfood.toml` still reads `claimed = ["T1"]` until
+> then, which is why the report says `claimed T1, verified T1 T2`.
 
 ## Phase F — Public surface (FEAT-06, 9h)
 
@@ -194,10 +224,19 @@
 
 | | |
 |---|---|
-| **Completed** | **3 of 10 features** — FEAT-01, FEAT-02, FEAT-03 |
+| **Completed** | **5 of 10 features** — FEAT-01 … FEAT-05 |
 | **Hours planned** | 69 (68 build + 1 held) |
 | **Slippage to date** | see `bible/08` §1c — first entry written at BREAK-1: A ≈4h, B ≈5h, C ~6h (**+1**) |
-| **Acceptance now** | `run.py` prints **`claimed T1, verified T1`**, with all three T1 checks PASS |
+| **Acceptance now** | `run.py` prints **`claimed T1, verified T1 T2`**, with **all 7 checks PASS** |
 | **Tag** | **`v-t1-verified`** (BREAK-1, 2026-09-28) |
-| **Next** | **FEAT-04** rubric, assignment + min-cut, judge console (7h) |
-| **Then** | **FEAT-05** isolation enforced, dashboard, exports (8h), then BREAK-2 ☕ T2 |
+| **Next** | **FEAT-06** voting, comments, ballot order, influence report (9h) |
+| **Then** | BREAK-3 ☕ T3 — and BREAK-2 ☕ T2 first, which is now **earned and unclaimed** |
+
+> **This table was stale until FEAT-05 opened (F-66).** It read *"3 of 10
+> features"*, Phase D's checkbox was unticked, and **"Next: FEAT-04"** — on a tree
+> where FEAT-04 had been committed and archived. This is **F-57's exact class**,
+> which F-57 itself predicted: *"a status heading is written once and never
+> revisited when the thing under it changes."* F-57 was found and fixed in
+> `findings.md` and `project-overview.md`; the **third** file carrying the same
+> defect was missed, and `verify_spec.py`'s 68 checks pass over it because a
+> machine cannot tell a stale feature count from a fresh one.

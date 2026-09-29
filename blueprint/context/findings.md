@@ -49,6 +49,176 @@ worth noticing rather than explaining away: this was the first feature that ran
 our code against the organizers' *data* instead of data we built, and the
 findings are almost all values that agreed with what we expected.
 
+## Resolved — found in FEAT-05, 2026-09-29
+
+*Five findings. **The one to read is F-70**, because it is the only one that was
+*invisible to every gate in the project and would still have shipped.*
+
+### F-70 [P1] closed - `ruff format` with no path argument reformatted `run.py` — the organizers' own acceptance program — and every gate stayed green
+
+**File:** `pyproject.toml` (`extend-exclude`), and `run.py`, `bible/03`,
+`bible/05`, `JUDGING.md`, `docker/healthcheck.py` as collateral
+**Found:** 2026-09-29, at FEAT-05, by reading `git status` after the final gate
+run
+**Why it matters:** `just lint` was red on line lengths. The fix is
+`ruff format`, and **`ruff format` with no path argument formats the whole
+repository** — including `run.py`, which is the acceptance program **the panel
+runs**. It rewrote 54 lines of it. It also rewrote `bible/03`,
+`bible/05` and `JUDGING.md`, because **ruff 0.16 formats Python fenced code
+blocks inside Markdown**, and `docker/healthcheck.py`.
+
+**`run.py` is a GIVEN input.** AGENTS.md says the panel runs the identical
+program; the submission ships the report that program produced. A submission
+that reformatted the organizers' own checker, by machine, without noticing, is
+claiming to run something identical while shipping something different — and the
+diff is whitespace-only, so **no gate, no test and no reader of the report could
+ever have told.**
+
+That is the property that makes this the worst-shaped finding in the ledger:
+**every existing check is a semantic check, and this change was semantically
+identical.** `verify_spec.py` parses `run.py` for its check surface and still
+passed 68/68. `just check` printed GATE GREEN. The acceptance report was
+byte-identical. There is no gate in this project that can catch a
+cosmetically-changed given file, and that is the finding — not the reformat.
+
+**Resolution:** **Closed 2026-09-29.** All five files restored with
+`git checkout`, and `pyproject.toml`'s `extend-exclude` now names `run.py`,
+`bible` and `*.md` with the reason written beside them, extending the decision
+already recorded against `tools/verify_spec.py` (F-43) from *our* gate to *the
+organizers' file*. **Proven by re-running the exact command that caused it:**
+`ruff format` with no path now reports 91 files unchanged and `git status` on
+`run.py`, `docker/`, `JUDGING.md` and `bible/` is empty.
+
+**The transferable rule, and it is the sharpest thing in this section: a gate can
+only catch a change it is looking for, so a class of change with no gate needs an
+exclusion rather than a test.** F-43 and F-46 were both about `verify_spec.py`;
+this is the same lesson one layer out, and the layer is *the file we do not own*.
+The reason it went unnoticed for a whole feature is also the general one: the
+reformatting was invisible, so nothing prompted anyone to look.
+
+### F-69 [P1] closed - The CSV export's first column was 126 empty cells, and the header test could not see it
+
+**File:** `src/reviewer/reviews/api.py`, `tests/test_api.py`
+**Found:** 2026-09-29, at FEAT-05, by the test that checks every exported value
+against the database
+**Why it matters:** D-11 puts ``source_key`` on every importable table so a
+round trip is byte-identical *including natural keys*, and `Review` inherits the
+column. **The loader never writes it** — it keys a review on `(judge, project)`
+and leaves the field blank, so all 126 rows carry an empty string.
+
+The export printed `review.source_key`. The result was a **structurally perfect
+CSV of 126 rows whose first column contained nothing at all.** No acceptance
+check failed. The header was right. `run.py` got a 200 and moved on.
+
+**This is F-61's exact shape — structurally valid output containing nothing,
+indistinguishable from output that works — and it is the third time this
+project has paid it, in a different medium each time: a min-cut certificate that
+named no judges, a leaderboard that would have been refused for the wrong reason,
+and now a column of nothing.** The reason the header test could not find it is
+the whole point: **a test that asserts the header is testing the header.** The
+test that caught it asserts every cell of every row against the database, keyed
+by criterion, and it is the second half of F-04's assertion — a correct header
+with positionally paired values is the same defect with the evidence removed.
+
+**Resolution:** **Closed 2026-09-29.** `_review_label()` falls back to the
+`(judge, project)` natural key, which is what the loader actually keys on and
+what a reader can check. `test_no_column_in_the_export_is_empty_throughout`
+asserts the property generally rather than for this one column, so a future
+empty column is caught by shape rather than by name. **The underlying gap —
+populating `Review.source_key` — is NOT closed here** and belongs to FEAT-07,
+which owns ``source_key`` and the byte-identical round trip. It is recorded in
+`_review_label`'s docstring so the next person finds it where the workaround is.
+
+### F-67 [P2] closed - "16/16 mutations on the new modules" was quoted in three documents and no command could produce it
+
+**File:** `tools/mutation_test.py`, `AGENTS.md`, `blueprint/context/project-overview.md`
+**Found:** 2026-09-29, at FEAT-05, by re-running the whole Phase 0 pass
+**Why it matters:** FEAT-04 ran sixteen deliberate corruptions against the
+assignment engine and the judge console, recorded the result in its archive, and
+the number was copied into `AGENTS.md`, §13 of the overview and
+`current-feature.md`. **`tools/mutation_test.py` had exactly one `MUTATIONS` list
+of eighteen entries, and not one of them touched `reviewer/assignment/` or
+`console.py`.** So the mutation harness could not produce the claim, could not
+confirm it, and could not lose it.
+
+This is **F-47 and F-48 verbatim**: a verification row that no command
+reproduces is an unreproducible claim wearing the costume of a passing one. And
+**F-59 could not catch it**, which is the more interesting half — `check_recipes`
+asks whether a command named in a document *exists*, and this was a *number*
+about a command, quoted correctly, attached to a command that exists. A check for
+the existence of a tool cannot tell you the tool does the thing.
+
+**Resolution:** **Closed 2026-09-29.** The sixteen were written into
+`tools/mutation_test.py` with their detector test named, and **`just
+mutation-test` now reports 44/44** — 18 original, 16 FEAT-04, 10 FEAT-05. The
+harness caught **two of the new patterns as `pattern not found` on the first run**
+(F-46's documented failure mode, from an indentation guess) and reported them as
+a harness defect rather than as a pass, which is the behaviour F-46 was filed for.
+
+**The generalisable lesson, and it is a gap in F-59:** *"every command named in a
+document exists"* is not the same claim as *"every number quoted about a command
+can be re-derived by running it."* Only the first is cheap to check. A number
+attached to a command is exactly as load-bearing as one attached to a fixture,
+and it drifts the same way.
+
+### F-66 [P2] closed - `build-plan.md` said "3 of 10 features, next: FEAT-04" on a tree where FEAT-04 was committed and archived
+
+**File:** `blueprint/build-plan.md`
+**Found:** 2026-09-29, at FEAT-05, by re-running Phase 0
+**Why it matters:** F-57 was found and fixed at BREAK-1: *"a status heading is
+written once and never revisited when the thing under it changes."* It was
+repaired in `findings.md` and in `project-overview.md` §10. **`build-plan.md` is
+the third file carrying the same defect, and it is the file a build session works
+from** — its Progress table read *"3 of 10 features — FEAT-01, FEAT-02,
+FEAT-03"*, Phase D's checkbox was unticked, and **"Next: FEAT-04"** on a tree
+where FEAT-04 had been committed six commits earlier with an archive and a green
+acceptance line.
+
+`verify_spec.py` passed 68/68 over it. **A machine cannot tell a stale feature
+count from a fresh one** — the same limit F-57 already recorded, hit a third
+time, and the reason this class keeps recurring is that the defence is the break
+sweep rather than a check.
+
+**Resolution:** **Closed 2026-09-29.** Corrected to 4 of 10, Phase D ticked with
+its acceptance result and F-60/F-61/F-62's numbers, and the table now carries the
+F-66 note inline **so the next reader sees the class rather than the fix.**
+
+### F-68 [P3] closed - The cold start was documented as 12.0 s and measured 19.9 s
+
+**File:** `AGENTS.md`, `blueprint/context/project-overview.md`
+**Found:** 2026-09-29, at FEAT-05, by `just coldstart`
+**Why it matters:** F-58 already closed the *class* — the cold start is the only
+figure in the project measured by an instrument, it is quoted to a tenth of a
+second in three shipped documents, and it has no regeneration path. It argued
+from a **0.2 s** discrepancy that tenths are not a project number.
+
+**0.2 s was the wrong estimate of the noise.** The measurement was **19.9 s**,
+7.9 s — 66% — above the documented 12.0 s, on the same machine, on the same
+budget. So the honest reading of F-58 is stronger than the one it closed with:
+**not "the tenths jitter" but "the figure is dominated by machine state and has
+never been reproducible."** Two runs in one session gave 9.1 s and 19.8 s for
+the *same* offline boot path, which is a factor of two, not a rounding.
+
+**Nothing is at risk: 19.9 s against a 60 s budget is a factor of three of
+headroom.** What is at risk is a document that says 12.0 s when the tool says
+19.9 s, because the number is quoted as *measured* and a reader who reruns it
+concludes the tool is broken.
+
+**And then the same session measured it again, 20 minutes later, at 12.1 s.**
+Same machine, same command, same clean volume: **12.1 s and 19.9 s, a factor of
+1.6.** The offline proof in the same session read 9.1 s and then 8.2 s. So the
+figure is not merely jittery at the tenths — **it is dominated by machine state,
+and the original 12.0 s was not a stale number but a lucky one.** Any single
+value in any document was wrong roughly half the time.
+
+**Resolution:** **Closed 2026-09-29.** Both documents now carry a **range and a
+budget — 12–20 s observed, budget 60 s** — and `tools/coldstart.py` remains the
+only place an exact figure appears, because it is the only place one is
+reproducible. The lesson added to F-58 is the stronger one: **a number with no
+regeneration path must be published as a range and a budget, never as a value.**
+A value is a claim a reader will check; a range is an admission, and admitting one
+is what keeps the rest of the document trustworthy.
+
 ## Resolved — found in FEAT-03, 2026-09-28
 
 *Eight findings from building the loader, the gallery and the deadline guard.
@@ -184,7 +354,7 @@ regenerated and are asserted against the identities the seed promotes, by
 `tests/test_demo_credentials.py`, so an emptied or hand-edited value fails the
 suite rather than the acceptance report.
 
-### F-51 [P2] fixed - `for_actor_and_subject`'s docstring described behaviour the code does not have
+### F-51 [P2] closed - `for_actor_and_subject`'s docstring described behaviour the code did not have, and a judge-organizer was refused a rule the export already defeated
 
 **File:** `src/reviewer/reviews/queryset.py`
 **Found:** 2026-09-28, at FEAT-03, by a Hypothesis counter-example
@@ -204,14 +374,52 @@ falsifying example arrived in about two seconds.
 misconfiguration** — the same premise F-45 was found on — so this is a real
 question, not a typo.
 
-**Resolution, and the reasoning is the point:** the **code is kept** and the
-**docstring corrected**, because the strict reading is the safe one and nothing
-can reach that accessor until FEAT-05 builds the route that does. Widening an
-access rule to match a sentence in a comment is the wrong repair at this hour;
-recording the ambiguity for the feature that owns the judge console is the right
-one. Both halves are now pinned by tests — the organizer-only fall-through and
-the judge-organizer refusal — and P2 is restated over the roles it is actually
-about, with the counter-example quoted in its docstring.
+**What happened next, and why it is the most valuable entry in this section.**
+FEAT-03 did the right thing with an ambiguous security rule and almost the wrong
+thing: it **kept the strict code and corrected the docstring**, on the grounds
+that "the strict reading is the safe one and nothing can reach this accessor
+until FEAT-05 builds the route that does." The finding was left **`fixed` rather
+than `closed`**, and `fixed` blocks completion *on purpose* — a repair is not
+done until a review has looked at it.
+
+**The review looked, at FEAT-05, and it went the other way.** Presenting it as
+a product question rather than a code question is what produced the answer,
+because the strict reading turns out not to be the safe one — it is the
+*incoherent* one:
+
+* the refusal protected **nothing**. `/api/v1/export.csv` is organizer-scoped
+  and contains every score in the event, so a judge-organizer read all 126 of
+  them anyway, through a documented route, in the same feature;
+* so the peer-blindness was real for a pure judge and **cosmetic for the one
+  person it most plausibly matters about**;
+* and **narrowing** — the only reading under which the refusal means anything —
+  would have forced `can_read_all_reviews` to split into "may read all scores"
+  against "may staff this event", *and* restricted the export, which is the very
+  route T2-7 scores. A stricter rule that costs a scored feature is not obviously
+  the safer rule.
+
+**Decided by the human, in writing: the organizer wins.** The guard is now
+`actor.is_judge and not actor.can_read_all_reviews`, so `for_actor` and
+`for_actor_and_subject` agree for every actor, and the docstring is true.
+
+**The consequence, stated rather than buried: a judge-organizer is not a
+peer-blind actor, and this accessor is not what makes them one.** They are
+refused the leaderboard *while judging is open* by a different rule (FEAT-06),
+and until that rule exists they can read every score. That sentence is in the
+docstring, because **closing F-51 quietly would close a question rather than
+answer it** — which is the distinction `fixed`-blocks-completion exists to draw.
+
+**Resolution:** **Closed 2026-09-29 at FEAT-05, by decision rather than by
+patch.** Three deliberate corruptions were run against the new guard and all
+three were caught by a test named for the rule: dropping the
+`not can_read_all_reviews` clause (pure judges stop being refused), reverting to
+the pre-F-51 strict reading, and removing the self-subject allowance. The
+previous version's test would have passed against the first two, because it only
+asserted that a judge-organizer was refused — so a rule that fired on *everyone*
+satisfied it perfectly. The new test asserts **equivalence** between the peer
+result, the self result and `for_actor`, and a separate one pins that a *pure*
+judge is still refused, because a guard that grows a clause can grow it the wrong
+way.
 
 ### F-52 [P3] closed - this ledger's own F-28 entry has the wrong mass arithmetic
 
@@ -253,11 +461,17 @@ transcribed id cannot reach it. The bible's specific ids are left as they are
 written: it is a research document, and the fix belongs in the code that was
 wrong to depend on them.
 
-**One entry below is `fixed` and deliberately not `closed`: F-51.** The code is
-right for now and the docstring now matches it, but the underlying question —
-*should* a judge who also organises be refused their own peers' scores? — is
-deferred to FEAT-05, which owns the judge console and the route that reaches
-the accessor. Closing it now would be closing a question, not a defect.
+**F-51 is now `closed`, at FEAT-05, and it went the other way.** The paragraph
+below is how the entry read when FEAT-03 wrote it, and it is left in place
+because the reasoning it contains is the reasoning that made the decision
+possible. The code was right *for now*, the docstring matched it, and the
+underlying question — *should* a judge who also organises be refused their own
+peers' scores? — was deferred to the feature that owns the route reaching the
+accessor, on the principle that closing it then would be closing a question
+rather than answering one. **FEAT-05 owned it, asked it as a product question,
+and the answer went against the interim code** — because by then the CSV export
+existed, and a rule the export already defeats is not a security control. See
+**F-51 closed**, above.
 
 ### F-56 [P3] closed — `just --list` rendered every recipe's last comment line, so the recipe list lied
 

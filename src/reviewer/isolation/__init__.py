@@ -18,6 +18,10 @@ Three pieces, in dependency order:
 ``actor``
     ``Actor`` -- an immutable, already-resolved authority for one event.
 
+``refusal``
+    ``deny()`` -- the portal's single 403/empty-body/no-``Location`` primitive,
+    shared by the judge console and the API surface.
+
 The accessors that *apply* a scope live next to the models they scope, in
 ``reviewer.reviews.queryset``. Putting them here would need this package to
 import the models, and putting the models here would make ``reviewer.isolation``
@@ -26,6 +30,7 @@ project eventually takes.
 """
 
 from reviewer.isolation.actor import Actor
+from reviewer.isolation.refusal import REFUSED_BY_HEADER, deny
 from reviewer.isolation.scope import (
     DECISION_ALLOW_ALL,
     DECISION_ALLOW_OWN,
@@ -39,8 +44,10 @@ __all__ = [
     "DECISION_ALLOW_ALL",
     "DECISION_ALLOW_OWN",
     "DECISION_DENY",
+    "REFUSED_BY_HEADER",
     "Actor",
     "Scope",
     "ScopeReason",
     "ScopedQuerySetMixin",
+    "deny",
 ]

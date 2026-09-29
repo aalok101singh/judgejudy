@@ -116,6 +116,9 @@ PRECONDITION_ROUTES = {
     "submit_route_exists": "submit",
     "submit_refused_by_deadline": "submit",
     "judge_scores_route_exists": "judge_scores",
+    "peer_scores_refused_by_scope": "judge_scores",
+    "participant_scores_refused_by_role": "judge_scores",
+    "csv_export_route_exists": "csv_export",
     "gallery_route_exists": "gallery",
 }
 
@@ -177,7 +180,16 @@ def run_probe(base_url: str, path: str, spec: dict, auth: dict) -> dict:
     if method not in PROBE_METHODS:
         return {"error": f"probe method {method!r} is not one this tool will send"}
 
-    url = base_url.rstrip("/") + path
+    # `path_suffix` exists for the peer-scores probe, and the reason it is worth
+    # having is that the peer URL and the bare URL are DIFFERENT URLs testing
+    # DIFFERENT things. Probing the bare one as judge_b would be satisfied by the
+    # role rule, which is the same refusal for the wrong reason -- and it would
+    # leave the peer-blindness of `for_actor_and_subject` untested by the one
+    # gate whose entire job is to test it. The suffix is taken from the same
+    # `.dogfood.toml` route the checker visits, not written here, so the two
+    # cannot drift.
+    suffix = str(spec.get("path_suffix", ""))
+    url = base_url.rstrip("/") + path + suffix
     header = auth.get(str(spec.get("auth", ""))) if spec.get("auth") else None
     if spec.get("auth") and not header:
         return {
@@ -270,9 +282,42 @@ def judge_probe(outcome: dict, spec: dict) -> tuple[bool, str]:
             "redirects -- so this refusal would arrive as a 200",
         )
 
+    # `header_must_contain` is the API-side twin of `body_must_contain`, and it
+    # exists because of a genuine conflict rather than a preference.
+    #
+    # D-02 requires a refusal to have an EMPTY body, so an API refusal cannot
+    # name its own guard in the body the way the deadline guard's form page does.
+    # F-40 requires the refusal to be attributable, so that a 403 from the
+    # isolation layer is distinguishable from a 403 from CSRF, from a 401 for an
+    # unrecognised credential, or from a 404. Both requirements are satisfiable at
+    # once because they land on different parts of the response: the body stays
+    # empty and the reason travels in `X-Refused-By`.
+    #
+    # Without this assertion the T2 probes would be satisfied by a refusal for
+    # any reason at all, which is the whole defect F-40 was filed about.
+    header_marker = spec.get("header_must_contain")
+    if header_marker:
+        present = [
+            name for name, value in outcome["headers"].items() if header_marker in (value or "")
+        ]
+        if not present:
+            seen = ", ".join(
+                f"{name}={value!r}"
+                for name, value in sorted(outcome["headers"].items())
+                if name.lower().startswith("x-")
+            )
+            return (
+                False,
+                f"answered HTTP {status} with no header carrying {header_marker!r}, so "
+                f"the refusal did not come from the mechanism this check names. "
+                f"Headers seen: {seen or '(none starting with X-)'}",
+            )
+
     detail = f"answered HTTP {status}"
     if marker:
         detail += f" naming {marker!r}"
+    if header_marker:
+        detail += f" naming {header_marker!r} in a header"
     if forbidden:
         detail += f" with no {forbidden} header"
     return True, detail
