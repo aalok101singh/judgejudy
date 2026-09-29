@@ -260,6 +260,62 @@ class TestTheTemplateIsWellFormed:
         assert offenders == [], f"these comment openers never close: {offenders}"
 
 
+class TestTheScopeLabelMatchesTheBoard:
+    """**F-90, and it was found by reading the live page rather than by a test.**
+
+    The page's "you are seeing your own reviews only" warning was derived from
+    ``not actor.can_read_all_reviews`` -- a statement about the actor's ROLE. But
+    the board is derived from whether they have any reviews of their own (F-89),
+    and **the two disagree for exactly one case: a published visitor.** The
+    visitor is shown the whole event and was told it was scoped to them.
+
+    **A page asserting a scope it did not apply is the same defect as a page
+    asserting a count it did not compute** -- a sentence in place of a number.
+    The fix is to derive the label from the *same* predicate the aggregate
+    branches on, so the two cannot drift, and the test is the one that says so:
+    a non-empty board with the scoped label on it is a contradiction.
+    """
+
+    def _says_scoped(self, body: str) -> bool:
+        return "your own reviews only" in body
+
+    def _row_count(self, body: str) -> int:
+        return body.count('<tr class="assignment">')
+
+    def test_a_visitor_seeing_the_whole_event_is_not_told_it_is_scoped(
+        self, client, identities, event
+    ):
+        event.results_state = RESULTS_PUBLISHED
+        event.save()
+        body = client.get(RESULTS_URL).content.decode()
+        assert self._row_count(body) > 1, "the visitor's board should be the whole event"
+        assert not self._says_scoped(body), (
+            "the page tells the visitor their board is scoped to their own reviews "
+            "while showing them the whole event -- the label and the board "
+            "disagree, and one of them is a lie"
+        )
+
+    def test_a_judge_seeing_their_own_reviews_is_told_so(self, client, identities, event):
+        event.results_state = RESULTS_PUBLISHED
+        event.save()
+        judge = identities.get("judge_a")
+        if judge is None:
+            pytest.skip("the fixture build produced no judge identity")
+        body = _client_for(judge.email).get(RESULTS_URL).content.decode()
+        assert self._row_count(body) > 0
+        assert self._says_scoped(body), "a judge shown a scoped board is not told it is scoped"
+
+    def test_an_organizer_is_never_told_the_board_is_scoped(self, client, identities, event):
+        organizer = identities.get("organizer")
+        if organizer is None:
+            pytest.skip("the fixture build produced no organizer identity")
+        for state in (RESULTS_HIDDEN, RESULTS_PUBLISHED):
+            event.results_state = state
+            event.save()
+            body = _client_for(organizer.email).get(RESULTS_URL).content.decode()
+            assert not self._says_scoped(body), state
+
+
 def test_the_event_is_born_hidden():
     """Stated as a fact about the shipped fixture, in the file that depends on it.
 

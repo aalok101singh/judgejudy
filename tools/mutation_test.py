@@ -1548,7 +1548,7 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
     ),
     (
         "src/reviewer/reviews/results.py",
-        "    elif _has_any_review(reviewer_actor):\n"
+        "    elif has_own_reviews(reviewer_actor):\n"
         "        scoped = Review.objects.for_actor(reviewer_actor)",
         "    elif False:\n        scoped = Review.objects.for_actor(reviewer_actor)",
         "the board is never narrowed, so a published JUDGE sees the whole event's "
@@ -1578,6 +1578,25 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-m",
             "pytest",
             "tests/test_results_page.py::TestThePageAndTheApiAgree",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/reviews/results_view.py",
+        '            "scoped": not actor.can_read_all_reviews and results_module.has_own_reviews(actor),',  # noqa: E501
+        '            "scoped": not actor.can_read_all_reviews,',
+        "the 'your own reviews only' warning is derived from the actor's ROLE "
+        "instead of the predicate the aggregate actually branched on. A published "
+        "VISITOR is shown the whole event (F-89: nothing of theirs to protect) and "
+        "is still told the board is scoped to them -- a page asserting a scope it "
+        "did not apply. Same defect class as every other finding this session: "
+        "output whose values are wrong while every structural property holds. This "
+        "one is a sentence rather than a number, which is the newest variation.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_results_page.py::TestTheScopeLabelMatchesTheBoard",
             "-q",
         ],
     ),

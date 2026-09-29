@@ -60,11 +60,16 @@ def results_page(request, event) -> HttpResponse:
             "normalization": results_module.NORMALIZATION,
             "results_state": event.results_state,
             # Whether this board covers the whole event or only the actor's own
-            # reviews. **A judge reading a published ranking sees their own
-            # subset, and the page says so**, because a reader who cannot tell a
-            # scoped board from a global one will read the wrong conclusion off
-            # it -- and that is the same "the ordering is the leak" reasoning
-            # that makes this capability unusual.
-            "scoped": not actor.can_read_all_reviews,
+            # reviews. **F-90: this must report what `leaderboard` ACTUALLY did,
+            # not `not actor.can_read_all_reviews`.** Deriving it from the role
+            # got it wrong in exactly the case F-89 introduced: a published
+            # *visitor* is shown the WHOLE event (nothing of theirs to protect)
+            # and was still told "your own reviews only" -- **a page asserting a
+            # scope it did not apply**, which is the ninth-defect's shape wearing
+            # a sentence instead of a number. The predicate is the same
+            # `EXISTS` the aggregate branches on, so the label and the board
+            # cannot disagree: if `leaderboard` narrowed, this says so; if it did
+            # not, this does not.
+            "scoped": not actor.can_read_all_reviews and results_module.has_own_reviews(actor),
         },
     )

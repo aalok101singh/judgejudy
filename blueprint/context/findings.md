@@ -177,6 +177,40 @@ projects above 1% reach, and the best below 100% — and reach is *measured* by 
 helper rather than asserted from memory, because it is a property of the noise
 model and a transcribed figure is exactly the habit F-72…F-75 exist to prevent.
 
+### F-90 [P2] fixed — the results page told a VISITOR their board was scoped to their own reviews while showing them the whole event
+
+**File:** `src/reviewer/reviews/results_view.py`
+**Found:** 2026-09-29, at FEAT-06 increment 7, **by reading the live HTTP
+response**, in the same session and minutes after the feature shipped
+**Why it matters:** the "you are seeing a ranking over your own reviews only"
+warning was derived from `not actor.can_read_all_reviews` — a statement about the
+actor's **role**. The board itself is derived from whether they have any reviews
+of their own (F-89). **The two disagree for exactly one case: a published
+visitor**, who is shown the whole event and was told the board was scoped to
+them.
+
+**A page asserting a scope it did not apply is the same defect as a page
+asserting a count it did not compute.** This is the tenth appearance of that
+class in this project, and the newest variation is that the wrong thing is a
+**sentence** rather than a number — which is why nothing in the suite noticed.
+Every existing assertion checked a status, a row count, or a title's presence;
+none checked that the prose matched the data.
+
+**Fixed by deriving the label from the same `has_own_reviews(actor)` predicate the
+aggregate branches on**, so the label and the board cannot drift: if
+`leaderboard` narrowed, the page says so; if it did not, the page does not claim
+it did. Pinned by `TestTheScopeLabelMatchesTheBoard`, whose three tests assert
+the two things together — a visitor with a whole-event board must **not** carry
+the scoped label, a judge with their own reviews **must**, and an organizer never
+does.
+
+**Found by `curl` again, and this is now the third finding in two increments that
+only a human reading a response could have found** (F-85, F-88, F-90). Every one
+of them was in the layer between the database, which was correct, and the page,
+which was not. **The suite is strong on state and weak on sentences**, and the
+cheap way to close that gap is to assert that prose and data agree — which is
+exactly what the three new tests do.
+
 ### F-89 [P2] fixed - A PUBLISHED event served the public an empty results board, so publication published nothing
 
 **File:** `src/reviewer/reviews/results.py`

@@ -97,11 +97,34 @@ reader can screenshot and describe. So the refusal is asserted on:
 
 ---
 
+## Two findings, and they are the ninth and tenth of one class
+
+Both are the same defect: **output whose values are wrong while every structural
+property holds.** F-89 is a *number* (an empty board where 41 should be). F-90 is
+a *sentence* (a scope warning that contradicts the board beside it).
+
+**F-90 is the one worth reading, because it was found by `curl` minutes after the
+feature shipped, and nothing in the suite could see it.** The warning was derived
+from the actor's **role**; the board is derived from whether they have reviews of
+their own. Those disagree for exactly one case — a published visitor — and the
+visitor is shown the whole event while being told the board is scoped to them.
+
+> The suite is strong on state and weak on **sentences**. Every existing assertion
+> checked a status, a row count, or a title's presence. None checked that the
+> prose matched the data.
+
+Fixed by deriving the label from the *same* predicate the aggregate branches on, so
+the two cannot drift. This is the **third finding in two increments that only a
+human reading an HTTP response could have found** (F-85, F-88, F-90), and all three
+were in the layer between a correct database and a wrong page.
+
+---
+
 ## What it cost
 
 | | |
 |---|---|
-| Tests | 555 -> **572** (17 in `tests/test_results_page.py`) |
-| Mutations | 82 -> **85** (3 new) |
-| Findings | **F-89 [P2]** |
+| Tests | 555 -> **575** (20 in `tests/test_results_page.py`) |
+| Mutations | 82 -> **86** (4 new) |
+| Findings | **F-89 [P2]**, **F-90 [P2]** |
 | Spec | the F-82 route check caught `/results/` as undocumented on its first run — the mechanism working |

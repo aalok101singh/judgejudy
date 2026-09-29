@@ -64,7 +64,7 @@ def _event_wide(actor):
     return Actor(event=actor.event, user=None, roles=frozenset({ROLE_ORGANIZER}))
 
 
-def _has_any_review(actor) -> bool:
+def has_own_reviews(actor) -> bool:
     """Whether this actor has at least one review that ``for_actor`` would return.
 
     Asked as an EXISTS rather than inferred from ``actor.is_judge``: the question
@@ -121,7 +121,7 @@ def leaderboard(actor, *, limit: int | None = None) -> list[dict]:
 
     if reviewer_actor.can_read_all_reviews:
         scoped = Review.objects.for_actor(reviewer_actor)
-    elif _has_any_review(reviewer_actor):
+    elif has_own_reviews(reviewer_actor):
         scoped = Review.objects.for_actor(reviewer_actor)
     else:
         # Nobody's own reviews: there is nothing to hide behind, so the board is
