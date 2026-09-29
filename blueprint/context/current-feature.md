@@ -360,6 +360,62 @@ What a browser acts on is an **element**, so the assertion is now on the tag.
 
 ### The two things, neither mine to answer
 
+## Increment 7 — the public results page (REQ-T3-03). The last named T3 gap.
+
+**Built:** `reviews/results_view.py`, `/results/`, `templates/reviews/results.html`. **17 tests**, **3 new mutations**.
+
+`results_visible_to` and `leaderboard` both existed and were both tested — for
+`/api/v1/results`. **A reviewer opening a browser never asks for JSON**, so for
+nine hours the brief's most carefully worded capability was enforced only on a
+surface nobody would have visited.
+
+**One predicate, one aggregate, two renderings**, and `TestThePageAndTheApiAgree`
+asserts the HTML and the JSON produce the same rows in the same order with the
+same means. Two renderings of one ranking is a liability — and it is exactly what
+caused F-84's second-order bug, where `voters` meant one thing in the tally and
+another in the influence report. **The reason that happened is that nobody
+compared the two.**
+
+### F-89 [P2] — a published event served the public an empty board
+
+`leaderboard` computed every row from `for_actor(actor)`, and for a participant
+or visitor that is **empty** — they hold no reviews. So a published page returned
+**200 with a board of nothing**: structurally valid, renders, passes every
+status-code assertion, ranks zero projects. F-80's shape, on the capability the
+brief is most careful about.
+
+FEAT-05's decision is deliberate and **kept** — "publishing opens the endpoint, it
+does not widen the scope." What that did not consider: **scoping is protective,
+not decorative.** It exists so a judge cannot infer peers' scores, and a visitor
+has nothing of their own to protect, so narrowing is vacuous for them.
+
+> **Narrow the board only when narrowing protects somebody.**
+
+The branch is `elif _has_any_review(actor)` — an `EXISTS` against the accessor,
+**not** `actor.is_judge`, because a judge with no assigned reviews is in the same
+position as a visitor. It stays a **scoped query**: the wider board is reached by
+building a real `Actor` and passing it to `for_actor`, not by an unscoped read,
+which is what D-01 and the JJ01 lint rule forbid — and `just lint` is in the gate.
+
+**Proved negative by a test that predates this feature by two increments.**
+Removing the narrowing is caught by FEAT-05's
+`test_a_judge_published_still_sees_a_ranking_over_a_scoped_set`. The
+security-relevant half of F-89 was already pinned, and the sabotage found it
+immediately instead of needing a new assertion.
+
+### The refusal is asserted four ways
+
+Status, empty body, no `Location`, **and no project title in the bytes** — the
+last is the one a shape check cannot make. A page rendering a board of zeros
+satisfies "the page has a table" and fails "the reader learned nothing."
+
+### What the page always says
+
+`unnormalized-raw-weighted-mean` on every 200 (a ranking that doesn't say whether
+it's corrected is one a reader must guess about), and whether the board is scoped
+— a published *judge* is told in words that they are seeing their own reviews
+only, and that "a published ranking over your own scores is not a result."
+
 ### What is NOT started
 
 - **Comments** on gallery projects (the model and its constraints ship; the
@@ -449,7 +505,7 @@ the tie.
 
 | | |
 |---|---|
-| **Status** | **FEAT-06 nearly done** — the three matrix columns, the audit chain, the influence report, the bias-attack harness, **the randomised ballot as a product path, voting with its identity budget, and comments** all ship. **REQ-T3-01, 02, 04 and 05 are real; REQ-T3-03 is half — the API refusal is built, the public pages are not.** One named gap remains before T3 could honestly be claimed |
+| **Status** | **FEAT-06 is DONE as far as the five named REQ-T3 requirements go.** T1, T2, T3-01 (voting + budget + tally), T3-02 (comments), T3-03 (results hidden, BOTH surfaces), T3-04 (randomised ballot order) and T3-05 (influence report) all ship and are tested. **That is the whole of REQ-T3, so the T3 claim is now a genuine question for BREAK-3 rather than a formality** - and the cut ledger names three things cut inside it |
 | **Started** | 2026-09-29 |
-| **Last touched** | FEAT-06 increment 6 — **public comments**, moderated and plain-text. **F-86**: the moderation queue rendered bodies unescaped and *every* escaping test was green, because they all read the page as a visitor. **F-87**: approving a comment re-rendered the stale page. `555 tests`, `82/82` mutations, spec 72/72, lint clean |
-| **Next action** | **public result hiding** (REQ-T3-03) — the predicate `results.results_visible_to(actor)` and the API 403 already exist and are tested; what is missing is the public page. Then BREAK-3: decide the T3 claim with the gap named |
+| **Last touched** | FEAT-06 increment 7 - **the public results page**, the last named T3 gap. **F-89**: a published event served the public an empty board, so publication published nothing. `572 tests`, `85/85` mutations, spec 72/72, lint clean, `just check` **GREEN** at 7 of 7 |
+| **Next action** | **BREAK-3.** The claim is now *available*, which has not been true before: all five T3 requirements are built. Per `bible/08` 1b that means the seven steps again, and the decision is the human's. The gap to name: three controls are cut and disclosed (comment rate limiting, ballot cookies/rate limiting, quadratic voting), and the published leaderboard is an **unnormalized** raw mean because FEAT-08 is not built |

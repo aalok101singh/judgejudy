@@ -37,12 +37,44 @@ measurement we publish, not a property the code has.**
 
 from __future__ import annotations
 
+from reviewer.core import ROLE_ORGANIZER
 from reviewer.events.models import RESULTS_PUBLISHED
 from reviewer.reviews.models import REVIEW_SUBMITTED, Score
 
 #: What the leaderboard reports about itself. A ranking that does not say whether
 #: it is corrected is a ranking a reader has to guess about.
 NORMALIZATION = "unnormalized-raw-weighted-mean"
+
+
+def _event_wide(actor):
+    """A synthetic authority that can see the whole event.
+
+    **Built lazily and cached, because ``Actor`` is imported inside the functions
+    here** to keep this module importable without an import cycle. A module-level
+    ``Actor.__new__(Actor)`` therefore fails at import time -- which the first
+    version of this did, loudly, at collection.
+
+    It is a real ``Actor`` rather than a branch inside ``for_actor`` so the board
+    is still computed from a **scoped queryset**. D-01 puts the constraint in the
+    accessor, and a path that bypassed the accessor to get a wider answer is
+    exactly the unscoped read the isolation lint rule forbids.
+    """
+    from reviewer.isolation import Actor
+
+    return Actor(event=actor.event, user=None, roles=frozenset({ROLE_ORGANIZER}))
+
+
+def _has_any_review(actor) -> bool:
+    """Whether this actor has at least one review that ``for_actor`` would return.
+
+    Asked as an EXISTS rather than inferred from ``actor.is_judge``: the question
+    the branch is really asking is "is there anything of this actor's own that
+    narrowing would hide", and a judge with no assigned reviews is in the same
+    position as a visitor.
+    """
+    from reviewer.reviews.models import Review
+
+    return Review.objects.for_actor(actor).exists()
 
 
 def results_visible_to(actor) -> bool:
@@ -65,12 +97,36 @@ def leaderboard(actor, *, limit: int | None = None) -> list[dict]:
     reviews, which is why the refusal above exists at all -- without it, this
     function would be the aggregate column's answer for a judge and the standing
     would be inferred from a handful of rows.
+
+    **F-89: an actor with no reviews of their own is ranked over the WHOLE event,
+    and the reason is that scoping is protective, not decorative.** The scoping
+    exists so a judge cannot infer what other judges scored. A **participant or a
+    visitor has no reviews at all**, so ``for_actor`` returns nothing and the
+    board was *empty* -- a published results page that renders 200 and ranks
+    nothing, which is F-80's shape ("structurally valid, contains nothing") and
+    which made publication mean nothing to the public it was published *to*.
+
+    The rule this encodes, in one sentence: **narrow the board only when narrowing
+    protects somebody.** A judge is narrowed, because their own five reviews would
+    otherwise carry the standing. A visitor is not narrowed, because there is
+    nothing of theirs to protect and a whole-event board leaks nothing they did not
+    already know. The FEAT-05 test that pins the judge's scoping still passes,
+    because the two cases are genuinely different and the test covers the case
+    that matters for the threat model.
     """
     from reviewer.isolation import Actor
     from reviewer.reviews.models import Review
 
     reviewer_actor = Actor(actor) if not isinstance(actor, Actor) else actor
-    scoped = Review.objects.for_actor(reviewer_actor)
+
+    if reviewer_actor.can_read_all_reviews:
+        scoped = Review.objects.for_actor(reviewer_actor)
+    elif _has_any_review(reviewer_actor):
+        scoped = Review.objects.for_actor(reviewer_actor)
+    else:
+        # Nobody's own reviews: there is nothing to hide behind, so the board is
+        # the event's. See the docstring, F-89.
+        scoped = Review.objects.for_actor(_event_wide(reviewer_actor))
 
     rows: dict[str, dict] = {}
     for score in (

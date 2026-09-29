@@ -1524,6 +1524,63 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    # --- the public results page (FEAT-06, T3d) -----------------------------------
+    (
+        "src/reviewer/reviews/results_view.py",
+        "    if not results_module.results_visible_to(actor):\n"
+        "        return refusal.deny(REFUSED_BY_RESULTS)",
+        "    if False:\n        return refusal.deny(REFUSED_BY_RESULTS)",
+        "the hidden-results guard never fires, so a VISITOR, a PARTICIPANT and a "
+        "JUDGE are all served the ranking while the voting window is open. This is "
+        "the capability the brief is most careful about -- 'results hidden from "
+        "everyone but organizers during the voting window' -- and it is the reason "
+        "the page exists rather than only the JSON endpoint. Note the detector is "
+        "the ROLE tests, not a status-code test: a page that rendered an EMPTY "
+        "board would pass 'the page is 403'-shaped checks and still be a leak, so "
+        "one assertion is that no project title appears in the refused bytes.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_results_page.py::TestTheHiddenEventRefusesEveryRoleAndSaysSo",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/reviews/results.py",
+        "    elif _has_any_review(reviewer_actor):\n"
+        "        scoped = Review.objects.for_actor(reviewer_actor)",
+        "    elif False:\n        scoped = Review.objects.for_actor(reviewer_actor)",
+        "the board is never narrowed, so a published JUDGE sees the whole event's "
+        "ranking instead of their own five reviews' worth. Scoping a judge is the "
+        "leak control for the aggregate cell -- a judge reading the standings while "
+        "judging can infer what other judges scored -- so this is the security "
+        "mutation, and the detector is a test that predates this feature entirely.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_results_and_audit.py::TestTheLeaderboardIsRefusedWhileResultsAreHidden"
+            "::test_a_judge_published_still_sees_a_ranking_over_a_scoped_set",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/reviews/results_view.py",
+        '            "normalization": results_module.NORMALIZATION,',
+        '            "normalization": "corrected",',
+        "the page claims the ranking is corrected. The aggregate is an UNNORMALIZED "
+        "raw weighted mean and judge-severity correction is FEAT-08, so this is "
+        "the exact assumption the whole detectability analysis exists to prevent, "
+        "printed by the one surface a human reads.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_results_page.py::TestThePageAndTheApiAgree",
+            "-q",
+        ],
+    ),
 ]
 
 

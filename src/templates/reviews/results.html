@@ -1,0 +1,79 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Judge Judy &middot; results</title>
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+</head>
+<body>
+  <main class="wrap">
+    <p class="eyebrow">DOGFOOD 2026 &middot; {{ actor.label }}</p>
+    <h1>Results</h1>
+
+    <p class="lede">
+      <strong>{{ event.name }}</strong> &middot;
+      {{ rows|length }} project{{ rows|length|pluralize }} ranked
+      &middot; results are {{ results_state }}
+    </p>
+
+    {% comment %}
+      A published ranking that does not say whether it is corrected is a ranking
+      a reader has to guess about. The aggregate is an UNNORMALIZED weighted
+      mean; judge-severity correction is FEAT-08 and this page is not allowed to
+      imply otherwise.
+    {% endcomment %}
+    <p class="scope-receipt">
+      <strong>Normalization:</strong> <code>{{ normalization }}</code>
+      &mdash; this ranking is a raw weighted mean of the answered criteria.
+      No judge-severity correction is applied.
+    </p>
+
+    {% if scoped %}
+      {% comment %}
+        The board is over THIS actor's own reviews, not the whole event. Saying
+        so is not a disclaimer, it is the difference between a number and a
+        misleading number.
+      {% endcomment %}
+      <p class="error" role="alert">
+        You are seeing a ranking over <strong>your own reviews only</strong>, not
+        the whole event. A published ranking over your own scores is not a
+        result.
+      </p>
+    {% endif %}
+
+    <table class="assignments">
+      <thead>
+        <tr><th>#</th><th>Project</th><th>Track</th><th>Mean</th><th>Reviews</th></tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr class="assignment">
+            <td>{{ row.rank }}</td>
+            <td>
+              <span class="project-title">{{ row.title }}</span>
+              <span class="project-id">{{ row.project }}</span>
+            </td>
+            <td>{{ row.track }}</td>
+            <td>{{ row.mean }}</td>
+            <td>{{ row.reviews_counted }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5">Nothing has been submitted for ranking yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <ul class="links">
+      <li><a href="/">Gallery</a></li>
+      <li><a href="/healthz">Health check</a></li>
+    </ul>
+
+    <p class="foot">
+      The same numbers are available as JSON at <code>/api/v1/results</code>, and
+      they come from the same function this page does &mdash; if the two ever
+      disagree, a test fails.
+    </p>
+  </main>
+</body>
+</html>

@@ -177,6 +177,46 @@ projects above 1% reach, and the best below 100% — and reach is *measured* by 
 helper rather than asserted from memory, because it is a property of the noise
 model and a transcribed figure is exactly the habit F-72…F-75 exist to prevent.
 
+### F-89 [P2] fixed - A PUBLISHED event served the public an empty results board, so publication published nothing
+
+**File:** `src/reviewer/reviews/results.py`
+**Found:** 2026-09-29, at FEAT-06 increment 7, by the first test run of the
+public results page
+**Why it matters:** `leaderboard` computed every row from
+`Review.objects.for_actor(actor)`, and for a **participant or a visitor** that is
+empty -- they have no reviews. So once results were published, the page returned
+**200 with a board of nothing**: structurally valid, renders, passes every
+status-code assertion, and ranks **zero** projects. **F-80's shape, on the
+capability the brief is most careful about.**
+
+The FEAT-05 decision was deliberate and documented -- *"publishing the results
+opens the endpoint, it does not widen the scope"* -- and that part is **kept**.
+What that sentence did not consider is that scoping is **protective, not
+decorative**: it exists so a judge cannot infer what other judges scored, and a
+visitor has nothing of their own to protect, so narrowing is vacuous for them.
+
+**The rule this encodes is one sentence: narrow the board only when narrowing
+protects somebody.** A judge is narrowed (their own five reviews would otherwise
+carry the standing). A visitor is not, because a whole-event board leaks nothing
+they did not already know by being able to read the gallery. The branch is
+written as `elif _has_any_review(actor)`, an ``EXISTS`` against the accessor,
+rather than `actor.is_judge` -- because a judge with no assigned reviews is in
+the same position as a visitor, and the question being asked is "is there
+anything of this actor's own that narrowing would hide".
+
+**It stays a SCOPED query.** The wider board is reached by building a real
+``Actor`` and passing it to ``for_actor``, not by adding an unscoped read -- a
+code path that bypassed the accessor to get a wider answer would be exactly what
+D-01 and the JJ01 lint rule exist to forbid. `just lint` is part of the gate, so
+this is enforced, not asserted.
+
+**Proved negative, and the detector is the interesting part:** removing the
+narrowing is caught by `test_a_judge_published_still_sees_a_ranking_over_a_scoped_set`,
+**a test that predates this feature by two increments.** The security-relevant
+half of F-89 was already pinned by FEAT-05, and the sabotage found it immediately
+rather than needing a new assertion. That is what a pre-existing, well-targeted
+test is for.
+
 ### F-88 [P2] fixed - Multi-line `{# #}` template comments were RENDERING INTO THE PAGE. Nine of them, two shipped before this session
 
 **File:** `src/templates/{ballots/ballot,comments/thread,reviews/console,reviews/organizer_assignments}.html`

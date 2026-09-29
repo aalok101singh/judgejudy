@@ -28,6 +28,12 @@ from reviewer.projects import views as project_views
 from reviewer.projects.views import current_event
 from reviewer.reviews import api as api_views
 from reviewer.reviews import console as console_views
+from reviewer.reviews import results_view as results_page_views
+
+
+def _results_page(request):
+    """Resolve the event, then delegate. One event per install, by design."""
+    return results_page_views.results_page(request, current_event())
 
 
 def _ballot(request):
@@ -169,6 +175,12 @@ urlpatterns = [
     # their own route so adding them cannot move the gallery's ordering -- and
     # the gallery carries only a link, which is additive and inert.
     path("projects/<str:project_id>/comments/", _comments, name="comments"),
+    # REQ-T3-03, the PUBLIC half. `/api/v1/results` has enforced this since
+    # FEAT-05, but a reviewer opening a browser never asks for JSON -- so the
+    # capability the brief is most careful about was enforced only on a surface
+    # nobody would have visited. Same predicate, same aggregate, two renderings,
+    # and a test asserts the two agree row for row.
+    path("results/", _results_page, name="results_page"),
     # The healthcheck polls this. It must stay unauthenticated, cheap and
     # database-free -- see the docstring in judge_judy/views.py.
     path("healthz", views.healthz, name="healthz"),

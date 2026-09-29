@@ -275,10 +275,10 @@ verification and the counts live in `AGENTS.md` §Current state,
 
 | | |
 |---|---|
-| Findings | **88** — **0 open blocking**, 0 open, 15 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 62 closed |
+| Findings | **89** — **0 open blocking**, 0 open, 16 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 62 closed |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
-| Gate (FEAT-06) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **82/82** · spec layer green · **555 tests** · lint clean |
-| Next | **public result hiding** (REQ-T3-03) — the predicate and the API 403 exist; the public page does not. Then BREAK-3 |
+| Gate (FEAT-06) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **85/85** · spec layer green · **572 tests** · lint clean |
+| Next | **BREAK-3.** All five REQ-T3 requirements ship, so the T3 claim is *available* for the first time. Per `bible/08` §1b the decision is the human's |
 
 **Two things that changed the shape of the project.**
 

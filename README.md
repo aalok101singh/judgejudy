@@ -30,8 +30,9 @@ writing, by a human.** `verified` cannot exceed T2 whatever we build: there are 
 T3 or T4 checks in their program at all. See
 [why it says `claimed T1`](#why-it-says-claimed-t1-and-not-claimed-t2-when-all-seven-checks-pass).
 
-What is not built: public result hiding, rate limiting, the T4 bulk-IO and signing
-layer, and the normalization proof.
+What is not built: comment rate limiting, the T4 bulk-IO and signing layer, and
+the normalization proof. The published leaderboard is an UNNORMALIZED raw mean --
+judge-severity correction is FEAT-08 and the page says so on every render.
 
 | | State |
 |---|---|
@@ -49,7 +50,8 @@ layer, and the normalization proof.
 | Bias-attack harness | ✅ built (`manage.py bias_attack`) — fixed order **detected**, randomised **zero-mean** |
 | Randomised ballot order (D-12) | ✅ built (`/vote/`) — calls the *same* `presentation_order` the bias-attack harness attacks, so the claim and the code cannot drift. Zero-**mean**, not zero |
 | Voting + identity budget (D-12) | ✅ built — weight 1 everywhere *exactly* exhausts the budget, so amplification is a trade. Abstaining is free, attributable, and contributes **nothing** to the tally. Borda via the same `schwartzian` the harness attacks |
-| Comments, public result hiding | ⚠️ **partial** — comments ship at `/projects/<id>/comments/` (moderated, plain text, escaped); **public result hiding is not built** (the API refusal is) |
+| Comments (T3-02) | ✅ built (`/projects/<id>/comments/`) — moderated, plain text, escaped. **Rate limiting is cut and disclosed**; it is the one control `bible/07` V-8 names that we did not ship |
+| Public result hiding (T3-03) | ✅ built (`/results/`) — a bare 403 for judge/participant/visitor while hidden, on the surface a browser actually reaches. Same predicate and aggregate as the API, and a test asserts the two agree |
 | Bulk IO, signed records, OpenAPI | ❌ **not built** (FEAT-07) |
 | Normalization engine + proof | ❌ **not built** (FEAT-08) |
 
@@ -150,6 +152,7 @@ and the spec gate now fails if this table and `urls.py` disagree.
 | `/api/v1/influence` | **The influence report (D-13).** Per-project concentration: distinct identities, first-preference share, vote-mass Gini, identical-ballot clusters. No thresholds. |
 | `/vote/` | **The randomised ballot (D-12).** A per-voter order that is stable across requests, rendered with its seed and the zero-**mean** caveat. Weight 1 everywhere exactly exhausts your identity budget, so favouring one project means giving another less. Born closed, like everything else. |
 | `/projects/<id>/comments/` | **Comments on a project.** Plain text, never markup. Every comment is **held for moderation** and nothing is public until a human approves it. Rate limiting is **not** implemented — see the threat model. |
+| `/results/` | **The published ranking (REQ-T3-03).** Refused with a bare 403 while results are hidden — the brief's "hidden from everyone but organizers during the voting window", enforced on the surface a browser actually reaches. Always labelled **unnormalized** |
 | `/admin/` | Django admin. |
 
 Plus the seed and the harness:
