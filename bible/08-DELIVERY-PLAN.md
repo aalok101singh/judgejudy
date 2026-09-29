@@ -216,6 +216,36 @@ finding that a document had rotted under it**:
 | **Found at the break** | **F-82** — the README's route count was wrong, its repair was *also* wrong, and the second repair invented a breakdown that did not sum over its own table. Fixed by making the count **derived from `urls.py`** rather than retyped, and proved negative |
 | **Concession, stated because the brief rewards it** | **`verified` cannot exceed T2 on a flawless build.** There are no T3 or T4 checks in the organizers' program and `verified` is prefix-locked, so the ceiling is arithmetic. The report ships printing `verified T1 T2`, and the README explains why in full rather than the report being edited to say otherwise |
 
+### BREAK-3, 2026-09-29 — T2 claimed, and the T3 claim becomes available
+
+The same seven steps, run again, on a clean volume with the network off. The
+whole block was spent **applying the T2 claim and proving the thing it rests on**,
+which is the point of a break and not an administrative formality.
+
+| | |
+|---|---|
+| 1 | clean `down -v`, `up` **network off** — volume removed and recreated, healthy |
+| 2 | `run.py` against `.dogfood.toml` — **7 of 7 PASS**, and the report header now reads **`claimed: T1 T2`** with the summary **`claimed T1 T2, verified T1 T2`** |
+| 3 | `isolation_proof` — **exit 0**; matrix: visitor `0/126` refused everywhere, participant `0/126` refused, **judge `5/126`** and refused the aggregate, organizer `126/126` and `41/126` on the aggregate |
+| 4 | full extended suite — **green**, `575 tests` |
+| 5 | this ledger |
+| 6 | **the tier claim, written down** in `blueprint/history/features/break-3-t3-claim.md` |
+| 7 | tag `v-t3-verified` |
+
+**The interesting sentence in the report is the one that did not change.**
+`claimed T1 T2, verified T1 T2` — and `verified` is the machine's word, not ours.
+It could not have said T3, because `run.py` contains **no T3 checks at all**. A
+panelist reading that line should conclude "they claimed T2 and the machine
+confirmed T2, and there is no machine check for T3" — which is the honest
+situation, and is why the T3 claim in step 6 is a **human judgement against a
+rubric** and the part of this break that is not machine-verifiable.
+
+**What the hour actually bought**, same as BREAK-2: not features. The T2 claim sat
+earned and unclaimed for **five features** after FEAT-05, and the reason it sat
+is the rule working. Applying it changed **one line** in `.dogfood.toml` and
+regenerated a report. Everything else this break did was check that the claim
+still held on a volume that had just been destroyed.
+
 ---
 
 ## 2. Block A · H+0 → H+4 · Skeleton and one command

@@ -15,24 +15,36 @@ That is the whole setup. Then open <http://localhost:8080>.
 
 ---
 
-## ⚠ Status: T1 and T2 are green; T2 is earned and deliberately unclaimed
+## ⚠ Status: T1 and T2 are green, and T2 is CLAIMED
 
 **Read this before judging anything else on this page.** The container, the
 healthcheck, the offline guarantee, the gallery, the seeded fixture, the deadline
 guard, the assignment engine, the judge console, the scoped score endpoint, the
-CSV export, **the influence report and the bias-attack harness** are real, measured
-and passing. **All seven of the organizers' machine checks now PASS.**
+CSV export, **the influence report, the bias-attack harness, the randomised
+ballot, voting, comments and the public results page** are real, measured and
+passing. **All seven of the organizers' machine checks now PASS.**
 
-**`run.py` prints `claimed T1, verified T1 T2` and that is deliberate.** Every T2
-check passes, so the claim is *available* — but `.dogfood.toml` says
-`claimed = ["T1"]` and that is correct, because **the claim is made at BREAK-2, in
-writing, by a human.** `verified` cannot exceed T2 whatever we build: there are no
-T3 or T4 checks in their program at all. See
-[why it says `claimed T1`](#why-it-says-claimed-t1-and-not-claimed-t2-when-all-seven-checks-pass).
+**`run.py` prints `claimed T1 T2, verified T1 T2`, and both words are deliberate.**
+T2 was **claimed at BREAK-2, in writing**, against what was actually green on a
+clean volume — not in advance, and not in a README. `verified` cannot exceed T2
+whatever we build: **there are no T3 or T4 checks in their program at all**, and
+`verified` is prefix-locked. So a flawless build prints exactly this. See
+[why `verified` stops at T2](#why-verified-stops-at-t2-even-when-every-check-passes).
 
-What is not built: comment rate limiting, the T4 bulk-IO and signing layer, and
-the normalization proof. The published leaderboard is an UNNORMALIZED raw mean --
-judge-severity correction is FEAT-08 and the page says so on every render.
+**T3 is built, tested and documented — and deliberately NOT claimed.** All five
+REQ-T3 requirements ship. **Nothing in this repository can verify T3**, and our
+own gate enforces the organizers' rule `overclaim = claimed − verified`, so
+entering T3 in the field their program parses turns the gate red with the word
+**OVERCLAIM** in it. The brief says that is the one thing that costs points.
+**T3 being built is not the same claim as T3 being entered in the scoring field**,
+and only the first one is ours. The reasoning, the arithmetic and the three
+options are in `blueprint/history/features/break-3-t3-claim.md`; this is the
+human's call and it is recorded as **F-91 [P1], open on purpose**.
+
+What is not built: comment rate limiting, ballot rate limiting and cookies,
+quadratic voting, the T4 bulk-IO and signing layer, and the normalization proof.
+The published leaderboard is an **UNNORMALIZED raw weighted mean** — judge-severity
+correction is FEAT-08 and the page says so on every render.
 
 | | State |
 |---|---|
@@ -40,7 +52,7 @@ judge-severity correction is FEAT-08 and the page says so on every render.
 | Boots with `--network none` | ✅ **proved** — healthy at **7.9–9.1 s**, four probes pass |
 | Healthcheck from a clean volume | ✅ green |
 | **Acceptance: T1** (gallery public · fixture projects shown · closed event refuses) | ✅ **3 of 3 PASS** |
-| **Acceptance: T2** (judge sees own scores · peer refused · participant blocked · CSV export) | ✅ **4 of 4 PASS** — `run.py` prints `claimed T1, verified T1 T2` |
+| **Acceptance: T2** (judge sees own scores · peer refused · participant blocked · CSV export) | ✅ **4 of 4 PASS** — `run.py` prints `claimed T1 T2, verified T1 T2` |
 | Assignment: feasible instance assigns | ✅ **123 of 123**, tightest per-judge capacity **6**, found by search |
 | Assignment: infeasible instance diagnosed | ✅ at capacity 5, `trk_01` and `trk_08` each short by 3, **bottleneck judges named** |
 | Assignment: seeded tiebreak reproducible | ✅ two runs, identical digest over 123 pairs |
@@ -55,7 +67,7 @@ judge-severity correction is FEAT-08 and the page says so on every render.
 | Bulk IO, signed records, OpenAPI | ❌ **not built** (FEAT-07) |
 | Normalization engine + proof | ❌ **not built** (FEAT-08) |
 
-### Why it says `claimed T1` and not `claimed T2`, when all seven checks pass
+### Why `verified` stops at T2, even when every check passes
 
 **This is arithmetic in their checker, not a gap in ours, and it is worth reading
 twice because it looks like an understatement.**
@@ -63,10 +75,10 @@ twice because it looks like an understatement.**
 `run.py` walks the tiers in order `["T1","T2","T3","T4"]` and **stops at the
 first tier that has no passing check**. Their program contains **seven checks:
 three in T1 and four in T2. There are no T3 checks and no T4 checks at all.**
-So the string it can ever print, for a flawless submission, is:
+So the string `verified` can ever print, for a flawless submission, is:
 
 ```
-claimed T1, verified T1 T2
+verified T1 T2
 ```
 
 We print exactly that. `verified` has reached its ceiling — it is not stopping
@@ -74,12 +86,34 @@ early. If you want to see the evidence, `acceptance-report.txt` is generated
 (not hand-written) by `just accept`, and it reads **7 passed, 0 failed, of 7
 checks**.
 
-**And we are not claiming T2, on purpose.** The claim is made at a scheduled
-verification break, against what is green, in writing, by a human. The T2 claim
-happens at **BREAK-2**, not in a README and not at the end of a feature. The
-gate enforces it in both directions: claiming a tier the report does not verify
-is a **mutation-tested** failure, and a check marked `pass` that fails is a
-regression. A tier claim that nothing can falsify is not a claim.
+**So `claimed` and `verified` are answering two different questions**, and the
+report puts them on one line on purpose:
+
+| | who decided it | what it means |
+|---|---|---|
+| `claimed T1 T2` | **us, at BREAK-2**, in writing, against what was green on a clean volume | what we are willing to be judged on |
+| `verified T1 T2` | **their program**, parsing seven checks | what a machine can confirm |
+
+**The T2 claim was applied at BREAK-2 and not before**, because the claim is made
+at a scheduled verification break, in writing, by a human — not in a README and
+not at the end of a feature. The gate enforces it in both directions: claiming a
+tier the report does not verify is a **mutation-tested** failure, and a check
+marked `pass` that fails is a regression. **A tier claim that nothing can falsify
+is not a claim.**
+
+**We also built all of T3, and we do not claim it.** All five REQ-T3
+requirements ship and are tested. **Nothing in this repository can verify T3** —
+their program has no T3 checks — and the acceptance gate enforces the rule
+`overclaim = claimed − verified`, so entering T3 in the field their program
+parses turns it red with the word **OVERCLAIM** in the output. The brief states
+that overclaiming is the one thing that costs points.
+
+> **T3 being built, tested and documented is not the same claim as T3 being
+> entered in the scoring field.** Only the first one is ours to make, and it is
+> the one we are making. The full reasoning, the arithmetic and the three options
+> are in `blueprint/history/features/break-3-t3-claim.md`; it is recorded as
+> **F-91 [P1], open on purpose**, because a decision is not a defect and "fixed"
+> findings block completion until a review has looked at them.
 
 The frozen `acceptance-report.txt` in this repository is the one the panel's
 identical program produces. We do not edit it.

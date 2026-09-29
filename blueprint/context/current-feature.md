@@ -197,10 +197,34 @@ three orders must score bit-identically.
 
 **The full table is in `history/features/06-bias-attack-harness.md`.**
 
-### BREAK-2 is done. The T2 claim is EARNED and the human has not yet applied it.
+### BREAK-2 and BREAK-3 are both done. T2 is CLAIMED; the T3 claim is prepared and deliberately NOT applied.
 
-All seven steps of `bible/08` §1b ran, on a clean volume with the network off.
-The full record is `history/features/break-2-t2-claim.md`.
+**T2 is claimed.** `.dogfood.toml` says `claimed = ["T1", "T2"]`, applied by the
+human at BREAK-2 and carried through BREAK-3. The report header reads
+`claimed: T1 T2` and the summary `claimed T1 T2, verified T1 T2`.
+
+**The T3 claim is the open decision, and it is not the one expected.** All five
+REQ-T3 requirements ship — but the gate enforces the organizers' own rule
+`overclaim = claimed − verified`, and `verified` is `T1 T2` because **their
+program has no T3 checks**. Claiming T3 puts `{"T3"}` in the overclaim set and
+**turns the gate red**:
+
+```
+claimed: T1 T2 T3
+claimed T1 T2 T3, verified T1 T2
+note: claimed but not verified: T3
+ GATE FAILED:
+   - OVERCLAIM: .dogfood.toml claims T3 but the report verified T1 T2.
+```
+
+Proved by running it, then reverted. Recorded as **F-91 [P1], accepted by
+decision**. The three options, the arithmetic and the recommendation are in
+`history/features/break-3-t3-claim.md`. **`v-t3-verified` is therefore NOT
+tagged** — tagging it while the gate prints OVERCLAIM would assert the opposite
+of what the machine says.
+
+All seven steps of `bible/08` §1b ran for BREAK-3, on a clean volume with the
+network off. The full record is `history/features/break-3-t3-claim.md`.
 
 | Step | Measured |
 |---|---|
@@ -508,4 +532,4 @@ the tie.
 | **Status** | **FEAT-06 is DONE as far as the five named REQ-T3 requirements go.** T1, T2, T3-01 (voting + budget + tally), T3-02 (comments), T3-03 (results hidden, BOTH surfaces), T3-04 (randomised ballot order) and T3-05 (influence report) all ship and are tested. **That is the whole of REQ-T3, so the T3 claim is now a genuine question for BREAK-3 rather than a formality** - and the cut ledger names three things cut inside it |
 | **Started** | 2026-09-29 |
 | **Last touched** | FEAT-06 increment 7 - **the public results page**, the last named T3 gap. **F-89**: a published event served the public an empty board, so publication published nothing. `575 tests`, `86/86` mutations, spec 72/72, lint clean, `just check` **GREEN** at 7 of 7 |
-| **Next action** | **BREAK-3.** The claim is now *available*, which has not been true before: all five T3 requirements are built. Per `bible/08` 1b that means the seven steps again, and the decision is the human's. The gap to name: three controls are cut and disclosed (comment rate limiting, ballot cookies/rate limiting, quadratic voting), and the published leaderboard is an **unnormalized** raw mean because FEAT-08 is not built |
+| **Next action** | **A DECISION FOR THE HUMAN, not a build: apply or decline the T3 claim.** The full reasoning, the arithmetic and the recommendation (option B: do not claim it) are in `history/features/break-3-t3-claim.md`. After that, **FEAT-08** (the normalization proof, 7h, protected) or **FEAT-07** (T4, 13h) - see `blueprint/build-plan.md` |

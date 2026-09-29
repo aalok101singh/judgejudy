@@ -177,6 +177,57 @@ projects above 1% reach, and the best below 100% — and reach is *measured* by 
 helper rather than asserted from memory, because it is a property of the noise
 model and a transcribed figure is exactly the habit F-72…F-75 exist to prevent.
 
+### F-91 [P1] accepted - the project's own gate FORBIDS claiming T3, and T3 is genuinely built
+
+**File:** `tools/run_acceptance.py`, `tools/expected_checks.json`,
+`.dogfood.toml`
+**Found:** 2026-09-29, at **BREAK-3**, on the first attempt to apply the T3 claim
+**Severity:** P1, and **accepted by decision rather than fixed** — it is a
+trade-off the human owns, not a defect, and the ledger has a category for exactly
+that. Nothing here is half-built.
+**Why it matters:** the gate enforces the organizers' own stated rule:
+
+```python
+overclaim = claimed_tiers - verified_tiers
+if overclaim:
+    problems.append("OVERCLAIM: .dogfood.toml claims ... but the report verified ...")
+```
+
+With `verified = T1 T2` (there are **no T3 checks in the organizers' program**),
+claiming T3 puts `{"T3"}` in that set and **the gate fails**. So the project has
+reached a state its own machinery treats as a violation:
+
+- **All five REQ-T3 requirements ship**, each tested, each traceable to a module.
+- **The gate says claiming T3 is overclaiming**, because the only way it can know
+  what was built is by parsing seven checks that stop at T2.
+
+**This is the honest collision at the centre of the whole brief**, and it is worth
+reading rather than engineering around. The brief says overclaiming is the one
+thing that costs points, and `verified T1 T2` is a **ceiling, not a measurement of
+our work** — nothing in this repository is capable of verifying T3. The gate is
+doing its job; the question is what the *job* is for when the checker cannot see
+the tier.
+
+**Three options, and the choice is the human's:**
+
+| | what it does | cost |
+|---|---|---|
+| **A. Claim T3** | `claimed = ["T1","T2","T3"]` | **the gate goes RED** with OVERCLAIM. Shipping red, or weakening a mutation-tested gate to go green |
+| **B. Do not claim T3** (recommended) | `claimed = ["T1","T2"]`, T3 shipped and documented as built | the report reads `claimed T1 T2, verified T1 T2` and the tier is **not claimed** in the organizers' scoring field |
+| **C. Add an accepted-overclaim flag** | a documented exception, like the deleted `--allow-false-passes` | **an escape hatch in the gate**, which this project has already deleted one of on principle and refuses to re-add |
+
+**Why B is the recommendation, and the reason is a rule the project already
+follows.** The report is the organizers' artifact and it ships **unedited**. If we
+claim T3 in the field their program parses, their program will print a sentence
+containing the word **OVERCLAIM** about this submission. That single word is worth
+more to a panel than the tier is, because it is the one thing the brief singles
+out. **T3 being built, tested, and documented is not the same claim as T3 being
+entered in the scoring field**, and only the first one is ours to make.
+
+**A gate that passes when broken is a lie** (F-33) — but so is a gate switched off
+because it is inconvenient. Neither is on offer, and B is the branch where neither
+has to be.
+
 ### F-90 [P2] fixed — the results page told a VISITOR their board was scoped to their own reviews while showing them the whole event
 
 **File:** `src/reviewer/reviews/results_view.py`

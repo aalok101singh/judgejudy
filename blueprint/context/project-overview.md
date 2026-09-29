@@ -277,7 +277,7 @@ verification and the counts live in `AGENTS.md` §Current state,
 
 | | |
 |---|---|
-| Findings | **90** — **0 open blocking**, 0 open, 17 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 62 closed |
+| Findings | **91** — **0 open blocking**, 0 open, 17 fixed (awaiting review), 1 unverified (F-27), **11 accepted by decision (F-91)**, 62 closed |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
 | Gate (FEAT-06) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **86/86** · spec layer green · **575 tests** · lint clean |
 | Next | **BREAK-3.** All five REQ-T3 requirements ship, so the T3 claim is *available* for the first time. Per `bible/08` §1b the decision is the human's |
