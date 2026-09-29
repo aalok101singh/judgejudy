@@ -24,17 +24,52 @@
       &middot; shown in a fixed order for you, different from every other voter's.
     </p>
 
-    <ol class="ballot">
-      {% for project in projects %}
-        <li class="ballot-item" data-position="{{ forloop.counter }}">
-          <span class="project-title">{{ project.title }}</span>
-          <span class="project-id">{{ project.id }}</span>
-          <span class="project-track">{{ project.track.name }}</span>
-        </li>
-      {% empty %}
-        <li>No projects are on the ballot.</li>
-      {% endfor %}
-    </ol>
+    {#- The identity budget, shown before the form rather than enforced silently.
+        Casting 1 everywhere exactly exhausts it, so amplification means giving
+        something else up. -#}
+    <p class="scope-receipt">
+      <strong>Budget:</strong> {{ spent }} of {{ budget }} weight spent.
+      Each project takes 1&ndash;{{ max_weight }}. Weight 1 everywhere is exactly
+      your budget, so to favour one project you must give another less &mdash; or
+      leave it unvoted, which counts as ranking it last.
+    </p>
+
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    {% if cast and abstained %}
+      <p class="saved">Recorded as an abstention. Your ballot order is unchanged and still reproducible from the seed above.</p>
+    {% elif cast %}
+      <p class="saved">Vote recorded against this ballot. The order you were shown is unchanged and still reproducible from the seed above.</p>
+    {% endif %}
+
+    {#- The form is a FORM, not a free-text ranking. The server reads the ranking
+        out of the ballot order it already fixed, so a voter cannot submit an
+        order they were never shown by reordering the page. -#}
+    <form method="post" action="/vote/">
+      {% csrf_token %}
+      <ol class="ballot">
+        {% for row in rows %}
+          <li class="ballot-item" data-position="{{ forloop.counter }}">
+            <span class="project-title">{{ row.project.title }}</span>
+            <span class="project-id">{{ row.project.pk }}</span>
+            <span class="project-track">{{ row.project.track.name }}</span>
+            <label class="weight">
+              weight
+              <input type="number" name="weight_{{ row.project.pk }}"
+                     min="0" max="{{ max_weight }}"
+                     value="{{ row.weight }}"
+                     inputmode="numeric">
+            </label>
+          </li>
+        {% empty %}
+          <li>No projects are on the ballot.</li>
+        {% endfor %}
+      </ol>
+
+      <p class="actions">
+        <button type="submit" name="action" value="cast">Record my vote</button>
+        <button type="submit" name="action" value="abstain">Abstain</button>
+      </p>
+    </form>
 
     <ul class="links">
       <li><a href="/">Gallery</a></li>
@@ -45,7 +80,8 @@
       The order is a permutation of all {{ total }} projects, stored against your
       identity so a refresh returns the same ballot rather than a fresh roll. The
       seed above reproduces it: the harness in <code>manage.py bias_attack</code>
-      measures this exact function.
+      measures this exact function, and the ranking below is computed by the same
+      Borda estimator it attacks.
     </p>
   </main>
 </body>

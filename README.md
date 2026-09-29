@@ -30,9 +30,8 @@ writing, by a human.** `verified` cannot exceed T2 whatever we build: there are 
 T3 or T4 checks in their program at all. See
 [why it says `claimed T1`](#why-it-says-claimed-t1-and-not-claimed-t2-when-all-seven-checks-pass).
 
-What is not built: voting (the ballot *order* is a product surface, the vote is
-not), comments, public result hiding, the T4 bulk-IO and signing layer, and the
-normalization proof.
+What is not built: comments, public result hiding, the T4 bulk-IO and signing
+layer, and the normalization proof.
 
 | | State |
 |---|---|
@@ -49,7 +48,8 @@ normalization proof.
 | Influence report (D-13) | ✅ built (`/api/v1/influence`) — per-project concentration, no thresholds |
 | Bias-attack harness | ✅ built (`manage.py bias_attack`) — fixed order **detected**, randomised **zero-mean** |
 | Randomised ballot order (D-12) | ✅ built (`/vote/`) — calls the *same* `presentation_order` the bias-attack harness attacks, so the claim and the code cannot drift. Zero-**mean**, not zero |
-| Voting, comments, public result hiding | ❌ **not built** (FEAT-06) — `/vote/` renders the order and does not yet accept a ranking |
+| Voting + identity budget (D-12) | ✅ built — weight 1 everywhere *exactly* exhausts the budget, so amplification is a trade. Abstaining is free, attributable, and contributes **nothing** to the tally. Borda via the same `schwartzian` the harness attacks |
+| Comments, public result hiding | ❌ **not built** (FEAT-06) — the API refusal is done; the public pages are not |
 | Bulk IO, signed records, OpenAPI | ❌ **not built** (FEAT-07) |
 | Normalization engine + proof | ❌ **not built** (FEAT-08) |
 
@@ -148,7 +148,7 @@ and the spec gate now fails if this table and `urls.py` disagree.
 | `/api/v1/results` | The leaderboard — refused to everyone but an organizer while `results_state = hidden`. |
 | `/api/v1/audit` | The hash-chained audit trail. |
 | `/api/v1/influence` | **The influence report (D-13).** Per-project concentration: distinct identities, first-preference share, vote-mass Gini, identical-ballot clusters. No thresholds. |
-| `/vote/` | **The randomised ballot (D-12).** A per-voter order that is stable across requests, rendered with its seed and the zero-**mean** caveat. Born closed, like everything else. |
+| `/vote/` | **The randomised ballot (D-12).** A per-voter order that is stable across requests, rendered with its seed and the zero-**mean** caveat. Weight 1 everywhere exactly exhausts your identity budget, so favouring one project means giving another less. Born closed, like everything else. |
 | `/admin/` | Django admin. |
 
 Plus the seed and the harness:

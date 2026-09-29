@@ -305,13 +305,62 @@ mutations, so a re-introduction is caught by name.
 
 ### What is NOT started
 
-- **Voting** with amplitude inside an identity budget, and mandatory attributable
-  abstention. `Vote` ships with its constraints and indexes; nothing writes one.
 - **Comments** on gallery projects (the model and its constraints ship; the
   surface does not).
 - **Results hiding as a *public* surface** — the API refusal is built and tested;
   the public pages are not.
 - **Rate limiting and a signed ballot cookie**, both cut and disclosed in `bible/08` §13.
+
+## Increment 5 — voting, the identity budget, and the tally (REQ-T3-01)
+
+**Built:** `ballots/tally.py`, the POST cast path on `/vote/`, and the weighting
+form. **23 tests**, **4 new mutations**.
+
+**The budget is one sentence: weight 1 on every project exactly exhausts it.**
+D-12 says voting claims cost *amplification inside an identity budget, not Sybil
+resistance*, so the cap is on total weight per `voter_key` and equals the ballot
+size. The consequence is the point — a voter who wants weight 3 on a favourite
+must give another project up or leave it unvoted, which makes the ballot
+**constant-sum**, and constant-sum is exactly what `schwartzian`'s docstring relies
+on when it says drift is "a genuine redistribution" with "no room for a uniform
+inflation to hide inside."
+
+**A budget of `3 x n` was the first design and it was rejected as decoration**: it
+permits weight 3 on *every* project, so the cap never binds. It is now the first
+mutation, and the sabotage proved five tests catch it.
+
+**`schwartzian` is called, not reimplemented** — the same rule as
+`presentation_order`. The harness measures drift on *this* function.
+
+### F-84 [P1] — an abstention silently became a VOTE
+
+`tally` ranked every `Ballot`, and `ranking_of` returned the unvoted projects in
+ballot order — so a voter who cast **nothing** came back with a full ranking equal
+to their raw ballot order and was scored as though they had voted for it.
+**The surface had a button labelled "Abstain" that recorded the abstention and
+then voted the ballot anyway.** The defect does not corrupt a number; it inverts
+the meaning of a control the brief explicitly asks for, and a reader would have
+found the correct model and a contradicting tally in the same commit.
+
+**Found by the cheapest possible assertion.** A test created a third ballot to
+break a tie and asserted the two were equal — they were not. The instinct was
+"the tie test is wrong"; the third ballot had moved the numbers. **A test
+asserting a negative caught a positive-valued defect.**
+
+**A second-order bug in the same function**: `voters` counted "rankings that
+mention this project", so a project ranked **last** by everyone reported **full
+support** — contradicting the influence report's distinct-identities count on the
+same data. Two shipped artefacts answering one question differently is worse than
+either being wrong alone. One definition now, read from the `Vote` rows.
+
+### A property worth saying out loud
+
+**Two perfectly opposite ballots cancel exactly** (4+3 and 3+4), and a test now
+pins it. It is the constant-sum property, and its consequence is real: **a
+perfectly symmetric brigade cancels**, so brigading has to be *asymmetric* to move
+anything. The tie test alone would pass against a tally that always returns equal
+points, so the *opposite* is asserted too — a third asymmetric voter must break
+the tie.
 
 ### The two questions, and neither is mine to answer
 
@@ -338,7 +387,7 @@ mutations, so a re-introduction is caught by name.
 
 | | |
 |---|---|
-| **Status** | **FEAT-06 in progress** — the three matrix columns, the audit chain, the influence report, the bias-attack harness and **the randomised ballot as a product path** are done. **Both acceptance clauses are built and REQ-T3-04 is now real.** Voting, comments and public result hiding are not started. The feature is NOT complete |
+| **Status** | **FEAT-06 in progress** — the three matrix columns, the audit chain, the influence report, the bias-attack harness, **the randomised ballot as a product path, and voting with its identity budget** are done. **REQ-T3-01 and REQ-T3-04 are now real; REQ-T3-05's influence report shipped at increment 2.** Comments and public result hiding are not started. The feature is NOT complete |
 | **Started** | 2026-09-29 |
-| **Last touched** | FEAT-06 increment 4 — **the randomised ballot as a product path**, `/vote/`, calling the function the harness attacks so the claim and the code cannot drift. **F-83** (a permutation keyed on a nullable column) and the constant-seed sabotage, which stayed green on every stability test. `503 tests`, `72/72` mutations, spec 72/72, lint clean, `just check` **GREEN** at 7 of 7 |
-| **Next action** | **voting** — `Vote` ships with its constraints and the per-voter budget index, and the Borda estimator the harness attacks is `schwartzian`, so what is missing is the write path and the ranking. Then comments, then public result hiding |
+| **Last touched** | FEAT-06 increment 5 — **voting, the identity budget, and the Borda tally**, with the budget binding exactly at weight-1-everywhere. **F-84 [P1]**: an abstention was silently counted as a vote for the random order, found by a test asserting a *tie*. `526 tests`, `76/76` mutations, spec 72/72, lint clean, `just check` **GREEN** at 7 of 7 |
+| **Next action** | **comments** (REQ-T3-02) — `Comment` ships with its escaped-never-`|safe` rule and moderation statuses; what is missing is the surface and the moderation affordance. Then **public result hiding** (REQ-T3-03), where the API refusal is already built and the public pages are not |

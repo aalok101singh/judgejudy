@@ -1344,6 +1344,75 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    # --- ballots/tally.py: casting, the budget, and the tally (FEAT-06, T3b) -----
+    # The first one is the important one. A budget of 3 x n is not a weaker
+    # version of the rule, it is NO rule: it permits weight 3 on every project,
+    # so the cap never binds and the identity budget D-12 specifies is
+    # decoration. It was the first sabotage tried, and five tests went red.
+    (
+        "src/reviewer/ballots/tally.py",
+        "    return BUDGET_MULTIPLIER * len(ballot.order)",
+        "    return BUDGET_MULTIPLIER * len(ballot.order) * 3",
+        "the identity budget is multiplied by the max weight, so it permits weight 3 on "
+        "EVERY project and never binds. D-12's whole claim is amplification INSIDE an "
+        "identity budget; a cap that cannot bind is not a budget. A budget of 3n is not a "
+        "weaker rule, it is no rule.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_voting.py::TestTheBudgetBinds",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/tally.py",
+        "    if not votes:\n        return []",
+        "    if not votes:\n        return list(ballot.order)",
+        "an abstaining voter is ranked on their raw ballot order and scored as though "
+        "they had voted for it. F-84: abstention silently becomes a vote for the "
+        "randomised order, which is the one thing abstention means the opposite of, and "
+        "it is invisible in every shape assertion.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_voting.py::TestTheTallyRespondsAndAlsoDoesNotFireWhenItShouldNot",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/tally.py",
+        "        return [], deny(REFUSED_BY_BUDGET)",
+        "        return [], 'budget'",
+        "the over-budget cast returns a 400-shaped string instead of a 403 with an empty "
+        "body. D-02: a refusal of the CLAIM must be a bare 403, never a redirect, and "
+        "F-40: it must be distinguishable from a malformed request, which is a 400.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_voting.py::TestTheBudgetBinds::test_the_refusal_is_a_403_with_an_empty_body",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/tally.py",
+        '            "voters": supporters.get(pk, 0),',
+        '            "voters": sum(1 for r in rankings if i in r),',
+        "supporters is reported as 'voters whose ranking mentions this project', so a "
+        "project ranked LAST by every voter reports full support. That contradicts the "
+        "influence report's distinct-identities count on the same data, and the two are "
+        "the published answer to the same question.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_voting.py::TestTheTallyRespondsAndAlsoDoesNotFireWhenItShouldNot"
+            "::test_an_abstaining_voter_adds_no_voters_to_any_project",
+            "-q",
+        ],
+    ),
 ]
 
 

@@ -275,10 +275,10 @@ verification and the counts live in `AGENTS.md` §Current state,
 
 | | |
 |---|---|
-| Findings | **83** — **0 open blocking**, 0 open, 10 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 62 closed |
+| Findings | **84** — **0 open blocking**, 0 open, 11 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 62 closed |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
-| Gate (FEAT-06) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **72/72** · spec layer green · **503 tests** · lint clean |
-| Next | **voting** (the ballot order is a product path now — `/vote/` calls the function the harness attacks), then comments and public result hiding |
+| Gate (FEAT-06) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **76/76** · spec layer green · **526 tests** · lint clean |
+| Next | **comments** and **public result hiding** — voting, the identity budget and the Borda tally now ship; REQ-T3-02 and the public half of REQ-T3-03 are the gaps |
 
 **Two things that changed the shape of the project.**
 

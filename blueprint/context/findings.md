@@ -177,6 +177,47 @@ projects above 1% reach, and the best below 100% — and reach is *measured* by 
 helper rather than asserted from memory, because it is a property of the noise
 model and a transcribed figure is exactly the habit F-72…F-75 exist to prevent.
 
+### F-84 [P1] fixed - An abstention silently became a VOTE for the randomised order
+
+**File:** `src/reviewer/ballots/tally.py`, `tests/test_voting.py`
+**Found:** 2026-09-29, at FEAT-06 increment 5, by a test that asserted a TIE
+**Why it matters:** `tally` iterated every `Ballot` and ranked it. `ranking_of`
+returned *the voter's votes, then every unvoted project in ballot order* -- so a
+voter who had cast **nothing at all** came back with a full-length ranking equal
+to their raw ballot order, and the aggregator scored them as though they had voted
+for it. **An abstention was being counted as a vote, and the vote it was counted
+as was "yes, in this exact random order."**
+
+This is the most serious of the findings in this increment and it is **P1 for a
+reason the others are not**: the defect does not corrupt a number, it **inverts
+the meaning of a control the brief explicitly asks for.** REQ-T3-01 requires
+mandatory attributable abstention; the surface had a button labelled "Abstain"
+that recorded an abstention in the database and then **voted the ballot anyway
+when tallying.** A reader auditing the code would have found the correct
+abstention model and a tally that contradicted it, both in the same commit.
+
+**It was found by the cheapest possible assertion**, and the mechanism is worth
+recording because it is not the one that was being looked for. A test created a
+third ballot to break a tie between two others, asserted the two were equal --
+and they were not. The instinct was "the tie test is wrong"; the reality was that
+the third ballot had moved the numbers. **A test asserting a NEGATIVE caught a
+positive-valued defect**, which is the F-21 lesson (`just check` will not catch
+this class -- everything it runs is correct) applying to a case nobody had looked
+for.
+
+**Fixed** by `ranking_of` returning `[]` for a voter who cast nothing, and
+`tally` skipping those ballots. Pinned by three tests: the standings must be
+byte-identical before and after adding an abstainer, and an abstainer must add
+zero to the `voters` count.
+
+**And a second-order bug in the same function, found by the test that pinned the
+first:** `voters` counted "ballots whose ranking mentions this project", so a
+project ranked **last** by every voter reported **full support** -- contradicting
+the influence report's distinct-identities count on the same data. **Two shipped
+artefacts answering the same question with different definitions is a worse
+defect than either being wrong alone**, and it is now one definition, read from
+the `Vote` rows.
+
 ### F-83 [P2] fixed - The ballot permutation was keyed on a NULLABLE column, so a self-submitted project put a `None` in the order
 
 **File:** `src/reviewer/ballots/order.py`, `tests/test_ballot_order.py`
