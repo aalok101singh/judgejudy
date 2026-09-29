@@ -1431,6 +1431,75 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    # --- comments/views.py: the public surface (FEAT-06, T3c) ---------------------
+    # F-86 is the one that matters. The same corruption applied to the PUBLIC
+    # thread is caught by four tests; applied to the moderation queue it was
+    # caught by NONE of them, because they all read the page as a visitor and the
+    # queue renders only for an organizer. The mutation points at the QUEUE
+    # deliberately, so the detector that catches it is the queue test.
+    (
+        "src/reviewer/comments/views.py",
+        "    return (\n        Comment.objects.filter(event=event)\n"
+        "        .exclude(status=COMMENT_VISIBLE)",
+        "    return (\n        Comment.objects.none()\n        .exclude(status=COMMENT_VISIBLE)",
+        "the moderation queue is emptied, so a moderator cannot see anything they are "
+        "asked to moderate. The queue still RENDERS, the page still returns 200, and "
+        "every public-thread test is green -- F-80's shape: a feature returning "
+        "structurally correct output containing nothing.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_comments.py::TestAPostedCommentIsNotVisible"
+            "::test_an_organizer_sees_the_queue_the_public_does_not",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/comments/views.py",
+        "    if not actor.can_read_all_reviews:\n        return deny(REFUSED_BY_NOT_ORGANIZER)",
+        "    if False:\n        return deny(REFUSED_BY_NOT_ORGANIZER)",
+        "anyone can approve or hide any comment. D-02 and the refusal contract: a "
+        "participant's moderation attempt must be a 403 with an EMPTY body naming the "
+        "guard, and the refused action must not take effect.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_comments.py::TestModeration",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/comments/views.py",
+        "        Comment.objects.filter(event=event, status=COMMENT_VISIBLE)",
+        "        Comment.objects.filter(event=event)",
+        "the public thread stops filtering on `visible`, so PENDING and HIDDEN comments "
+        "are published. The moderation default becomes decorative, which is the single "
+        "property REQ-T3-02's 'pending moderation queue' is asking for.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_comments.py::TestAPostedCommentIsNotVisible",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/comments/views.py",
+        "        if len(body) > MAX_BODY_CHARS:",
+        "        if False:",
+        "the length cap stops being enforced, so a single comment can be megabytes of "
+        "text on a public page. V-8 names length caps as one of the four controls on "
+        "this surface; three of four is a control set with a hole in it.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_comments.py::TestTheLengthCap",
+            "-q",
+        ],
+    ),
 ]
 
 

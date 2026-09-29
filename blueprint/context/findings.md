@@ -177,6 +177,58 @@ projects above 1% reach, and the best below 100% — and reach is *measured* by 
 helper rather than asserted from memory, because it is a property of the noise
 model and a transcribed figure is exactly the habit F-72…F-75 exist to prevent.
 
+### F-86 [P2] fixed - The MODERATION QUEUE rendered comment bodies unescaped, and every escaping test was green
+
+**File:** `src/templates/comments/thread.html`, `tests/test_comments.py`
+**Found:** 2026-09-29, at FEAT-06 increment 6, **by a sabotage the tests did not
+catch** — which is the finding
+**Why it matters:** the sabotage put the safe filter on the **moderation
+queue's** copy of `comment.body`, not the public thread's, and **all four
+rendering tests stayed green.** They were green because every one of them read
+the page as a *visitor*, and the queue is rendered only for an organizer.
+
+**The queue is the highest-privilege rendering of user-controlled text in the
+whole feature.** It is what an organizer looks at, in their own authenticated
+session, for every comment anyone has ever posted — and a hostile comment that is
+*never approved* never reaches the public thread at all, so the public tests were
+structurally incapable of catching it. Stored XSS against the person whose job
+is to review the content, triggered by the content itself.
+
+**This is the F-80 shape applied to a security property**: a render path that
+exists, is reachable, renders user input, and had **no test at all**. The claim
+"we escape comment bodies" was true of **one of two call sites**, and the second
+was written in the same file, twenty lines below the first.
+
+**The generalisable lesson, and it is the one worth keeping:** *escaping is a
+property of every render path, not of the data.* A test that proves a payload is
+escaped on page A has proved nothing about page B. **The number that matters is
+the count of places user-controlled text reaches HTML, and the assertion has to be
+enumerated over that count** — not written once and trusted.
+
+**Fixed, and pinned by `test_the_moderation_queue_escapes_too`**, which reads the
+page *as an organizer* and asserts the queue is present, non-empty, and escaped.
+Its companion `test_both_render_paths_are_covered_by_this_file` exists so the
+first cannot pass **vacuously** against an empty queue — a test that asserts on a
+page section that is empty passes no matter what the escaping does.
+
+### F-87 [P2] fixed - A comment escaped the moderation queue entirely: a pending comment was invisible to the moderator who has to approve it
+
+**File:** `src/reviewer/comments/views.py`, `tests/test_comments.py`
+**Found:** 2026-09-29, at FEAT-06 increment 6, on the first test run
+**Why it matters:** `_moderate` rebuilt only the **queue** in the context after
+acting, and re-rendered the **public thread** from a context built *before* the
+write. So approving a comment updated the database and then re-rendered a page on
+which the comment was still absent — **the organizer pressed "Approve", the row
+went visible, and the page said it had not happened.** The same shape as F-85
+one module over, and the second time this session that a right-in-the-database
+write was paired with a wrong-on-the-page render.
+
+**Found immediately, unlike F-85, because the moderation tests re-render the page
+after acting** — which is the habit that caught it. That is the whole difference
+between the two findings, and it is a habit worth naming: **a write test that
+re-reads the page is a test about the product; one that asserts on the database
+is a test about storage.**
+
 ### F-85 [P2] fixed - After casting a vote the page reported the PRE-cast budget and empty weight boxes
 
 **File:** `src/reviewer/ballots/views.py`, `tests/test_voting.py`

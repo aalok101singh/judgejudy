@@ -30,7 +30,7 @@ writing, by a human.** `verified` cannot exceed T2 whatever we build: there are 
 T3 or T4 checks in their program at all. See
 [why it says `claimed T1`](#why-it-says-claimed-t1-and-not-claimed-t2-when-all-seven-checks-pass).
 
-What is not built: comments, public result hiding, the T4 bulk-IO and signing
+What is not built: public result hiding, rate limiting, the T4 bulk-IO and signing
 layer, and the normalization proof.
 
 | | State |
@@ -49,7 +49,7 @@ layer, and the normalization proof.
 | Bias-attack harness | ✅ built (`manage.py bias_attack`) — fixed order **detected**, randomised **zero-mean** |
 | Randomised ballot order (D-12) | ✅ built (`/vote/`) — calls the *same* `presentation_order` the bias-attack harness attacks, so the claim and the code cannot drift. Zero-**mean**, not zero |
 | Voting + identity budget (D-12) | ✅ built — weight 1 everywhere *exactly* exhausts the budget, so amplification is a trade. Abstaining is free, attributable, and contributes **nothing** to the tally. Borda via the same `schwartzian` the harness attacks |
-| Comments, public result hiding | ❌ **not built** (FEAT-06) — the API refusal is done; the public pages are not |
+| Comments, public result hiding | ⚠️ **partial** — comments ship at `/projects/<id>/comments/` (moderated, plain text, escaped); **public result hiding is not built** (the API refusal is) |
 | Bulk IO, signed records, OpenAPI | ❌ **not built** (FEAT-07) |
 | Normalization engine + proof | ❌ **not built** (FEAT-08) |
 
@@ -149,6 +149,7 @@ and the spec gate now fails if this table and `urls.py` disagree.
 | `/api/v1/audit` | The hash-chained audit trail. |
 | `/api/v1/influence` | **The influence report (D-13).** Per-project concentration: distinct identities, first-preference share, vote-mass Gini, identical-ballot clusters. No thresholds. |
 | `/vote/` | **The randomised ballot (D-12).** A per-voter order that is stable across requests, rendered with its seed and the zero-**mean** caveat. Weight 1 everywhere exactly exhausts your identity budget, so favouring one project means giving another less. Born closed, like everything else. |
+| `/projects/<id>/comments/` | **Comments on a project.** Plain text, never markup. Every comment is **held for moderation** and nothing is public until a human approves it. Rate limiting is **not** implemented — see the threat model. |
 | `/admin/` | Django admin. |
 
 Plus the seed and the harness:

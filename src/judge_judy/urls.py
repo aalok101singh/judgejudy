@@ -23,6 +23,7 @@ from django.urls import path
 
 from judge_judy import views
 from reviewer.ballots import views as ballot_views
+from reviewer.comments import views as comment_views
 from reviewer.projects import views as project_views
 from reviewer.projects.views import current_event
 from reviewer.reviews import api as api_views
@@ -104,6 +105,16 @@ def _influence(request):
     return api_views.influence(request, event)
 
 
+def _comments(request, project_id):
+    """The comment thread for one project.
+
+    A refusal when there is no event, for `_console`'s reason: a portal with no
+    event has nothing to comment on rather than a page that is missing, and the
+    acceptance gate's route probes cannot tell a 404 from a mistyped URL.
+    """
+    return comment_views.thread(request, current_event(), project_id)
+
+
 urlpatterns = [
     # T1-1 and T1-2. Server-rendered, public, first page in FIXTURE ORDER --
     # `run.py` slices `projects[:3]` positionally, so the ordering is load
@@ -150,6 +161,14 @@ urlpatterns = [
     # gated on the voting window and on having a derivable identity, and both
     # refusals are literal 403s with empty bodies.
     path("vote/", _ballot, name="ballot"),
+    # REQ-T3-02. Public comments, one thread per project.
+    #
+    # **Deliberately NOT on the gallery.** `run.py` reads `projects[:3]`
+    # positionally from `/` and checks that one of those titles appears in the
+    # body, so the gallery markup is a page the T1 checks read. Comments live on
+    # their own route so adding them cannot move the gallery's ordering -- and
+    # the gallery carries only a link, which is additive and inert.
+    path("projects/<str:project_id>/comments/", _comments, name="comments"),
     # The healthcheck polls this. It must stay unauthenticated, cheap and
     # database-free -- see the docstring in judge_judy/views.py.
     path("healthz", views.healthz, name="healthz"),

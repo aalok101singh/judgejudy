@@ -1,0 +1,95 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Judge Judy &middot; comments on {{ project.title }}</title>
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+</head>
+<body>
+  <main class="wrap">
+    <p class="eyebrow">DOGFOOD 2026 &middot; {{ project.track.name }}</p>
+    <h1>{{ project.title }}</h1>
+    <p class="lede">
+      <strong>{{ project.team.name }}</strong> &middot;
+      <span class="project-id">{{ project.id }}</span>
+    </p>
+
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+    {% if posted %}
+      {#- The honest sentence. A comment is NOT published by posting it; it goes
+          into a moderation queue and a human decides. Saying "posted" without
+          saying that would be the kind of small lie this project keeps
+          forbidding. -#}
+      <p class="saved">
+        Received. Comments are held for moderation and appear once a human
+        approves them, so yours is not public yet.
+      </p>
+    {% endif %}
+
+    {#- The thread. `{{ comment.body }}` has NO `|safe` and never will: the model
+        docstring, bible/07 P-4 and the tests all say the same thing. -#}
+    <ol class="comments">
+      {% for comment in comments %}
+        <li class="comment" id="comment-{{ comment.pk }}">
+          <p class="comment-body">{{ comment.body }}</p>
+          <p class="comment-meta">
+            {% if comment.author_label %}{{ comment.author_label }}{% else %}anonymous{% endif %}
+            &middot; {{ comment.created_at|date:"Y-m-d H:i" }}
+          </p>
+        </li>
+      {% empty %}
+        <li class="comment comment--empty">No approved comments on this project yet.</li>
+      {% endfor %}
+    </ol>
+
+    {#- The moderation queue is an ORGANIZER affordance and it is rendered on the
+        same page, so a moderator does not need a second screen to do the job the
+        schema says exists. It is the only place pending/hidden comments appear. -#}
+    {% if queue %}
+      <h2>Moderation queue ({{ queue|length }} waiting)</h2>
+      <ul class="comments comments--queue">
+          {% for comment in queue %}
+            <li class="comment comment--{{ comment.status }}">
+              <p class="comment-body">{{ comment.body }}</p>
+            <p class="comment-meta">{{ comment.status }} &middot; posted {{ comment.created_at|date:"Y-m-d H:i" }}</p>
+            <form method="post" action="">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="moderate">
+              <input type="hidden" name="comment" value="{{ comment.pk }}">
+              <button type="submit" name="status" value="visible">Approve</button>
+              <button type="submit" name="status" value="hidden">Hide</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <h2>Add a comment</h2>
+    <form method="post" action="" class="comment-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="post">
+      <label>
+        Your name (optional)
+        <input type="text" name="label" maxlength="120" value="">
+      </label>
+      <label>
+        Comment (plain text, up to {{ max_body }} characters)
+        <textarea name="body" rows="4" maxlength="{{ max_body }}"></textarea>
+      </label>
+      <button type="submit">Post comment</button>
+    </form>
+    <p class="foot">
+      Comments are plain text. There is no formatting and no link rendering, by
+      design &mdash; see the threat model, V-8. Nothing you post is visible until
+      a moderator approves it.
+    </p>
+
+    <ul class="links">
+      <li><a href="/">Gallery</a></li>
+      <li><a href="/healthz">Health check</a></li>
+    </ul>
+  </main>
+</body>
+</html>

@@ -47,6 +47,7 @@
             <span class="tag tag--count">
               {{ project.review_count }} review{{ project.review_count|pluralize }}
             </span>
+            <a class="tag tag--link" href="/projects/{{ project.pk }}/comments/">comments</a>
           </p>
         </li>
       {% empty %}

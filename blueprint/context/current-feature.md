@@ -303,13 +303,75 @@ the guarantee hold" is half the question — and it is why
 pairwise inequality, and carries its own slot-1 control. Both sabotages are now
 mutations, so a re-introduction is caught by name.
 
+## Increment 6 — public comments (REQ-T3-02)
+
+**Built:** `comments/views.py`, `/projects/<id>/comments/`,
+`templates/comments/thread.html`. **25 tests**, **4 new mutations**.
+
+**Four controls, and the one that does not ship is named in our own threat
+model.** `bible/07` V-8 lists: escaped output, no raw HTML, `pending` queue,
+rate limits, length caps. **Three ship and are tested; rate limiting does not**,
+and it is in the cut ledger, the README, and the module docstring — disclosed
+three times rather than quietly missing.
+
+**Comments are deliberately NOT on the gallery.** `run.py` reads `projects[:3]`
+positionally from `/`, so the gallery markup is a page the T1 checks read. A
+separate route is additive and cannot move the ordering. The gallery carries
+only a link.
+
+### F-86 [P2] — the moderation queue rendered bodies unescaped, and every escaping test was green
+
+The sabotage put the safe filter on the **queue's** copy of `comment.body`, not
+the public thread's, and **all four rendering tests stayed green** — they read the
+page as a *visitor*, and the queue renders only for an organizer.
+
+**The queue is the highest-privilege rendering of user-controlled text in the
+whole feature**, and a hostile comment that is *never approved* never reaches the
+public thread, so those tests were structurally incapable of catching it. Stored
+XSS against the person whose job is to review the content, triggered by the
+content itself.
+
+> **Escaping is a property of every render path, not of the data.** A test that
+> proves a payload is escaped on page A has proved nothing about page B. The
+> number that matters is the **count of places user-controlled text reaches HTML**,
+> and the assertion has to be enumerated over that count.
+
+Pinned by `test_the_moderation_queue_escapes_too`, which reads the page *as an
+organizer* — plus a companion that proves the queue is non-empty, so the first
+cannot pass vacuously.
+
+### F-87 [P2] — approving a comment updated the row and re-rendered the stale page
+
+`_moderate` rebuilt only the queue, re-rendering the public thread from a context
+built **before** the write. So the organizer pressed "Approve" and the page said
+it had not happened. F-85's shape one module over.
+
+**Found immediately, unlike F-85, because the moderation tests re-render the page
+after acting.** That is the whole difference between the two, and it is a habit
+worth naming: **a write test that re-reads the page is a test about the product;
+one that asserts on the database is a test about storage.**
+
+### A test that was wrong before it was right
+
+The first escaping test asserted the string `"onerror"` is absent from the page.
+It failed — against **correctly escaped output**, where `onerror` is inert text
+inside a `<p>`. A test that asserts a *substring* is absent is asserting a proxy.
+What a browser acts on is an **element**, so the assertion is now on the tag.
+
+### The two things, neither mine to answer
+
 ### What is NOT started
 
 - **Comments** on gallery projects (the model and its constraints ship; the
   surface does not).
 - **Results hiding as a *public* surface** — the API refusal is built and tested;
-  the public pages are not.
-- **Rate limiting and a signed ballot cookie**, both cut and disclosed in `bible/08` §13.
+  the public pages are not. **This is the last named REQ-T3 gap.**
+- **Comment rate limiting**, cut and disclosed three times (`bible/08` §13, the
+  README, and `comments/views.py`'s docstring). `bible/07` V-8 names it and we
+  did not ship it, which is the one place our own threat model promises
+  something the code does not deliver.
+- **Comment threading.** `Comment.parent` ships unused; REQ-T3-02 does not ask
+  for it.
 
 ## Increment 5 — voting, the identity budget, and the tally (REQ-T3-01)
 
@@ -387,7 +449,7 @@ the tie.
 
 | | |
 |---|---|
-| **Status** | **FEAT-06 in progress** — the three matrix columns, the audit chain, the influence report, the bias-attack harness, **the randomised ballot as a product path, and voting with its identity budget** are done. **REQ-T3-01 and REQ-T3-04 are now real; REQ-T3-05's influence report shipped at increment 2.** Comments and public result hiding are not started. The feature is NOT complete |
+| **Status** | **FEAT-06 nearly done** — the three matrix columns, the audit chain, the influence report, the bias-attack harness, **the randomised ballot as a product path, voting with its identity budget, and comments** all ship. **REQ-T3-01, 02, 04 and 05 are real; REQ-T3-03 is half — the API refusal is built, the public pages are not.** One named gap remains before T3 could honestly be claimed |
 | **Started** | 2026-09-29 |
-| **Last touched** | FEAT-06 increment 5 — **voting, the identity budget, and the Borda tally**, with the budget binding exactly at weight-1-everywhere. **F-84 [P1]**: an abstention was silently counted as a vote for the random order, found by a test asserting a *tie*. `528 tests`, `77/77` mutations, spec 72/72, lint clean, `just check` **GREEN** at 7 of 7 |
-| **Next action** | **comments** (REQ-T3-02) — `Comment` ships with its escaped-never-`|safe` rule and moderation statuses; what is missing is the surface and the moderation affordance. Then **public result hiding** (REQ-T3-03), where the API refusal is already built and the public pages are not |
+| **Last touched** | FEAT-06 increment 6 — **public comments**, moderated and plain-text. **F-86**: the moderation queue rendered bodies unescaped and *every* escaping test was green, because they all read the page as a visitor. **F-87**: approving a comment re-rendered the stale page. `553 tests`, `81/81` mutations, spec 72/72, lint clean |
+| **Next action** | **public result hiding** (REQ-T3-03) — the predicate `results.results_visible_to(actor)` and the API 403 already exist and are tested; what is missing is the public page. Then BREAK-3: decide the T3 claim with the gap named |
