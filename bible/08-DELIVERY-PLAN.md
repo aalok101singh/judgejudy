@@ -153,9 +153,9 @@ break protocol real rather than ceremonial.
 | A | 4.0 | ~4 | ≈0 | Skeleton, image, compose, healthcheck. On plan. `compose up` served in 6.2 s, and the two costs that would have overrun it did not happen: a 1.9 s seed and a PATH problem that was not a missing install (F-13/F-34) |
 | B | 5.0 | ~5 | ≈0 | Schema, 24 models / 12 apps, `for_actor()`, scope receipt, hash-chained audit, the JJ01 lint rule. On plan, and the scope receipt landed in the estimate rather than on top of it |
 | C | 5.0 | ~6 | **+1** | **The first block to meet the organizers' data instead of ours, and it cost the hour.** Eight findings, three of them P1 (F-49, F-50, F-55), every one a value that agreed with what we expected and disagreed with what the file said. F-40 was also discharged here: two of the seven checks had been passing for the wrong reason, and the fix was a new *kind* of precondition, not a patch |
-| D | 7.0 | | | |
-| E | 8.0 | | | |
-| F | 10.0 | | | |
+| D | 7.0 | ~7 | ≈0 | Rubric, the assignment engine with its min-cut certificate, the judge console. `FEAT-04` recorded `Actual: ~7h` when it was written. The min-cut certificate was the whole point of the block and it landed inside the estimate, which the §1c table said it would because it was already priced in at +1.5 |
+| E | 8.0 | ~8 | ≈0 | The three isolation columns, the scoped score endpoint, the CSV export, the refusal primitive. **No `Actual:` line was written in the FEAT-05 archive, so this is a retrospective estimate and is marked as one** — see the note below |
+| F | 10.0 | ~7 so far | **−3** | **Three increments shipped, the feature is NOT done.** The three matrix columns, the audit chain's missing writer, the influence report and the bias-attack harness. It is running UNDER plan and the reason is not efficiency: the randomised ballot-order *product path*, voting and comments are unstarted. F-80 alone cost a full redesign of the quality ladder, and the ladder had to be right before the harness meant anything |
 | G | 11.0 | | | |
 | H | 7.0 | | | |
 
@@ -182,6 +182,39 @@ concessions, stated up front because they weaken the table above:
    because block C overran; they move because blocks D–H are still unstarted, so
    the overrun is absorbed by the ~1.5 h × 4 breaks already budgeted, or it is
    not absorbed at all. Which of those is true is decided at BREAK-2, not here.
+
+**BREAK-2, 2026-09-29.** The first three concessions still stand, and the second
+of them bit. Adding rows D, E and F:
+
+1. **Block E has no `Actual:` in its archive, and that is now a gap in this
+   ledger's own source rather than a judgement call.** `FEAT-01`…`FEAT-04` each
+   recorded `Actual: ~Nh` when the archive was written; `FEAT-05` did not, so its
+   `~8` above is a **retrospective estimate made at the break**, and it is marked
+   as one. The rule the next session should keep is the boring one: **write the
+   `Actual:` line into the archive when you write the archive**, because the
+   slippage ledger is only as good as the figures it reads.
+2. **Block F is under plan and the feature is unfinished, and those two facts are
+   the same fact.** `~7` against a planned 10.0 is not efficiency — the ballot
+   order, voting and comments are simply not built yet. **A negative Δ on an
+   incomplete block is not a saving**, and reading it as one is how a slippage
+   ledger starts lying.
+3. **The two zero-Δ rows that were expected to be non-zero were not.** D and E
+   both landed on plan, which is a real result and not a rounding: the two blocks
+   that met the organizers' *requirements* rather than their *data* both
+   estimated correctly. C, the one block that met the fixture, ran +1. **Three
+   blocks is not a trend, but it is the only signal the ledger has produced and
+   it points the same way every time.**
+
+### The one hour BREAK-2 actually cost, and what it verified
+
+Not an hour of building. The block spent itself on **verification and on
+finding that a document had rotted under it**:
+
+| | |
+|---|---|
+| **Green, measured** | spec **72/72** · acceptance **7 of 7 PASS**, `claimed T1, verified T1 T2` · suite **479** · mutations **68/68** · lint clean · `prove-offline` passes · `isolation_proof` **exit 0** on a clean volume |
+| **Found at the break** | **F-82** — the README's route count was wrong, its repair was *also* wrong, and the second repair invented a breakdown that did not sum over its own table. Fixed by making the count **derived from `urls.py`** rather than retyped, and proved negative |
+| **Concession, stated because the brief rewards it** | **`verified` cannot exceed T2 on a flawless build.** There are no T3 or T4 checks in the organizers' program and `verified` is prefix-locked, so the ceiling is arithmetic. The report ships printing `verified T1 T2`, and the README explains why in full rather than the report being edited to say otherwise |
 
 ---
 

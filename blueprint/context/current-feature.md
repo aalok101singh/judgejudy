@@ -197,7 +197,59 @@ three orders must score bit-identically.
 
 **The full table is in `history/features/06-bias-attack-harness.md`.**
 
-### What is NOT started
+### BREAK-2 is done. The T2 claim is EARNED and the human has not yet applied it.
+
+All seven steps of `bible/08` §1b ran, on a clean volume with the network off.
+The full record is `history/features/break-2-t2-claim.md`.
+
+| Step | Measured |
+|---|---|
+| spec | **72/72** |
+| acceptance | **7 of 7 PASS**, `claimed T1, verified T1 T2` — parsed from the **body**; `run.py` always exits 0 (F-32) |
+| `isolation_proof` | **exit 0** |
+| suite | **479** |
+| mutations | **68/68** |
+| `prove-offline` | passes |
+| lint | clean |
+
+**F-82 was found at the break, and it is the reason one number is now derived
+rather than corrected.** The README's route count was wrong; so was the repair's
+("Eleven routes"), because the table omitted `/judge/review/<id>/` and the prose
+apportioning the eleven did not sum over the table's own rows. A repair that
+swaps a wrong number for a right one has not fixed anything a check could catch,
+so a new `verify_spec` check now derives the routes from `urls.py` and asserts
+the README names every one. **Proved negative** — deleting the row turns it red
+and names the route.
+
+**The `verified T1 T2` ceiling is arithmetic, not a gap,** and it is stated in
+the claim record, the README and the shipped report. There are no T3 or T4 checks
+in the organizers' program; `verified` is prefix-locked.
+
+#### THE DIFF FOR THE HUMAN TO APPLY — not applied on initiative
+
+`.dogfood.toml` line 49 is **correct as it stands**: `claimed = ["T1"]`. T2 is
+earned but the claim is the human's. Two edits, and no credential values in
+either:
+
+1. Line 49:
+
+   ```toml
+   claimed = ["T1", "T2"]
+   ```
+
+2. The stale paragraph at lines 36-38, which now says the opposite of the truth —
+   *"**T2 is deliberately NOT claimed.** It is four checks and none of them runs:
+   the judge console, the scoped score endpoint and the CSV export arrive in
+   FEAT-04 and FEAT-05"*. All three shipped; all four checks pass. Replace it
+   with the BREAK-2 reason: T2 is claimed because all four checks pass and each
+   passes *with a precondition*, so a wrong-reason refusal cannot stand in.
+
+Then `just report` and `git diff acceptance-report.txt`. The header must read
+`claimed: T1 T2` and the summary `claimed T1 T2, verified T1 T2`.
+
+**Do not** edit the report by hand to make the two lines agree.
+
+
 
 - **Randomized ballot order as a product path** — seeded per voter, stable across
   requests. **The function the harness attacks exists and is tested**
