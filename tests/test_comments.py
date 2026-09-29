@@ -44,9 +44,13 @@ IMG_ONERROR = '"><img src=x onerror=alert(1)>'
 SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 
 _SAFE_FILTER = "|" + "safe"
-#: Django template comments and HTML comments, which are documentation and are
-#: allowed to NAME the filter they are describing.
-_TEMPLATE_COMMENTS = re.compile(r"\{#.*?#\}|<!--.*?-->", re.S)
+#: Django's `{# ... #}` comment is SINGLE-LINE -- a wrapped one is not a comment
+#: at all (F-88). `{% comment %}` blocks do span lines, and are what a multi-line
+#: note must use. BOTH spellings are stripped before the safe-filter check, or a
+#: comment explaining that the filter is banned would trip the ban.
+_TEMPLATE_COMMENTS = re.compile(
+    r"\{#.*?#\}|<!--.*?-->|\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}", re.S
+)
 
 
 def _strip_template_comments(text: str) -> str:
@@ -155,6 +159,64 @@ class TestTheBodyIsNeverMarkup:
             if _SAFE_FILTER in _strip_template_comments(p.read_text(encoding="utf-8"))
         ]
         assert offenders == [], f"templates must never use the safe filter: {offenders}"
+
+    def test_no_template_comment_spans_a_line_break(self):
+        """**F-88, and this is a library claim EXECUTED rather than recalled.**
+
+        Django's ``{# ... #}`` comment is **single-line**. A ``{#- ... -#}`` that
+        wraps is not a comment at all: it renders into the page as literal text,
+        minus whatever ``{{ }}`` it contained, which the engine evaluates anyway.
+        A page can therefore show a visitor its own template source.
+
+        Nine of them shipped across four templates, **two of which predate this
+        session** (``console.html`` and ``organizer_assignments.html``), so this is
+        a leak that was already in the judged surface.
+
+        The assumption it corrects is the one everybody arrives with: the blocks
+        *read* as comments, they are indented like comments, and the reason they
+        are not is invisible until you look at the HTTP response rather than the
+        file. **The same sentence as F-11 and F-79: a recalled default is not a
+        checked one.**
+
+        **The check asserts the SHAPE, not one instance of the defect** -- "every
+        ``{#`` closes on its own line" -- because the first version of it looked
+        for a *matched pair* spanning lines, and the mutation harness immediately
+        found the gap: an **unterminated** ``{#`` also leaks literal text, and a
+        paired-regex cannot see it. A check written against the bad example rather
+        than the rule is a check with a hole in it.
+        """
+        import re
+
+        offenders = []
+        for path in sorted(SRC.rglob("*.html")):
+            for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                for m in re.finditer(r"\{#", line):
+                    if "#}" not in line[m.start() :]:
+                        offenders.append(f"{path.relative_to(SRC)}:{n}")
+        assert offenders == [], (
+            "these {# openers never close on their own line, so Django renders "
+            f"them as literal page text: {offenders}"
+        )
+
+    def test_the_check_itself_can_fail(self):
+        """**F-33: a check that has only ever passed is not evidence.** Asserted
+        against three known-bad spellings and one known-good one, so the check is
+        known to be able to say no -- including the unterminated case the mutation
+        harness found."""
+        import re
+
+        def leaks(text: str) -> bool:
+            return any(
+                "#}" not in line[m.start() :]
+                for line in text.splitlines()
+                for m in re.finditer(r"\{#", line)
+            )
+
+        assert leaks("{#- spans\n  lines -#}")
+        assert leaks("{#- unterminated, and never closed")
+        assert not leaks("ok {#- one -#} fine")
+        assert not leaks("{% comment %}\n  spans lines safely\n{% endcomment %}")
+        assert not leaks("no comment at all")
 
     def test_the_moderation_queue_escapes_too(self, client, world):
         """**F-86, and it is the finding this increment produced.**

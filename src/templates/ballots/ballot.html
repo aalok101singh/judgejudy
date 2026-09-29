@@ -11,22 +11,27 @@
     <p class="eyebrow">DOGFOOD 2026 &middot; {{ actor.label }}</p>
     <h1>Your ballot</h1>
 
-    {#- D-12's caveat is in the MARKUP, not only in a docstring. A page showing a
-        randomised order without saying what it does is read as "position bias
-        solved", and the harness says in terms that it is zero-MEAN. -#}
+{% comment %}
+    D-12's caveat is in the MARKUP, not only in a docstring. A page showing a randomised
+    order without saying what it does is read as "position bias solved", and the harness
+    says in terms that it is zero-MEAN.
+    {% endcomment %}
     <p class="lede">{{ caveat }}</p>
 
-    {#- The seed, rendered. An order that cannot be reproduced is an order nobody
-        can check, and this is what makes it reproducible to a reader. -#}
+{% comment %}
+    The seed, rendered. An order that cannot be reproduced is an order nobody can check,
+    and this is what makes it reproducible to a reader.
+    {% endcomment %}
     <p class="scope-receipt">
       <strong>Ballot seed:</strong> <span class="project-id">{{ ballot.seed }}</span>
       &middot; {{ ballot.order|length }} projects
       &middot; shown in a fixed order for you, different from every other voter's.
     </p>
 
-    {#- The identity budget, shown before the form rather than enforced silently.
-        Casting 1 everywhere exactly exhausts it, so amplification means giving
-        something else up. -#}
+{% comment %}
+    The identity budget, shown before the form rather than enforced silently. Casting 1
+    everywhere exactly exhausts it, so amplification means giving something else up.
+    {% endcomment %}
     <p class="scope-receipt">
       <strong>Budget:</strong> {{ spent }} of {{ budget }} weight spent.
       Each project takes 1&ndash;{{ max_weight }}. Weight 1 everywhere is exactly
@@ -41,9 +46,11 @@
       <p class="saved">Vote recorded against this ballot. The order you were shown is unchanged and still reproducible from the seed above.</p>
     {% endif %}
 
-    {#- The form is a FORM, not a free-text ranking. The server reads the ranking
-        out of the ballot order it already fixed, so a voter cannot submit an
-        order they were never shown by reordering the page. -#}
+{% comment %}
+    The form is a FORM, not a free-text ranking. The server reads the ranking out of the
+    ballot order it already fixed, so a voter cannot submit an order they were never
+    shown by reordering the page.
+    {% endcomment %}
     <form method="post" action="/vote/">
       {% csrf_token %}
       <ol class="ballot">

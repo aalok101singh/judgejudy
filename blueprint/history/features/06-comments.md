@@ -101,7 +101,7 @@ ordering**; the gallery carries only a link, which is additive and inert.
 
 | | |
 |---|---|
-| Tests | 528 -> **553** (25 in `tests/test_comments.py`) |
-| Mutations | 77 -> **81** (4 new) |
-| Findings | **F-86 [P2]**, **F-87 [P2]** |
+| Tests | 528 -> **555** (27 in `tests/test_comments.py`) |
+| Mutations | 77 -> **82** (5 new) |
+| Findings | **F-86 [P2]**, **F-87 [P2]**, **F-88 [P2]** |
 | Cuts recorded | comment rate limiting; comment threading |

@@ -177,6 +177,52 @@ projects above 1% reach, and the best below 100% — and reach is *measured* by 
 helper rather than asserted from memory, because it is a property of the noise
 model and a transcribed figure is exactly the habit F-72…F-75 exist to prevent.
 
+### F-88 [P2] fixed - Multi-line `{# #}` template comments were RENDERING INTO THE PAGE. Nine of them, two shipped before this session
+
+**File:** `src/templates/{ballots/ballot,comments/thread,reviews/console,reviews/organizer_assignments}.html`
+**Found:** 2026-09-29, at FEAT-06 increment 6, **by reading an HTTP response
+rather than a template file**
+**Why it matters:** **Django's `{# ... #}` comment is SINGLE-LINE.** A
+`{#- ... -#}` that wraps is **not a comment at all** — the engine does not
+recognise the opening, so the whole block renders into the page as literal text,
+*and any `{{ }}` inside it is still evaluated* (the `{{ comment.body }}` came out
+as an empty pair of backticks). So a page was showing a visitor **its own
+template source**, implementation chatter and all.
+
+**Nine instances across four templates, and two of the four — `console.html` and
+`organizer_assignments.html` — predate this session.** They shipped at FEAT-04,
+so this was **already in the judged surface**: the judge console and the
+organizer's assignment plan have been printing their own source since before
+BREAK-2. Nothing in 479 tests, 77 mutations, the spec gate or `run.py` noticed,
+because a page that renders correctly *and* carries extra text satisfies every
+assertion in the suite.
+
+**The claim was EXECUTED, not recalled, and the executed answer contradicted the
+recalled one** — which is the whole point of the rule this project has now been
+hit by three times (F-11, F-79, and here):
+
+```
+multi-line comment -> 'A\n{#- line one\n   line two -#}\nB'   # rendered verbatim
+single-line comment -> 'A\n\nB'                                 # stripped
+```
+
+Nobody arrives at this believing otherwise — the blocks *read* as comments, they
+are indented like comments, and the `{#-` with its leading dash says "this is a
+comment" as loudly as syntax can. **The reason they were not is invisible from
+the file and obvious from the response**, which is why it took a `curl` to find.
+
+**Fixed** by converting all nine to `{% comment %}` blocks, which *do* span lines,
+and pinned by `test_no_template_comment_spans_a_line_break`, which enumerates the
+sites and names file and line. **Proved negative** by re-introducing one
+(`thread.html:21`, named in the failure), and the check's own regex is asserted
+against a known-bad and a known-good input so it is known to be able to say no.
+
+**The lesson, and it is the fourth time this shape has appeared:** a page that
+renders *correctly* and additionally carries text nobody asked for passes every
+assertion in the suite. The count that matters here is **the number of bytes the
+template engine emits that no test accounts for** — and the cheapest way to get at
+it is to read the response.
+
 ### F-86 [P2] fixed - The MODERATION QUEUE rendered comment bodies unescaped, and every escaping test was green
 
 **File:** `src/templates/comments/thread.html`, `tests/test_comments.py`

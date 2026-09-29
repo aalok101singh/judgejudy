@@ -16,9 +16,10 @@
       {{ progress.outstanding }} outstanding.
     </p>
 
-    {#- The scope receipt. bible/05 §6a: isolation you can read, not just isolation
-        you have. A receipt that is in the context but not in the markup is not a
-        receipt. -#}
+{% comment %}
+    The scope receipt. bible/05 §6a: isolation you can read, not just isolation you
+    have. A receipt that is in the context but not in the markup is not a receipt.
+    {% endcomment %}
     <p class="scope-receipt">
       <strong>Scope:</strong> {{ receipt.summary }}
       {% if receipt.constraints %}

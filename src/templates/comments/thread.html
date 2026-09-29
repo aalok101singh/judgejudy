@@ -18,18 +18,21 @@
     {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
     {% if posted %}
-      {#- The honest sentence. A comment is NOT published by posting it; it goes
-          into a moderation queue and a human decides. Saying "posted" without
-          saying that would be the kind of small lie this project keeps
-          forbidding. -#}
+{% comment %}
+      The honest sentence. A comment is NOT published by posting it; it goes into a
+      moderation queue and a human decides. Saying "posted" without saying that would be
+      the kind of small lie this project keeps forbidding.
+      {% endcomment %}
       <p class="saved">
         Received. Comments are held for moderation and appear once a human
         approves them, so yours is not public yet.
       </p>
     {% endif %}
 
-    {#- The thread. `{{ comment.body }}` has NO `|safe` and never will: the model
-        docstring, bible/07 P-4 and the tests all say the same thing. -#}
+{% comment %}
+    The thread. `{{ comment.body }}` has NO `|safe` and never will: the model docstring,
+    bible/07 P-4 and the tests all say the same thing.
+    {% endcomment %}
     <ol class="comments">
       {% for comment in comments %}
         <li class="comment" id="comment-{{ comment.pk }}">
@@ -44,9 +47,11 @@
       {% endfor %}
     </ol>
 
-    {#- The moderation queue is an ORGANIZER affordance and it is rendered on the
-        same page, so a moderator does not need a second screen to do the job the
-        schema says exists. It is the only place pending/hidden comments appear. -#}
+{% comment %}
+    The moderation queue is an ORGANIZER affordance and it is rendered on the same page,
+    so a moderator does not need a second screen to do the job the schema says exists.
+    It is the only place pending/hidden comments appear.
+    {% endcomment %}
     {% if queue %}
       <h2>Moderation queue ({{ queue|length }} waiting)</h2>
       <ul class="comments comments--queue">

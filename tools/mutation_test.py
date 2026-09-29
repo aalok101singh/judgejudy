@@ -1500,6 +1500,30 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    (
+        "src/templates/comments/thread.html",
+        "{% comment %}",
+        "{#- an opener that never closes on its line",
+        "F-88: Django's {# hash-brace comment is SINGLE-LINE, so an opener that does "
+        "not close on its own line is not a comment -- it renders into the page as "
+        "literal template source, with any {{ }} inside it still evaluated. Nine shipped "
+        "across four templates, two of them since FEAT-04, so the judge console and the "
+        "assignment plan have been printing their own source. Nothing in the suite "
+        "notices, because a page that renders correctly AND carries extra text satisfies "
+        "every assertion. This is a TEMPLATE edit on purpose: every other mutation in "
+        "this file corrupts .py, and a gate that only ever corrupts .py will not notice a "
+        "broken .html. NOTE the replacement contains no closing hash-brace on purpose: an "
+        "earlier version of this entry put one in its own text, which made the mutation "
+        "a no-op that the harness correctly reported as undetectable.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_comments.py::TestTheBodyIsNeverMarkup"
+            "::test_no_template_comment_spans_a_line_break",
+            "-q",
+        ],
+    ),
 ]
 
 
