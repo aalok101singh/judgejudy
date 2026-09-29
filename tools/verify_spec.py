@@ -497,6 +497,96 @@ def _commands_named_in(body: str) -> set[str]:
     return found
 
 
+def check_no_quoted_self_count(r):
+    """No artefact may quote how many checks *this program* runs. **F-72.**
+
+    **The defect.** ``AGENTS.md`` said ``verify_spec.py`` has "67 checks", the
+    ``justfile`` said the same in the banner of the one gate a reviewer runs,
+    and the program printed **68/68**. So the header of THE GATE misstated the
+    gate's own size, and ``AGENTS.md`` contradicted itself two hundred lines
+    from the contradiction. It survived because nothing checks a *number quoted
+    about a command* -- which is the gap F-67 named and left open.
+
+    **The repair is subtraction, not correction.** Retyping 67 as 68 would leave
+    a hand-typed count one edit from rotting again, which is the defect, not the
+    fix. The number is now *un-typable* in the three live sites: the banner
+    points at the program's own tally, and the two documents say the same.
+
+    **What is left to check is that nobody types it back.** So this asserts the
+    absence of a count rather than its agreement with one -- an absent number
+    cannot go stale, and the check needs no knowledge of the true total, which
+    would otherwise be self-referential (adding this check changes the count it
+    would have to compare against).
+
+    **False positives are handled by subject, not by an allow-list.** ``run.py``
+    really does have 7 checks, and five lines in these files say so correctly
+    ("all 7 checks PASS", "7 checks: 3x T1, 4x T2"). So a line is only judged
+    when it is about the *spec layer* **and** about *checks* -- two facts about
+    the line, not an English word list. The second is what stops the banner
+    ``1/6  spec layer (no Docker)``, where "1/6" is a step fraction rather than
+    a count, and it is the same discipline ``check_recipes`` uses for commands.
+
+    **The limit of this check, stated rather than hidden.** The subject test is
+    per line, so a count split across a line break ("verify_spec.py has 67" /
+    "checks, no Docker") would escape it. F-59's command check has the same
+    per-line property and was accepted with it. A paragraph-level test would be
+    tighter and would also start flagging prose that mentions both checkers in
+    one breath, which is the F-59 lesson about allow-lists arriving one level
+    down. **A check that reports its own blind spot is worth more than one that
+    silently has it.**
+    """
+    g = "5. SPEC INTEGRITY — citations, ledger, budget, question tally"
+
+    # a count of checks. The lookbehind drops "7 of 7 checks", which is how the
+    # acceptance tally is written and is about run.py, not about this program.
+    bare = re.compile(r"(?<!of )\b\d+\s*checks?\b")
+    # the same count in the justfile's own prose about its own output
+    lines = re.compile(r"\b\d+\s+passing\s+lines?\b")
+    # a pass tally that names the spec layer, in either order
+    tally = re.compile(r"\b(\d+)\s*/\s*(\d+)\s+spec\b|\bspec\b[^|\n]{0,6}\b(\d+)\s*/\s*(\d+)")
+    # the two subject tests: the spec layer, and checks
+    spec_subject = re.compile(r"\bspec\b|verify_spec", re.I)
+    check_subject = re.compile(r"\bchecks?\b", re.I)
+
+    def _is_tally(m):
+        """A check tally is N-of-M with M at or just above N (68/68, 67/69).
+
+        This is what tells ``1/6  spec layer`` -- the step counter in the banner
+        of the very recipe this check polices -- apart from ``68/68 spec``. A
+        step index is never within two of its step count; a count of checks
+        that mostly pass always is.
+        """
+        num = m.group(1) or m.group(3)
+        den = m.group(2) or m.group(4)
+        return int(den) - int(num) <= 2
+
+    sites = ["justfile", "AGENTS.md", "blueprint/context/project-overview.md"]
+    offenders = []
+    for rel in sites:
+        try:
+            body = read(rel)
+        except OSError:
+            offenders.append("%s (unreadable)" % rel)
+            continue
+        for i, line in enumerate(body.splitlines(), 1):
+            if not (spec_subject.search(line) and check_subject.search(line)):
+                continue
+            hit = None
+            for pat, needs_tally in ((bare, False), (lines, False), (tally, True)):
+                m = pat.search(line)
+                if m and (not needs_tally or _is_tally(m)):
+                    hit = m.group(0).strip()
+                    break
+            if hit:
+                offenders.append("%s:%d  %r" % (rel, i, hit))
+
+    r.check(g, "no artefact quotes this gate's own check count", not offenders,
+            "0 quoted counts in %s" % ", ".join(sites),
+            offenders or "0 quoted counts - the number is un-typable, F-72",
+            "F-72: the banner of 'just check' said 67 while the gate printed 68/68. "
+            "A count typed beside a command is a count that rots; make it un-typable.")
+
+
 def check_structure(r):
     g = "5. SPEC INTEGRITY — citations, ledger, budget, question tally"
 
@@ -598,6 +688,22 @@ def check_structure(r):
              "Re-derive, do not transcribe. The ledger is the source of truth.")
         r.eq(g, "%s open-blocking count" % os.path.basename(rel), real_blocking, blocking,
              "An open P0/P1 blocks a feature from being marked done.")
+
+        # **F-74.** The printed breakdown has to add up to the printed total.
+        # The tally regex above only reached the total and the open-blocking
+        # count, so a breakdown summing to something *other* than its own total
+        # passed. A reader who adds the parts and does not get the total learns
+        # not to trust the line -- which is the whole value of a tally.
+        line = body[m.start():body.index("\n", m.start())]
+        buckets = re.findall(
+            r"(\d+)\s+(open\s+blocking|open|unverified|accepted|closed|fixed|invalid)\b",
+            line)
+        itemised = sum(int(n) for n, _ in buckets)
+        r.eq(g, "%s tally breakdown sums to its total" % os.path.basename(rel),
+             itemised, claimed_total,
+             "F-74: the parts summed to %d against a stated total of %d, and no check "
+             "added them up. A tally whose parts do not sum teaches the reader to "
+             "skip the tally." % (itemised, claimed_total))
 
     # question tally must be closed
     dq = read("bible/DISCORD-QUESTIONS.md")
@@ -793,6 +899,7 @@ def main():
     check_census(r, data)
     check_clock(r)
     check_recipes(r)
+    check_no_quoted_self_count(r)
     check_structure(r)
     if args.env:
         check_env(r)

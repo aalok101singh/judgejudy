@@ -12,7 +12,7 @@ order. It is short on purpose.
 
 | # | File | Bytes | When |
 |---|---|---|---|
-| 1 | **`blueprint/context/project-overview.md** | **19,934** | **Always. This is the whole project in one load.** |
+| 1 | **`blueprint/context/project-overview.md** | **19,948** | **Always. This is the whole project in one load.** |
 | 2 | `blueprint/context/current-feature.md` | — | Find the in-flight scope. Exactly one. |
 | 3 | `blueprint/context/findings.md` | — | What is known broken, and what was chosen not to fix. Check anything touching the files you are about to touch. |
 | 4 | `blueprint/context/ai-interaction.md` | — | How to work here. Read once per session. |
@@ -110,7 +110,7 @@ Full reasoning: `blueprint/context/project-overview.md` §4 and §6.
 ## Verify
 
 ```bash
-python tools/verify_spec.py   # the spec layer vs the organizers' files — 67 checks
+python tools/verify_spec.py   # the spec layer vs the organizers' files — prints its own check count
 just check                    # the application — clean down -v, up, run.py, proofs, pytest
 ```
 
@@ -147,13 +147,14 @@ engine with its min-cut certificate, the judge console, the scoped score
 endpoint and the CSV export are in place, and **`run.py` prints
 `claimed T1, verified T1 T2` with all 7 checks PASS.** T2 is **earned and not
 yet claimed** — the claim is made at BREAK-2, by the human, in writing. Next:
-**FEAT-06** — the public surface: voting, comments, ballot order, the influence
-report.
+**FEAT-06** — the influence report is built and verified; **the bias-attack
+harness**, ballot order, voting and comments are not.
 
 | | |
 |---|---|
-| Findings | **70** — **0 open blocking, 0 open**, 1 unverified (F-27), 10 accepted by decision, 47 closed |
+| Findings | **77** — **0 open blocking**, 0 open, 6 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 60 closed |
 | Acceptance | **T1 and T2 green** — **7 of 7 checks pass**, `claimed T1, verified T1 T2`. The `verified` ceiling is arithmetic in `run.py`, not a gap: there are no T3 or T4 checks at all |
-| Suite | **374 tests**, 44/44 mutations, 68/68 spec checks |
-| Container | cold start **12–20 s** observed 2026-09-29 against the 60 s budget (a range, not a value — F-68); `prove-offline` passes |
+| Suite | **428 tests**, 59/59 mutations, spec layer green (it prints its own tally) |
+| Container | cold start **11.8–20 s** observed 2026-09-29 against the 60 s budget (a range, not a value — F-68); `prove-offline` passes |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
+

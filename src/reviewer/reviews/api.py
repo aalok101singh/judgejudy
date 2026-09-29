@@ -46,17 +46,24 @@ survives a green run and lies in the one message a human reads.
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
+import logging
 
 from django.http import HttpResponse
 from django.views.decorators.http import require_http_methods
 
 from reviewer.accounts.models import User
+from reviewer.audit import chain as audit_chain
+from reviewer.ballots import influence as influence_module
 from reviewer.isolation import Actor
 from reviewer.isolation.refusal import REFUSED_BY_HEADER, deny
 from reviewer.isolation.scope import DECISION_DENY
+from reviewer.reviews import results as results_module
 from reviewer.reviews.models import REVIEW_SUBMITTED, Review
+
+logger = logging.getLogger(__name__)
 
 #: The reason strings a refusal carries. They are ``module.function`` so a probe,
 #: a log line and a test can all name the same guard, which is the whole point of
@@ -65,6 +72,9 @@ from reviewer.reviews.models import REVIEW_SUBMITTED, Review
 REFUSED_BY_ROLE = "api.judge_scores.role"
 REFUSED_BY_SUBJECT = "api.judge_scores.peer_scope"
 REFUSED_BY_EXPORT = "api.export.role"
+REFUSED_BY_RESULTS = "api.results.hidden"
+REFUSED_BY_AUDIT = "api.audit.role"
+REFUSED_BY_INFLUENCE = "api.influence.role"
 BAD_SUBJECT = "api.judge_scores.unknown_subject"
 
 
@@ -75,6 +85,47 @@ def _json(payload: dict, *, status: int = 200) -> HttpResponse:
         status=status,
     )
     return response
+
+
+def _log_denial(event, actor, request, object_id: str, guard: str) -> None:
+    """Record a refusal in the chain.
+
+    **Denials are logged because "who tried" is a first-class question.** A run of
+    refused peer-score requests is exactly the signal a security-minded organizer
+    wants, and the model's own docstring says so. The IP is stored **hashed**, never
+    raw, so the entry can correlate a burst without becoming a location log -- the
+    same trade ``reviewer.ballots`` makes.
+
+    **A failure to log must not turn a refusal into a 500.** The refusal is the
+    correct answer and the caller must still get it, so the whole body is guarded
+    and the worst case is a trail with a gap -- which ``omitted_since_prev``
+    exists to make disclosable rather than ambiguous. The failure is *reported*
+    rather than swallowed, so a reviewer reading the logs can see that the trail
+    dropped something instead of believing it is complete.
+
+    **A seeded event's chain contains `denied` entries with no actor, and that is
+    not noise.** `tools/run_acceptance.py`'s route-existence preconditions
+    deliberately send **no credential** -- they are asking "is this URL routed at
+    all", and attaching a role would make them answer a different question (F-42).
+    So the portal refuses them, and refusing an anonymous request to a protected
+    route is exactly the event an organizer wants in the trail. The first run of
+    this feature produced a chain whose entries 4 and 5 were the gate's own
+    probes; that is the refusal contract working, recorded honestly rather than
+    filtered out for tidiness.
+    """
+    try:
+        raw = request.META.get("REMOTE_ADDR", "") or ""
+        audit_chain.append(
+            event,
+            audit_chain.ACTION_DENIED,
+            actor=actor.user if actor is not None else None,
+            object_type="request",
+            object_id=object_id,
+            after={"guard": guard},
+            ip_hash=hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32] if raw else "",
+        )
+    except Exception as exc:  # pragma: no cover - the trail is best-effort by design
+        logger.warning("audit append failed for %s: %s: %s", object_id, type(exc).__name__, exc)
 
 
 def _review_label(review) -> str:
@@ -248,7 +299,9 @@ def judge_scores(request, event) -> HttpResponse:
 
     # The branch is on the DECISION, never on emptiness. See the module docstring.
     if qs.scope.decision == DECISION_DENY:
-        return deny(REFUSED_BY_SUBJECT if subject is not None else REFUSED_BY_ROLE)
+        guard = REFUSED_BY_SUBJECT if subject is not None else REFUSED_BY_ROLE
+        _log_denial(event, actor, request, f"judge/scores?judge={raw_subject or '-'}", guard)
+        return deny(guard)
 
     receipt = qs.scope.with_counts(qs.count(), qs.scope_total_count())
     return _json(
@@ -298,6 +351,7 @@ def csv_export(request, event) -> HttpResponse:
     """
     actor = Actor.for_request(request, event)
     if not actor.can_read_all_reviews:
+        _log_denial(event, actor, request, "export.csv", REFUSED_BY_EXPORT)
         return deny(REFUSED_BY_EXPORT)
 
     qs = Review.objects.for_actor(actor).select_related(
@@ -321,11 +375,31 @@ def csv_export(request, event) -> HttpResponse:
             *(criterion.key for criterion in criteria),
         ]
     )
-    for row in _export_rows(qs, criteria):
+    rows = _export_rows(qs, criteria)
+    for row in rows:
         writer.writerow(row)
 
     response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="judges-scores.csv"'
+
+    # The audit trail records the EXPORT, not just the denial -- a bulk read of
+    # every score in the event is the single action an organizer most needs to be
+    # able to answer for. `scope_reason` is the receipt, so the entry answers
+    # "what was this actor able to see" as well as "what did they do".
+    #
+    # `with_counts` rather than the bare `Scope`: the receipt is only useful with
+    # the numbers, and `as_dict` lives on the counted form. Same object the
+    # response body already renders, so the two cannot disagree.
+    receipt = qs.scope.with_counts(qs.count(), qs.scope_total_count())
+    audit_chain.append(
+        event,
+        audit_chain.ACTION_EXPORT_RUN,
+        actor=actor.user,
+        object_type="event",
+        object_id=event.pk,
+        after={"rows": len(rows), "columns": [c.key for c in criteria]},
+        scope_reason=receipt.as_dict(),
+    )
     return response
 
 
@@ -383,12 +457,148 @@ def _export_rows(qs, criteria) -> list[list]:
     return rows
 
 
+# ---------------------------------------------------------------- the leaderboard
+
+
+@require_http_methods(["GET"])
+def results(request, event) -> HttpResponse:
+    """``/api/v1/results`` -- the ranking, when the actor is allowed to see one.
+
+    **Refused while results are hidden, for everyone but an organizer.** The
+    shipped fixture is born with ``results_state = hidden``, so on the demo data
+    this endpoint is a 403 for a judge, a participant and a visitor, and a 200
+    for an organizer. That is the ``aggregate`` cell of the isolation matrix and
+    it is the one its own docstring called "nobody tests and everybody forgets".
+
+    **Why the refusal matters more here than anywhere else on the portal.** A
+    judge browsing their own reviews sees only their own; there is nothing to
+    infer. A judge reading a *ranking* can infer what other judges scored, and
+    the score they are about to give stops being their own. This is the one
+    capability where "scoped to your own rows" is the wrong frame, because the
+    rows are not the leak -- the ordering is.
+    """
+    actor = Actor.for_request(request, event)
+    if not results_module.results_visible_to(actor):
+        return deny(REFUSED_BY_RESULTS)
+
+    board = results_module.leaderboard(actor)
+    return _json(
+        {
+            "actor": {"label": actor.label, "roles": sorted(actor.roles)},
+            "results_state": event.results_state,
+            "normalization": results_module.NORMALIZATION,
+            "count": len(board),
+            "ranking": board,
+        }
+    )
+
+
+# ------------------------------------------------------------------ the audit view
+
+
+@require_http_methods(["GET"])
+def audit(request, event) -> HttpResponse:
+    """``/api/v1/audit`` -- the chain, its head, and whether it verifies.
+
+    **Organizer and admin only.** There is no honest per-actor slice of an audit
+    trail: a judge asking for their own history would get a trail with gaps where
+    other people's actions were, and a gap in an audit trail is exactly what
+    ``omitted_since_prev`` exists to stop being ambiguous. All or nothing.
+
+    The verification result is part of the response rather than a separate
+    command, because **a reader who has to run a second tool to find out whether
+    the trail they were shown is intact will not run it.**
+    """
+    actor = Actor.for_request(request, event)
+    entries, permitted = audit_chain.for_actor(actor)
+    if not permitted:
+        return deny(REFUSED_BY_AUDIT)
+
+    problems = audit_chain.verify_chain(event)
+    return _json(
+        {
+            "count": len(entries),
+            "chain_head": audit_chain.AuditEntry.chain_head(event),
+            "verified": not problems,
+            "problems": problems,
+            "entries": [
+                {
+                    "seq": entry.seq,
+                    "action": entry.action,
+                    "actor": entry.actor.email if entry.actor_id else None,
+                    "object": f"{entry.object_type}:{entry.object_id}".strip(":"),
+                    "at": entry.created_at.isoformat(),
+                    "entry_hash": entry.entry_hash,
+                    "prev_hash": entry.prev_hash,
+                    "omitted_since_prev": entry.omitted_since_prev,
+                }
+                for entry in entries
+            ],
+        }
+    )
+
+
+# ------------------------------------------------------------ the influence report
+
+
+@require_http_methods(["GET"])
+def influence(request, event) -> HttpResponse:
+    """``/api/v1/influence`` -- the anti-abuse report, before publication (D-13).
+
+    **Readable while the leaderboard is refused, and that asymmetry is the point.**
+    ``/api/v1/results`` is a 403 for everyone but an organizer until
+    ``results_state`` is published, because a ranking during judging lets a judge
+    infer what other judges are scoring. This endpoint is about *concentration*,
+    not about the outcome, and the organizer has to see it **before** deciding to
+    publish -- that is the whole value of a report over a mechanism. Refusing it
+    until after publication would make it a post-mortem.
+
+    **So the two endpoints answer different questions and are gated differently on
+    purpose**, and there is a test that pins the contrast: a judge is refused the
+    leaderboard *and* refused this, an organizer sees both, and the organizer sees
+    this one while results are still hidden. If a later change ever makes the two
+    share a guard, the report stops being able to do its job.
+
+    **The empty case is a 200 with an explicit ``no_votes`` reason, never a table
+    of zeros.** The shipped fixture has no votes, and forty-one rows of
+    ``gini 0.00`` would be F-61 for the fifth time: a structurally perfect report
+    saying nothing, indistinguishable from a clean one. ``report()`` returns
+    ``None`` and this view says so in a field whose name is the claim.
+    """
+    actor = Actor.for_request(request, event)
+    payload, permitted = influence_module.report_for_actor(actor)
+    if not permitted:
+        return deny(REFUSED_BY_INFLUENCE)
+
+    if payload is None:
+        return _json(
+            {
+                "status": "no_votes",
+                "reason": (
+                    "No ballots have been cast for this event, so there is no vote "
+                    "concentration to report. This is not a finding that no "
+                    "brigade exists."
+                ),
+                "method": influence_module.REPORT_METHOD,
+                "ranking": [],
+            }
+        )
+
+    return _json({"status": "ok", **payload})
+
+
 # Re-exported so a caller does not have to know which module owns the header name.
 __all__ = [
+    "REFUSED_BY_AUDIT",
     "REFUSED_BY_EXPORT",
     "REFUSED_BY_HEADER",
+    "REFUSED_BY_INFLUENCE",
+    "REFUSED_BY_RESULTS",
     "REFUSED_BY_ROLE",
     "REFUSED_BY_SUBJECT",
+    "audit",
     "csv_export",
+    "influence",
     "judge_scores",
+    "results",
 ]

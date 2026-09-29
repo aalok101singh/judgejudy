@@ -26,8 +26,8 @@ bulk-IO and signing layer, and the normalization proof.
 
 | | State |
 |---|---|
-| `docker compose up` → serving page | ✅ **12–20 s** from an empty volume, budget 60 s, observed 2026-09-29 (a range: two runs gave 12.1 s and 19.9 s on the same machine) |
-| Boots with `--network none` | ✅ **proved** — healthy at **8.2–9.1 s**, four probes pass |
+| `docker compose up` → serving page | ✅ **11.8–20 s** from an empty volume, budget 60 s, observed 2026-09-29 (a range: three runs gave 11.8 s, 12.1 s and 19.9 s on the same machine) |
+| Boots with `--network none` | ✅ **proved** — healthy at **7.9–9.1 s**, four probes pass |
 | Healthcheck from a clean volume | ✅ green |
 | **Acceptance: T1** (gallery public · fixture projects shown · closed event refuses) | ✅ **3 of 3 PASS** |
 | **Acceptance: T2** (judge sees own scores · peer refused · participant blocked · CSV export) | ✅ **4 of 4 PASS** — `run.py` prints `claimed T1, verified T1 T2` |

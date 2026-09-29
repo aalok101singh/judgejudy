@@ -71,6 +71,27 @@ def _csv_export(request):
     return api_views.csv_export(request, event)
 
 
+def _results(request):
+    event = current_event()
+    if event is None:
+        return api_views.deny(api_views.REFUSED_BY_RESULTS)
+    return api_views.results(request, event)
+
+
+def _audit(request):
+    event = current_event()
+    if event is None:
+        return api_views.deny(api_views.REFUSED_BY_AUDIT)
+    return api_views.audit(request, event)
+
+
+def _influence(request):
+    event = current_event()
+    if event is None:
+        return api_views.deny(api_views.REFUSED_BY_INFLUENCE)
+    return api_views.influence(request, event)
+
+
 urlpatterns = [
     # T1-1 and T1-2. Server-rendered, public, first page in FIXTURE ORDER --
     # `run.py` slices `projects[:3]` positionally, so the ordering is load
@@ -98,6 +119,18 @@ urlpatterns = [
     # checks want a 403. That is a false pass, not a red check.
     path("api/v1/judge/scores", _judge_scores, name="judge_scores"),
     path("api/v1/export.csv", _csv_export, name="csv_export"),
+    # The two capabilities the isolation matrix still printed `?` for, because at
+    # FEAT-05 they had neither an accessor nor a route. The leaderboard is the
+    # `aggregate` cell its own docstring called "nobody tests and everybody
+    # forgets", and the audit view is what makes the hash chain readable by a
+    # human rather than only by `verify_chain`.
+    path("api/v1/results", _results, name="results"),
+    path("api/v1/audit", _audit, name="audit"),
+    # D-13, the anti-abuse answer. Deliberately NOT gated on `results_state` the
+    # way `/api/v1/results` is: an organizer has to be able to see how
+    # concentrated the support is *before* deciding to publish, so gating it
+    # behind publication would turn a preventive report into a post-mortem.
+    path("api/v1/influence", _influence, name="influence"),
     # The healthcheck polls this. It must stay unauthenticated, cheap and
     # database-free -- see the docstring in judge_judy/views.py.
     path("healthz", views.healthz, name="healthz"),

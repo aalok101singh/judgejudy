@@ -117,8 +117,8 @@ doctor:
 spec:
     @python tools/verify_spec.py
 
-# Only the failures, because 67 passing lines is noise while editing and one
-# failing line is the entire message.
+# Only the failures, because a screen of passing lines is noise while editing
+# and one failing line is the entire message.
 #
 # The spec gate's failures, and nothing else.
 spec-quiet:
@@ -238,8 +238,9 @@ accept *args:
 # THE GATE. One command, from a clean volume, that proves a checkpoint.
 check:
     @echo "=========================================================="
-    @echo " 1/6  spec layer (67 checks, no Docker)"
+    @echo " 1/6  spec layer (no Docker). The check count is not quoted here on"
     @echo "=========================================================="
+    @echo "      purpose: verify_spec prints the count it actually ran -- F-72"
     @python tools/verify_spec.py -q || (echo "SPEC GATE FAILED" & exit /b 1)
     @echo ""
     @echo "=========================================================="

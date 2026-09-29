@@ -49,7 +49,352 @@ worth noticing rather than explaining away: this was the first feature that ran
 our code against the organizers' *data* instead of data we built, and the
 findings are almost all values that agreed with what we expected.
 
+## Resolved — found in FEAT-06, 2026-09-29 (in progress)
+
+*Seven findings. **Four were found by re-running Phase 0 on a tree nobody had
+touched** (F-72…F-75) and **two by the feature's own mutation harness and by
+running the report in the real container** (F-76, F-77) — not one by reading the
+code. **Five of the seven are about a number or a test that could not be
+trusted**, and the two newest are about a *fixture* that could not discriminate,
+which is the F-41 defect reached from the other direction. F-71, from the
+previous increment, is the seventh. The remaining FEAT-06 work — voting, ballot
+order, comments and the bias-attack harness — is not started.*
+
+### F-76 [P2] fixed - A metric I invented for the influence report was degenerate, and the synthetic attack scored it at exactly 1.0
+
+**File:** `src/reviewer/ballots/influence.py`, `tests/test_influence.py`
+**Found:** 2026-09-29, at FEAT-06, by running the report against a real brigade
+**Why it matters:** I shipped the report with a fourth detector called **lift** —
+first-preference share divided by voter share — on the reasoning that a project
+over-represented against its own base is the shape of a bloc vote. The synthetic
+attack scored it at **exactly 1.0**, and the reason is structural: **every voter
+casts exactly one first preference**, so `first_share == voter_share` whenever a
+project's backers are its first-preferencers, which is the overwhelmingly common
+case. It can only depart from 1 when people first-preference a project they do
+not back, which is not a brigade — it is a ballot display that disagrees with a
+vote.
+
+So it was a column that would have read as a real signal on **every row** of the
+report while carrying no information, and **`bible/06` §6.2`'s worked example is
+phrased in exactly those terms**, so a reader would have had no way to know.
+
+**This is D-04's lesson applied to abuse rather than to normalization.** D-04
+removed a tunable constant from the estimator because it was the largest exposure
+we had. A metric that is structurally constant is the same exposure wearing a
+decimal point, and it would have been the easiest thing in the report for a
+reviewer to attack — and the attack would have been *correct*, which is worse.
+
+**Resolution:** **Fixed 2026-09-29.** Cut. The report ships `bible/06` §6.2's
+actual four fields — distinct identities, first-preference share, vote-mass Gini,
+clustered identities — and the ranking is **clustered identities, then Gini, then
+first-preference share**, the three numbers that are each either a structural fact
+or a measurement. The docstring records *why* the cut happened and that the
+metric was measured rather than assumed, because the next session's obvious move
+is to add it back.
+
+**And it is pinned by a test**, which is the part that matters:
+`TestTheDegenerateMetricStaysCut` asserts no row carries a `lift` or
+`voter_share` key and that the method string does not advertise it. **A cut
+recorded only in a docstring is a cut that gets re-derived**, and the
+reasoning here is short enough to look re-derivable.
+
+**The generalisable lesson: a detector must be shown to *discriminate* before it
+ships, and the cheapest way to show that is to point it at a case it should
+report and one it should not.** The brigade was detected; the question I had not
+asked was whether anything *else* was.
+
+### F-77 [P2] fixed - The "organic control" in the influence tests was itself a brigade of nine, and a green suite did not notice
+
+**File:** `tests/test_influence.py`
+**Found:** 2026-09-29, at FEAT-06, by running `manage.py influence_report` in the container
+**Why it matters:** Every "organic" voter in the fixture backed **exactly one
+project at weight 1**. An identity is clustered by its *whole* vote vector, so
+nine such voters have byte-identical vectors — **the control was a brigade.** The
+report in the container duly printed `clustered 9` on every single row, which is
+the visual signature of a fixture that cannot distinguish its subject from its
+control.
+
+**The test suite was green throughout, and that is the finding.** No assertion
+ever said the organic rows *should not* be flagged, so nothing was checking the
+only thing that made the control a control. Every test in the file passed while
+the control was broken, including the acceptance clause itself. **Running the
+command in the real container is what showed it** — pytest never would have, and
+mutation testing never did either, because the code was correct and only the
+*scenario* was degenerate.
+
+**This is F-41 reached from the other direction.** F-41 is a test that cannot
+fail. This is a **fixture that cannot separate the case under test from its
+control** — the same defect wearing different clothes, and arguably worse,
+because a test that cannot fail at least occupies a slot a reader might question,
+while a fixture that cannot discriminate produces *green output that means
+nothing*.
+
+**Resolution:** **Fixed 2026-09-29.** `organic()` now gives each voter a distinct
+weight and a distinct set of distractor projects, so their vectors genuinely
+differ — which is also the realistic shape, since a real ballot ranks many
+projects and the one-project-per-voter version was never plausible. Verified in
+the container: the brigade reads `clustered 12` and every organic project reads
+`clustered 0`.
+
+**The missing assertion now exists and is the point of the class**:
+`test_the_organic_voters_are_not_also_flagged_as_a_brigade` asserts
+`clustered_identities == 0` on every control row, with a message that says the
+control is broken rather than the detector. **A fixture needs the same
+falsifiability discipline as the code it exercises**, and the cheapest check is
+to assert on the case you expect *not* to fire.
+
+### F-72 [P2] fixed - The banner of `just check` said the spec gate has 67 checks while the gate printed 68/68, and `AGENTS.md` contradicted itself about it
+
+**File:** `justfile` (`check` and `spec-quiet`), `AGENTS.md`, `tools/verify_spec.py`
+**Found:** 2026-09-29, at FEAT-06, by re-running Phase 0 on arrival
+**Why it matters:** `AGENTS.md` §Verify said `verify_spec.py` has **67 checks**.
+The `justfile`'s `check` recipe — the *banner* of the one command a reviewer
+runs — printed `1/6  spec layer (67 checks, no Docker)`. The program printed
+**68/68**. And `AGENTS.md` contradicted **itself**: line 113 said 67, line 157
+said `68/68 spec checks`.
+
+So the header of THE GATE misstated the gate's own size, on the same screen,
+two lines above the truth. This is **F-67 verbatim, one layer out**: F-67 was a
+number quoted about a command that no command could produce, and the fix then
+built the mutation targets — but F-67's own lesson said explicitly that *"every
+command named in a document exists"* is not *"every number quoted about a
+command can be re-derived"*, and **that second check was never written.** The
+count rotted the moment one check was added, which was F-59.
+
+**Resolution:** **Fixed 2026-09-29; awaiting review.** The repair is
+**subtraction, not correction** — retyping 67 as 68 would leave a hand-typed
+count one edit from rotting again, which is the defect rather than the fix. The
+number is now **un-typable** in all three live sites: the banner and the
+`spec-quiet` comment no longer quote a count, and both documents say the
+program prints its own tally.
+
+**A new check asserts the absence rather than the agreement,** which is what
+makes it immune to its own addition:
+
+```
+  no artefact quotes this gate's own check count                 PASS
+```
+
+`check_no_quoted_self_count` scans the justfile, `AGENTS.md` and the overview
+for a count that names the spec layer, and fails if it finds one. **It cannot
+be self-referential**: it asserts a number is *absent*, so adding the check
+does not change the thing it is checking, and it needs no knowledge of the true
+total. That is the general move for a self-describing gate.
+
+**The first run failed, which is the evidence the check is real** (F-44's
+repair is worth repeating verbatim: *"the test failed on the first run, which is
+the evidence that it is real"*). It caught `AGENTS.md` and the overview both
+still quoting the tally, **and two of its own false positives**, which is the
+part worth recording:
+
+* `1/6  spec layer` in the banner I had just rewritten — "1/6" is a **step
+  counter**, not a count. A check tally is *N-of-M with M at or just above N*
+  (68/68, 67/69); a step index never is, so `_is_tally` requires
+  `M - N <= 2` and the banner is exempt on a *numeric* fact rather than a
+  name in an allow-list.
+* `7 checks` on five lines that are all **correct** — they are `run.py`'s 7
+  acceptance checks, which we absolutely want to be able to say. The fix is a
+  **two-part subject test**: a line is judged only if it names the spec layer
+  *and* says "check". That is a fact about the line, the same discipline
+  `check_recipes` uses for commands, and F-59's lesson about English
+  allow-lists arriving one level down.
+
+**The check's own blind spot is written into its docstring rather than left for
+a reader to discover:** the subject test is per line, so a count split across a
+line break ("verify_spec.py has 67" / "checks, no Docker") would escape it.
+F-59's command check has the same per-line property and was accepted with it.
+A paragraph-level test would be tighter and would start flagging prose that
+mentions both checkers in one breath. **A check that reports its own blind spot
+is worth more than one that silently has it.**
+
+### F-73 [P2] fixed - The isolation proof's shipped footer pointed at `tests/test_results.py`, which does not exist
+
+**File:** `src/reviewer/reviews/management/commands/isolation_proof.py`, `tests/test_isolation_proof.py`
+**Found:** 2026-09-29, at FEAT-06, by reading the proof's output during Phase 0
+**Why it matters:** The proof's `STILL NOT PROVEN` footer tells the reader that
+the leaderboard predicate's own test lives in `tests/test_results.py`. **That
+file does not exist.** The tests are in `tests/test_results_and_audit.py` —
+the file the same feature created, and whose name the previous session evidently
+had in hand when it wrote the line.
+
+This matters more than a stale filename, because of *where* it is. The proof's
+output is the artefact a panelist reads to decide whether the isolation claims
+are real. A pointer to a file that is not there is worse than no pointer,
+because the reader who follows it concludes **the test does not exist** rather
+than **the name is stale** — and the honest answer, that a test does exist, is
+the one the defect hides. It is F-59 one medium out: a document that names a
+command has to be a command that can be typed, and this document is generated
+Python rather than Markdown, so F-59's recipe scan never saw it.
+
+**Resolution:** **Fixed 2026-09-29; awaiting review.** The footer names the real
+file, and a new test walks **every** `tests/*.py` path the output names and
+asserts it exists:
+
+```python
+    def test_every_test_file_it_names_actually_exists(self, seeded):
+        named = set(re.findall(r"tests/[\w/]+\.py", output))
+        assert named, "the proof named no test file, so this check proves nothing"
+```
+
+The check is general on purpose — the next renamed file is caught by shape, not
+by someone remembering to fix a string — and the `assert named` is the F-61
+guard: without it, a proof that named no file at all would pass vacuously,
+which is the trap this project has now paid four times.
+
+**The generalisable lesson: F-59 audits the Markdown and not the code, and
+anything a command *prints* is a document.** The audit was extended to the
+printed surface here, at the point of the one printed artefact that names a
+source path.
+
+### F-74 [P2] fixed - The findings tally's breakdown summed to 59 against its own stated total of 71, and no check added the parts up
+
+**File:** `AGENTS.md`, `blueprint/context/project-overview.md`, `tools/verify_spec.py`
+**Found:** 2026-09-29, at FEAT-06, by re-running Phase 0 and counting the ledger
+**Why it matters:** Both files print:
+
+```
+| Findings | **71** — **0 open blocking**, 0 open, 1 unverified (F-27),
+  10 accepted by decision, 48 closed |
+```
+
+and the parts sum to **59**, not 71. The true closed count is **60**: the
+ledger's summary table holds twelve early findings (F-01…F-12) that
+`verify_spec` folds into `closed`, and the printed "48" counts only the prose
+entries. So the tally was **wrong by twelve, in the direction that makes the
+ledger look worse than it is** — a P3-grade inaccuracy in the project's single
+most-cited statistic.
+
+**The check that should have caught it reached two numbers and stopped.**
+`verify_spec` compared the claimed *total* against the ledger and the claimed
+*open-blocking count* against the ledger, both correctly, and never summed the
+breakdown. This is F-28's rule in its purest form: **a census number that
+nobody derives from the census.** The total was derived; the breakdown beside it
+was typed, and nothing in the project added them up.
+
+**Resolution:** **Fixed 2026-09-29; awaiting review.** `48` → `60` in both
+files, and a new check asserts the invariant rather than the value:
+
+```
+  AGENTS.md tally breakdown sums to its total                        PASS
+  project-overview.md tally breakdown sums to its total             PASS
+```
+
+It extracts every `N <status>` bucket from the tally line and requires the sum
+to equal the total, so the next finding that moves between buckets cannot
+silently break the sum. **The lesson is the one F-58 already recorded and F-68
+then had to re-learn:** a number with no derivation path must not be printed
+next to a number that has one. The two sat three words apart and only one was
+checked.
+
+### F-75 [P3] fixed - The cold start was published as a 12–20 s range and measured 11.8 s, so the floor was wrong
+
+**File:** `AGENTS.md`, `README.md`
+**Found:** 2026-09-29, at FEAT-06, by `just coldstart` during Phase 0
+**Why it matters:** F-68 closed by replacing a single value with **a range and a
+budget** — *"a value is a claim a reader will check; a range is an admission."*
+**This is that lesson arriving one session later, and it is a lesson about the
+range itself: a range's endpoints are numbers too, and they were typed rather
+than derived.** The published floor was 12 s; the measurement is 11.8 s.
+
+The offset is 0.2 s and nothing is at risk — 11.8 s against a 60 s budget is a
+factor of five. What is at risk is the *document*, because a reader who reruns
+`just coldstart`, sees a figure outside the published interval, and concludes
+**the tool is broken**. That is the exact failure mode F-68 was filed for, and
+fixing the symptom while leaving the mechanism in place is what let it recur.
+
+**Resolution:** **Fixed 2026-09-29; awaiting review.** The range is now
+**11.8–20 s** in `AGENTS.md` and `README.md`, and the README names all three
+observations (11.8 s, 12.1 s, 19.9 s) rather than a representative pair.
+`tools/coldstart.py` remains the only place an exact figure appears, because it
+is the only place one is reproducible — F-68's resolution, unchanged.
+
+**There is no check here, and deliberately so.** A gate that re-measured the
+cold start would need Docker, would double the length of the gate, and would
+fail on machine noise rather than on a defect — a check that cries wolf is
+worse than none. The standing rule is the one already written: **publish the
+interval and the budget, and let the tool be the only source of a value.**
+
+### F-71 [P1] closed - The audit chain was schema-only: `AuditEntry.objects.count() == 0` on a fully seeded event, and the proof verified it was append-only without ever checking it existed
+
+**File:** `src/reviewer/audit/chain.py` (new), `src/reviewer/audit/models.py`,
+`src/reviewer/reviews/management/commands/isolation_proof.py`
+**Found:** 2026-09-29, at FEAT-06, by running the query instead of reading the model
+**Why it matters:** `AuditEntry` shipped at FEAT-02 with `seq`, `prev_hash`,
+`entry_hash` and `omitted_since_prev`, D-08 was decided at hour zero, and
+`manage.py isolation_proof` could already assert that the trail is append-only —
+`AuditQuerySet.update` and `.delete` both raise `TypeError`. **Nothing in the
+repository ever wrote a row.** Measured on a fully seeded event:
+
+```
+results_state     = hidden
+AuditEntry rows   = 0
+```
+
+So three separate things were true and none of them was visible:
+
+* the audit trail, which the brief's *Judging Integrity* criterion asks for as a
+  **"readable audit trail"**, contained nothing;
+* `verify_chain` returned **no problems** — because "verifies" over an empty
+  sequence is trivially true, and it is the most misleading PASS available;
+* the isolation matrix's `audit` column had two possible answers and both were
+  wrong. `0` reads as *"verified, and the answer is none"* — the exact option
+  the `UNPROVEN` constant's own docstring says not to use. And `?` forever means
+  the matrix never grows.
+
+**This is F-61 for the fourth time, in four different media:** a min-cut
+certificate naming no judges (F-61), a leaderboard that would have been refused
+for the wrong reason, a CSV column of 126 empty cells (F-69), and now a
+structurally perfect hash chain containing no links. The generalisation, and it
+is what FEAT-06 should be read as: **a capability that is schema and a permission
+is not a feature.** Every instance so far was a structure that could return the
+right shape while containing nothing, and every one was found by a test that
+asserted *content* rather than *shape*.
+
+**The specific blind spot, and it is the interesting half:** the proof
+**verified the trail's integrity without ever verifying its existence.** Those are
+independent claims and the command only made the first. A check that re-walks a
+chain is a check that a chain exists *and* is intact, and writing the first half
+is what made the second half look covered.
+
+**Resolution:** **Closed 2026-09-29.** `reviewer/audit/chain.py` is the writer and
+the verifier: `append()` is the only supported way to create an entry, it takes a
+row lock on the head so two concurrent appends cannot both claim a `seq`, and
+`verify_chain()` recomputes each digest **from the row's own contents** rather
+than re-reading the stored hash — so an in-place edit of `after` is caught, which
+is the one tamper a signed list would miss and the reason the hash covers the
+payload. `manage.py verify_audit` is the reviewer-facing command, and
+`_still_not_proven` now says the matrix reports *how many* entries exist while
+`verify_audit` re-walks the hashes.
+
+**The chain is now populated by real traffic.** After a `just check` run:
+
+```
+  entries       7
+  sequence      1..7
+  chain head    ba2931abf07424d731fb22ad02dc7cb15127f41e707ce1a2d9f632f839b5edae
+  CHAIN VERIFIED -- 7 entries re-walked, every entry hash recomputed.
+```
+
+Two of those seven are `denied` with **no actor**, and they are the gate's own
+route-existence probes: `tools/run_acceptance.py` sends no credential on purpose,
+because those preconditions ask "is this URL routed at all" and attaching a role
+would make them answer a different question (F-42). The portal refused them and
+logged it, which is the contract working. **It is recorded in `_log_denial`'s
+docstring so the next reader does not file it as a defect** — and the alternative,
+filtering our own probes out of the trail, would be a trail that hides who tried.
+
+**Three corruption checks, and the first two runs found a gap in the tests.** The
+sequence-gap check and the `prev_hash` link check could each be deleted with the
+suite green, because the tamper test asserted
+`any("is missing" in p or "prev_hash" in p ...)` — an `or` satisfied by whichever
+check survived. That is **F-41's defect in a new file**: an assertion that cannot
+distinguish the two defects it names, so it passes against half the implementation.
+There are now three separate tamper tests, and the third is the case that matters
+most: **a row inserted at the right `seq` renumbers nothing and leaves no gap, so
+only the link check can see it.**
+
 ## Resolved — found in FEAT-05, 2026-09-29
+
 
 *Five findings. **The one to read is F-70**, because it is the only one that was
 *invisible to every gate in the project and would still have shipped.*

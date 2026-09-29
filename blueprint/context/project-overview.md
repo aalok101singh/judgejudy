@@ -11,7 +11,8 @@ DOGFOOD 2026, built to be forked and run for a decade. Not a demo.
 **Status:** FEAT-01 to FEAT-05 built and verified; **`run.py` prints
 `claimed T1, verified T1 T2` with all 7 checks PASS.** T2 is **earned and not yet
 claimed** — the claim is made at BREAK-2, by the human, in writing. Next:
-**FEAT-06** — voting, comments, ballot order, the influence report.
+**FEAT-06** — the **influence report is built** (D-13); the **bias-attack
+harness**, ballot order, voting and comments are not.
 
 ---
 
@@ -178,7 +179,7 @@ FEAT-05 and still unclaimed**, which is the rule working rather than aspirationa
 ## 8. Verify — two gates, at different times
 
 ```bash
-python tools/verify_spec.py   # the plan vs the organizers' files. 68 checks. Runs NOW.
+python tools/verify_spec.py   # the plan vs the organizers' files. Prints its own count. Runs NOW.
 just check                    # the application. Needs Docker. Runs at every break.
 ```
 
@@ -268,34 +269,31 @@ shell still will not see it.
 ## 13. Current state
 
 **FEAT-01 to FEAT-05 built and verified; BREAK-2 is next and T2 is earned and
-unclaimed; FEAT-06 is the in-flight feature.** The narrative, the per-feature
+unclaimed; FEAT-06 is the in-flight feature**, and the **influence report is
+built** while the bias-attack harness is not. The narrative, the per-feature
 verification and the counts live in `AGENTS.md` §Current state,
 `context/current-feature.md` and `history/features/`.
 
 | | |
 |---|---|
-| Findings | **70** — **0 open blocking**, 0 open, 1 unverified (F-27), 10 accepted by decision, 47 closed |
+| Findings | **77** — **0 open blocking**, 0 open, 6 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 60 closed |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
-| Gate (FEAT-05) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **44/44** · spec **68/68** · **374 tests** · lint clean |
-
-| Next | **BREAK-2 ☕ T2** — tag `v-t2-verified`; the claim is made there, in writing |
+| Gate (FEAT-06) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **59/59** · spec layer green · **428 tests** · lint clean |
+| Next | **the bias-attack harness** — the acceptance line's remaining clause |
 
 **Two things that changed the shape of the project.**
 
 **FEAT-03 was the only feature that met genuinely new input** — the organizers'
 data rather than ours — and it opened **three P1s at once** (F-49, F-50, F-55).
-Every feature since has found its serious defect in *our own reasoning*, because
-the data was already loaded and verified twice. **The rate tracks how much new
-input meets the code**, so expect fewer findings, not fewer bugs.
+Every feature since has found its serious defect in *our own reasoning* or *our
+own documents*. **The rate tracks how much new input meets the code**, so expect
+fewer findings, not fewer bugs.
 
-**And the same defect has appeared three times in three media: a feature
-returning structurally valid output containing nothing.** A min-cut certificate
-naming no judges (F-61). A leaderboard refused for the wrong reason. And the CSV
-export's first column — **126 empty cells**, because `Review` inherits
-`source_key` from D-11 and the loader never writes it (F-69): a perfect-looking
-export, correct header, 200 from the checker.
-
-**The rule for FEAT-06 is the one the third instance earned: assert values, not
-shapes.** The test that missed the empty column asserted the CSV *header* — a
-test that asserts the header is testing the header. What caught it asserted every
-*cell* against the database.
+**And the same defect has now appeared FIVE times in five media: a feature
+returning structurally valid output containing nothing** — a min-cut certificate
+naming no judges (F-61), 126 empty export cells (F-69), an audit chain with
+`count() == 0` (F-71), and at FEAT-06 a **structurally constant metric that read
+as a detector** (F-76) and a **fixture whose control was itself a brigade**
+(F-77). **The rule: assert values, not shapes — and assert that a control does
+not fire.** A fixture that cannot separate its subject from its control produces
+green output that means nothing.

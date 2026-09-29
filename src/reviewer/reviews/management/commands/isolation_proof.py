@@ -82,15 +82,24 @@ ROLE_STRENGTH = {
 #: zero would read as "verified, and the answer is none".
 UNPROVEN = "?"
 
+#: What a cell prints when the actor is **refused** the capability. Distinct from
+#: both ``UNPROVEN`` (not built) and a zero count (permitted, nothing to see), and
+#: it is the third of the three that the project's own working rules insist on:
+#: "a denied request is a refusal, not a filter".
+REFUSED = "refused"
+
 #: Where each column's number comes from, printed under the table. A cell whose
-#: provenance is not written down is a cell a reader has to take on trust.
+#: provenance is not written down is a cell a reader has to take on trust -- so
+#: these name the *function*, not the feature that shipped it. The last three
+#: changed from "FEAT-05 --" at FEAT-06, when the accessors and routes behind them
+#: actually existed.
 CAPABILITY_SOURCES = {
     "own": "Review.objects.for_actor(actor)",
     "peer": "Review.objects.for_actor_and_subject(actor, someone else)",
     "cross-track": "the actor's scope, restricted to tracks they are not bound to",
-    "aggregate": "FEAT-04/FEAT-05 -- a leaderboard over a scoped Review set",
-    "export": "FEAT-05 -- the CSV export and its own permission",
-    "audit": "FEAT-05 -- the audit view and its own permission",
+    "aggregate": "results.results_visible_to(actor) then results.leaderboard(actor)",
+    "export": "actor.can_read_all_reviews then Review.objects.for_actor(actor)",
+    "audit": "audit.chain.for_actor(actor) -- organizer and admin only",
 }
 
 
@@ -213,9 +222,11 @@ class Command(BaseCommand):
 
         self.stdout.write(f"mode: MATRIX -- event {event_id}, {total} reviews")
         self.stdout.write("")
-        self.stdout.write("  Each cell is ROWS VISIBLE of TOTAL for that capability.")
-        self.stdout.write("  A `?` is a cell with no accessor and no route yet: it is not")
-        self.stdout.write("  proven, and is printed as a question rather than a guess.")
+        self.stdout.write("  Each cell is ROWS VISIBLE of TOTAL for that capability, or")
+        self.stdout.write("  the word `refused` where the actor may not have the capability at")
+        self.stdout.write("  all. A `?` is a cell with no accessor and no route yet: it is not")
+        self.stdout.write("  proven, and is printed as a question rather than a guess. A zero")
+        self.stdout.write("  is neither -- it is a real count of rows a permitted actor may see.")
         self.stdout.write("")
 
         header = f"  {'actor':<12}" + "".join(f"{c:>13}" for c in CAPABILITIES)
@@ -235,17 +246,30 @@ class Command(BaseCommand):
         self.stdout.write("  Location header. It is asserted on /projects/new by")
         self.stdout.write("  tests/test_denial_contract.py, which sends the identical request with")
         self.stdout.write("  the window open (201) and closed (403 naming")
-        self.stdout.write("  assert_open_for_submission). The judge-scores refusals arrive with")
-        self.stdout.write("  those routes in FEAT-05, and until then this matrix does not claim")
-        self.stdout.write("  to have exercised them.")
+        self.stdout.write("  assert_open_for_submission), and on the four API refusals by")
+        self.stdout.write("  tests/test_api.py, which asserts the status, the EMPTY body, the")
+        self.stdout.write("  absence of Location and the guard name in X-Refused-By separately.")
+        self.stdout.write("")
+        self.stdout.write("  `refused` is a cell, not a zero. A 0 would read as 'verified, and")
+        self.stdout.write("  the answer is none'; these rows are refused and there is something")
+        self.stdout.write("  they may not see. That is the same distinction the API makes, and")
+        self.stdout.write("  printing a number here would hide it.")
 
     def _cells(self, actor, total: int, peer) -> list[str]:
-        """The six cells for one actor, as real counts or `?`.
+        """The six cells for one actor, as real counts, ``refused``, or `?`.
 
-        Three of the six are computable from the primitive alone. The other three
-        need an accessor and a route that do not exist yet, and they print `?`.
-        Printing a plausible value there would be the F-40 shape inside our own
-        proof: a cell that looks decided and is not.
+        **A refusal is printed as the word ``refused``, never as a zero.** This is
+        the `UNPROVEN` docstring's own point applied to the three columns that now
+        exist: ``0/41`` in the aggregate column would read as *"verified, and there
+        are no projects"*, and it would be a lie -- there are 41, and this actor may
+        not see the ranking of them. "You may not" and "there is nothing here" are
+        different answers, and a matrix that cannot express the first is not
+        evidence of anything.
+
+        The three columns that used to print `?` are computed now, and each is a
+        real call into the accessor and the route it names. A cell whose provenance
+        is not written down is a cell a reader has to take on trust, so
+        ``CAPABILITY_SOURCES`` names the function, not the feature.
         """
         own = Review.objects.for_actor(actor)
         own_count = own.count()
@@ -270,10 +294,46 @@ class Command(BaseCommand):
             f"{own_count}/{total}",
             f"{peer_count}/{total}",
             f"{cross}/{total}",
-            UNPROVEN,
-            UNPROVEN,
-            UNPROVEN,
+            self._aggregate_cell(actor, total),
+            self._export_cell(actor, total),
+            self._audit_cell(actor),
         ]
+
+    def _aggregate_cell(self, actor, total: int) -> str:
+        """The ranking, and whether this actor may see one at all.
+
+        **The refusal is the interesting number.** On the shipped fixture
+        ``results_state`` is ``hidden``, so a judge, a participant and a visitor
+        are all refused a leaderboard while an organizer sees the whole event.
+        That is the cell ``isolation_proof`` has been naming as "the aggregate cell
+        nobody tests and everybody forgets" since FEAT-02.
+        """
+        from reviewer.reviews import results as results_module
+
+        if not results_module.results_visible_to(actor):
+            return REFUSED
+        projects = len(results_module.leaderboard(actor))
+        return f"{projects}/{total}"
+
+    def _export_cell(self, actor, total: int) -> str:
+        """The CSV export, which is organizer/admin only and refused to the rest."""
+        if not actor.can_read_all_reviews:
+            return REFUSED
+        return f"{Review.objects.for_actor(actor).count()}/{total}"
+
+    def _audit_cell(self, actor) -> str:
+        """The chain, for an organizer -- or ``refused``, which is the other four rows.
+
+        The denominator is the chain itself rather than the review count, because
+        the two populations are unrelated: an export is one row per review, an
+        audit entry is one row per *action*.
+        """
+        from reviewer.audit import chain as audit_chain
+
+        entries, permitted = audit_chain.for_actor(actor)
+        if not permitted:
+            return REFUSED
+        return f"{len(entries)} entries"
 
     # ------------------------------------------------------------------ checks
 
@@ -505,10 +565,16 @@ class Command(BaseCommand):
         with_data = bool(Review.objects.exists())
         if with_data:
             return [
-                "the aggregate, export and audit columns -- they print `?` because no "
-                "accessor and no route exist for them yet (FEAT-04/FEAT-05)",
-                "that a judge is refused the LEADERBOARD while judging is open, which "
-                "is the aggregate cell nobody tests and everybody forgets",
+                "that a judge is refused the LEADERBOARD while results are hidden -- "
+                "this matrix now SHOWS that refusal, but 'refused' is a claim this "
+                "command makes about a predicate, and the predicate's own test is "
+                "in tests/test_results_and_audit.py",
+                "that the audit chain is INTACT rather than merely present -- the "
+                "matrix reports how many entries exist; `manage.py verify_audit` "
+                "re-walks the hashes",
+                "the normalization the ranking does NOT apply -- the aggregate is "
+                "an unnormalized weighted mean, and judge-severity correction is "
+                "FEAT-08",
                 "that no view reaches an unscoped Review -- enforced by the syntactic "
                 "lint rule (`just lint`), which is a separate gate",
             ]

@@ -40,7 +40,31 @@ F-40, in the layer F-40's own repair was written for.
   column was 126 empty cells until a test that checks every cell caught it. The
   export falls back to the `(judge, project)` natural key. Populating the column
   belongs to FEAT-07, which owns `source_key` and the byte-identical round trip.
-- **44/44 mutations**, 374 tests, 68/68 spec, lint clean.
+
+### What THIS session did: a clean Phase 0, and four wrong numbers
+
+**Every gate was green and four written figures were not.** That is the headline
+and it is F-67's lesson paid in full: a number attached to a *command* is as
+load-bearing as one attached to the fixture, and until this session no check
+derived any of them. The application code did not change. The words around it did.
+
+| Finding | What was wrong | Repair |
+|---|---|---|
+| **F-72** [P2] | `just check`'s **banner** and `AGENTS.md` said the spec gate has **67** checks; it prints **68/68** | number made **un-typable**; a new check asserts no artefact quotes it |
+| **F-73** [P2] | the isolation proof's shipped footer pointed at `tests/test_results.py`, which does not exist | footer corrected; a new test asserts **every** `tests/*.py` the proof names exists |
+| **F-74** [P2] | the findings tally's breakdown summed to **59** against a stated total of **71**; closed was really **60** | `48`→`60`; a new check asserts the breakdown **sums to its total** |
+| **F-75** [P3] | cold start published as **12–20 s**, measured **11.8 s** — the floor was wrong | range widened to **11.8–20 s**; F-68's lesson, one session on |
+
+**Two of the three new checks failed on their first run**, which is the evidence
+they are real, and **each negative was then proved by breaking the document on
+purpose** (`55 closed` fails the sum; re-typing `68/68 spec` fails the count).
+Neither is self-referential: both assert a *property* (parts sum; no number
+quoted), not an agreement with a value, so adding them could not break them.
+
+**Nothing in the application changed and nothing needed to.** F-71's audit chain
+reproduced **exactly** on a clean `just check` — 7 entries, sequence 1..7, head
+`ba2931ab…`, CHAIN VERIFIED — which is the strongest confirmation in this
+ledger that a *generated* number is reproducible and a typed one is not.
 
 ### FEAT-06 scope
 
@@ -48,36 +72,117 @@ F-40, in the layer F-40's own repair was written for.
 a bias-attack harness shows the estimator is zero-mean under position bias; the
 influence report renders for a synthetic attack.
 
+### What is built so far, and what is not
+
+**Done in FEAT-06 — the three `?` columns of the isolation matrix, and now the
+influence report (increment 2).**
+
+| Column | Now | How |
+|---|---|---|
+| `aggregate` | `41/126` organizer, **`refused`** for judge/participant/visitor | `results.results_visible_to(actor)` → `results.leaderboard(actor)`, at `/api/v1/results` |
+| `export` | `126/126` organizer, **`refused`** for the rest | `actor.can_read_all_reviews` → `for_actor(actor)`, at `/api/v1/export.csv` |
+| `audit` | `7 entries` organizer, **`refused`** for the rest | `audit.chain.for_actor(actor)`, at `/api/v1/audit` |
+
+**A cell prints the word `refused`, never a zero.** `0/41` in the aggregate column
+would read as *"verified, and there are no projects"* when there are 41 and this
+actor may not see the ranking of them. That is the `UNPROVEN` constant's own
+reason for existing, applied to the columns that now exist.
+
+**The aggregate cell is the one the proof called "nobody tests and everybody
+forgets", and it is now the sharpest statement in the matrix:** the shipped event
+has `results_state = hidden`, so a judge, a participant and a visitor are all
+refused a leaderboard while an organizer sees all 41. The ranking is a raw
+weighted mean and **says so** in every row — normalization is FEAT-08.
+
+**F-71, closed — and it is F-61 for the fourth time.** `AuditEntry` shipped at
+FEAT-02 with the whole hash chain and **nothing ever wrote a row**. `reviewer/audit/chain.py`
+is now the writer and verifier, `manage.py verify_audit` re-walks the hashes,
+and the chain is populated by real traffic: **7 entries, sequence 1..7, CHAIN
+VERIFIED** after a `just check` — reproduced in this session's Phase 0.
+
+---
+
+## Increment 2 — the influence report (D-13), the anti-abuse answer
+
+**Built:** `ballots/influence.py`, `manage.py influence_report`, and
+`GET /api/v1/influence` (organizer/admin only). Per project: distinct
+identities, first-preference share, **vote-mass Gini**, and **identical-ballot
+clusters**. `24 tests`, `9 new mutations`.
+
+**The acceptance line's first clause — the bias-attack harness — is NOT built.**
+One of the two clauses is done. The report went first *because* the harness needs
+an attack to be visible, and building the detector after its own test would have
+been the wrong order.
+
+**Three decisions, and each is a sentence a reviewer can check:**
+
+- **Not gated on `results_state`.** The leaderboard is refused while hidden; this
+  is not, because the organizer has to see concentration *before* deciding to
+  publish. Two tests pin the contrast.
+- **No threshold anywhere.** Gini and cluster size are reported and ranked; the
+  report never says "brigaded". Exact-match clustering needs no cut-off.
+- **The caveat is in the output,** not the docstring. A report that shows a Gini
+  without saying what it cannot conclude is a machine for accusing a table of
+  friends.
+
+**Two findings, and both are about verification, not logic:**
+
+- **F-76** — the `lift` metric I invented is **structurally constant**: every
+  voter casts one first preference, so a project's backers are its
+  first-preferencers and the ratio is identically 1.0. The synthetic attack
+  scored it at exactly 1.0. **Cut**, recorded with the arithmetic, and pinned by
+  `TestTheDegenerateMetricStaysCut` so it cannot be re-derived from `bible/06`'s
+  phrasing. D-04's lesson applied to abuse: a metric you cannot show
+  *discriminates* is a tunable constant with a decimal point.
+- **F-77** — the "organic control" in the tests **was itself a brigade of nine**,
+  because every organic voter backed one project at weight 1 and so had a
+  byte-identical vector. **24 tests were green and the control was broken.**
+  Found by running the command in the container, not by pytest or mutation
+  testing, because the code was right and the *scenario* was degenerate. This is
+  F-41 from the other side: a **fixture** that cannot separate subject from
+  control. The missing assertion now exists.
+
+**Verified in the container on a clean volume:** a 12-voter brigade ranks first
+with `clustered 12`, and every organic project reads `clustered 0`. The
+full table is in `history/features/06-influence-report.md`.
+
+### What is NOT started
+
+- **Voting** with amplitude inside an identity budget, and mandatory attributable
+  abstention.
+- **Comments**, and results hiding as a *public* surface (the API is done; the
+  public pages are not).
+- **Randomized ballot order** — seeded per voter, stable across requests, and the
+  claim is **zero-*mean*, not zero**.
+- **The bias-attack harness** — the acceptance line's first clause, and the
+  reason the report went first.
+
 ### The two questions, and neither is mine to answer
 
-- **The leaderboard cell.** `isolation_proof` prints `?` for the aggregate,
-  export and audit columns, and its own "STILL NOT PROVEN" list names *the
-  aggregate cell nobody tests and everybody forgets*: **that a judge is refused
-  the leaderboard while judging is open.** The export and the audit now have
-  accessors and routes, so those cells can be filled; the aggregate is FEAT-06's,
-  and it is the one that makes "isolation" mean something during judging rather
-  than after it.
-- **D-12 scope** — ballot order and voting are FEAT-06 and must not be pulled
-  forward, and must not be overclaimed: randomisation makes bias zero-*mean*,
-  not zero.
+- **The leaderboard's published shape.** A published ranking is a page anyone can
+  read, and the brief says results are hidden until the deadline. Whether
+  publication shows *all* 41 projects or the top N is a product call with a
+  fairness dimension, and it changes the widget in FEAT-07.
+- **D-12 scope** — ballot order is FEAT-06 and must not be overclaimed:
+  randomisation makes bias zero-*mean*, not zero.
 
 ### Do not
 
-- **Do not claim T2.** It is earned — all four checks pass — but **the claim is
-  made at BREAK-2, in writing, by the human.** `.dogfood.toml` still says
-  `claimed = ["T1"]` and that is correct until then. The report already prints
-  `claimed T1, verified T1 T2`, which is the ceiling `run.py` can ever print.
+- **Do not claim T2.** It is earned and unclaimed, and the claim is made at
+  BREAK-2, in writing, by the human. `.dogfood.toml` still says
+  `claimed = ["T1"]`, which is correct.
 - **Do not move `submissions_close`.** It is in the past because that is what
   makes the deadline check meaningful.
 - **Do not edit `acceptance-report.txt` by hand.** It is generated.
 - **Do not re-litigate D-01…D-15.**
+- **Do not retype a gate's own check count.** Three places did it and all three
+  rotted (F-72). `verify_spec` now fails if you do.
 
 ### State
 
 | | |
 |---|---|
-| **Status** | **FEAT-06 not started.** FEAT-05 built and verified; its acceptance line passed on both clauses |
-| **Started** | — |
-| **Elapsed** | 0h of 9h (FEAT-06) |
-| **Last touched** | FEAT-05, 2026-09-29 — `claimed T1, verified T1 T2`, **7 of 7 checks**, 374 tests, 44/44 mutations, 68/68 spec, lint clean |
-| **Next action** | fill the export and audit cells of the `isolation_proof` matrix — they now have accessors and routes and still print `?` — then build the leaderboard refusal that is the aggregate cell, then voting and the influence report |
+| **Status** | **FEAT-06 in progress** — the three matrix columns, the audit chain and **the influence report** are done; a Phase-0 sweep repaired four wrong figures (F-72…F-75) and the report increment opened two more (F-76, F-77). Voting, comments, ballot order and **the bias-attack harness** are not started |
+| **Started** | 2026-09-29 |
+| **Last touched** | FEAT-06 increment 2 — **the influence report (D-13)**, with the acceptance line observed in the container and the empty case refusing to be a table of zeros. `428 tests`, `59/59` mutations, spec green, lint clean, `just check` **GREEN** at 7 of 7 |
+| **Next action** | **the bias-attack harness** — the acceptance line's remaining clause, which the report exists to make visible. Then ballot order, then voting |

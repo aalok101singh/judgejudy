@@ -10,6 +10,9 @@ that it says which mode it ran in, and that it names what it has not proven.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 from django.core.management import CommandError, call_command
 from tests import factories, ground_truth
@@ -111,6 +114,29 @@ class TestEmptyDatabaseMode:
         ):
             assert line in output, f"the output does not disclose: {line}"
 
+    def test_every_test_file_it_names_actually_exists(self, seeded):
+        """**F-73.** The footer pointed a reader at `tests/test_results.py`,
+        which does not exist -- the tests live in
+        `tests/test_results_and_audit.py`.
+
+        This is F-59 one medium out: a document that names a *command* has to be
+        a command that can be typed, and the proof's own output is a document a
+        panelist reads to decide whether isolation is real. A pointer to a file
+        that is not there is worse than no pointer, because the reader who
+        follows it concludes the test does not exist rather than that the name
+        is stale.
+
+        The check is general on purpose -- it walks every `tests/*.py` path the
+        output names -- so the next renamed file is caught by shape rather than
+        by someone remembering to fix a string.
+        """
+        output = run()
+        named = set(re.findall(r"tests/[\w/]+\.py", output))
+        assert named, "the proof named no test file, so this check proves nothing"
+        root = Path(__file__).resolve().parent.parent
+        missing = sorted(p for p in named if not (root / p).exists())
+        assert not missing, f"the proof points at files that do not exist: {missing}"
+
     def test_require_data_turns_an_empty_database_into_a_failure(self):
         """At a verification break the loader has run; an empty DB is a defect."""
         with pytest.raises(CommandError, match="no reviews"):
@@ -204,28 +230,94 @@ class TestMatrixMode:
         output = run()
         assert _cell(output, "admin", "own") == "2/2", output
 
-    def test_the_unbuilt_capabilities_print_a_question_mark(self, seeded):
-        """`?`, not `0/2`. A zero would read as "verified, and the answer is none"."""
+    def test_every_capability_cell_is_a_count_or_a_refusal(self, seeded):
+        """**Was `test_the_unbuilt_capabilities_print_a_question_mark`, and its
+        principle outlived its assertion.**
+
+        The original read: *"`?`, not `0/2`. A zero would read as 'verified, and
+        the answer is none'."* That sentence is still the rule, and at FEAT-06 it
+        applies harder than it did: with accessors and routes for the last three
+        columns, the choice is no longer `?` versus a number but **a number
+        versus the word `refused`**, and picking the number for a capability this
+        actor may not use is the same mistake wearing a different hat.
+
+        So the assertion is now on the whole set: nothing prints `?`, and every
+        non-numeric cell says `refused` rather than being a zero.
+        """
         output = run()
         judge_row = _row(output, "judge")
-        assert judge_row.count("?") == 3, judge_row
-        assert judge_row.split()[4:] == ["?", "?", "?"], judge_row
+        assert "?" not in judge_row, judge_row
+        assert judge_row.count("refused") == 3, judge_row
+
+        # And across the whole table: every cell is a count, a refusal, or an
+        # `n entries`. Anything else is a value with no stated provenance.
+        for role in ("visitor", "participant", "judge", "organizer", "admin"):
+            row = _row(output, role)
+            for cell in row.split()[1:]:
+                assert (
+                    "/" in cell or cell == "refused" or cell.endswith("entries") or cell.isdigit()
+                ), f"{role} row has an unexplained cell {cell!r}: {row}"
+
+    def test_a_refused_capability_is_not_printed_as_zero(self, seeded):
+        """**The specific F-61 hazard, asserted at the level it will be read.**
+
+        A `0/2` in a refused capability's column would be indistinguishable from
+        "this actor has nothing", and it would be a lie: they are refused the
+        capability entirely.
+
+        **Scoped to the last three columns, and that scoping is the point.** The
+        first draft asserted `"0/2" not in row` and it failed on the *visitor* row
+        — where `0/2` in the `own` column is correct: a visitor is permitted that
+        read and there is nothing to see. So the first three columns legitimately
+        print zeros and the last three must not. A test that could not tell those
+        apart was asserting the wrong thing, and it was right to fail.
+        """
+        output = run()
+        for role in ("visitor", "participant", "judge"):
+            cells = _row(output, role).split()[1:]
+            assert len(cells) == 6, _row(output, role)
+            aggregate, export, audit = cells[3], cells[4], cells[5]
+            for column, cell in (
+                ("aggregate", aggregate),
+                ("export", export),
+                ("audit", audit),
+            ):
+                assert cell == "refused", (
+                    f"{role} {column} column is {cell!r}; a refused capability must "
+                    f"say so, not print a count: {_row(output, role)}"
+                )
 
     def test_every_cell_states_its_provenance(self, seeded):
         output = run()
         for column in ("own", "peer", "cross-track", "aggregate", "export", "audit"):
             assert column in output.split("own          ")[-1]
 
+    def test_the_provenance_names_functions_not_features(self, seeded):
+        """A column whose provenance is "FEAT-05" is a column nobody can check.
+
+        The last three used to name the feature that would build them. Now that
+        they exist, the table names the **function** that produces each number,
+        which is the difference between a claim and a pointer.
+        """
+        from reviewer.reviews.management.commands import isolation_proof as ip
+
+        output = run()
+        for column in ("aggregate", "export", "audit"):
+            source = ip.CAPABILITY_SOURCES[column]
+            assert "FEAT-" not in source, f"{column}: {source!r}"
+            assert source in output, f"{column} provenance is not printed: {source!r}"
+
     def test_it_still_discloses_the_denial_properties(self, seeded):
         """Even in matrix mode. D-02 is not covered by a row count.
 
-        Rewritten in FEAT-03. The assertion used to be on the literal string
-        ``403 / empty body / no Location``, which was in the matrix footer while
-        the routes did not exist. Now that ``/projects/new`` does exist and the
-        submit refusal is tested, the footer's job is different: it has to say
-        **which** denials are proven, and admit that the judge-scores ones are
-        not. Asserting the old phrase would have kept a stale claim alive --
-        a "still not proven" list nobody maintains is worse than none.
+        This test has been rewritten twice, and the pattern is the interesting
+        part: **each version asserted the footer's current claim, so each rewrite
+        was forced by the footer becoming true.** At FEAT-03 the footer admitted
+        that the judge-scores refusals were *not* proven, and asserting that phrase
+        would have kept a stale claim alive — "a 'still not proven' list nobody
+        maintains is worse than none." At FEAT-05 the routes arrived; at FEAT-06
+        the footer names the file that proves them, and asserting the old
+        admission would be the same error in the other direction.
         """
         output = run()
 
@@ -234,7 +326,12 @@ class TestMatrixMode:
             "the footer must name what IS proven, or a reader cannot tell a "
             "tested refusal from an assumed one"
         )
-        assert "until then this matrix does not claim" in output
+        assert "tests/test_api.py" in output, (
+            "the footer must name the test that proves the API refusals now"
+        )
+        assert "until then this matrix does not claim" not in output, (
+            "the footer still disclaims the API refusals, which arrived at FEAT-05"
+        )
 
     def test_an_unknown_event_is_an_error_not_an_empty_table(self, seeded):
         with pytest.raises(CommandError, match="no event"):

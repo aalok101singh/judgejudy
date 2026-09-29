@@ -517,10 +517,10 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
     ),
     (
         "src/reviewer/reviews/api.py",
-        "    if not actor.can_read_all_reviews:\n        return deny(REFUSED_BY_EXPORT)\n",
-        "    if False:\n        return deny(REFUSED_BY_EXPORT)\n",
-        "everybody gets the export, so a judge — or a participant — can read "
-        "every score in the event through a documented route",
+        "    if not actor.can_read_all_reviews:\n",
+        "    if False:\n",
+        "everybody gets the export, so a judge — or a participant — can read every "
+        "score in the event through a documented route",
         [
             sys.executable,
             "-m",
@@ -541,6 +541,107 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-m",
             "pytest",
             "tests/test_api.py::TestTheCsvExport::test_no_column_in_the_export_is_empty_throughout",
+            "-q",
+        ],
+    ),
+    # --- FEAT-06: the leaderboard, the audit chain, and the matrix cells -----
+    # M5 and M6 in this block were the two corruptions that produced NO failure
+    # on the first run, because the tamper test used
+    # `any("is missing" in p or "prev_hash" in p ...)` -- an `or` satisfied by
+    # whichever check survived. That is F-41's defect in a new file, and it is
+    # the reason there are now three separate tamper tests with three separate
+    # messages. The insertion case is the one a sequence check cannot see at all.
+    (
+        "src/reviewer/audit/chain.py",
+        "        if entry.seq != expected_seq:",
+        "        if False:",
+        "a gap in the sequence goes undetected, so a deleted row is only caught if "
+        "it also breaks the link -- and truncation and insertion are different attacks",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_results_and_audit.py::TestTheAuditChain"
+            "::test_a_deleted_row_is_caught_as_a_sequence_gap",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/audit/chain.py",
+        "        if entry.prev_hash != expected_prev:",
+        "        if False:",
+        "the chain link stops being checked, so a row INSERTED at the right seq "
+        "renumbers nothing and leaves no gap -- the one tamper a sequence check "
+        "alone cannot see",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_results_and_audit.py::TestTheAuditChain"
+            "::test_an_inserted_row_is_caught_by_the_link_check_alone",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/audit/chain.py",
+        "        recomputed = compute_hash(entry)",
+        "        recomputed = entry.entry_hash",
+        "the verifier stops recomputing the hash and trusts the stored digest, so "
+        "an in-place edit of `after` or `actor` is undetectable -- the only class "
+        "of tamper a signed list would also miss",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_results_and_audit.py::TestTheAuditChain::test_an_edited_row_is_caught",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/audit/chain.py",
+        "    if not actor.can_read_all_reviews:",
+        "    if False:",
+        "the audit view opens to every role, and a judge reads what everyone did",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_results_and_audit.py::TestTheAuditAccessor::test_a_judge_is_refused_the_audit_view",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/reviews/results.py",
+        "    return actor.event.results_state == RESULTS_PUBLISHED",
+        "    return True",
+        "the results-visibility check is dropped, so a judge reads the LEADERBOARD "
+        "while judging is open -- the aggregate cell the isolation proof named as "
+        "the one nobody tests, and the one that lets a judge infer what other "
+        "judges are scoring",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_results_and_audit.py"
+            "::TestTheLeaderboardIsRefusedWhileResultsAreHidden"
+            "::test_a_judge_is_refused_the_leaderboard",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/reviews/management/commands/isolation_proof.py",
+        "        if not results_module.results_visible_to(actor):\n            return REFUSED",
+        '        if not results_module.results_visible_to(actor):\n            return f"0/{total}"',
+        "the matrix prints a ZERO where a refusal belongs -- the F-61 shape, in "
+        "the one artefact a panelist reads to decide whether isolation is real. "
+        "`0/41` says 'there are no projects' when there are 41 and this actor may "
+        "not see the ranking of them.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_isolation_proof.py::TestMatrixMode"
+            "::test_a_refused_capability_is_not_printed_as_zero",
             "-q",
         ],
     ),
@@ -782,6 +883,162 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "pytest",
             "tests/test_judge_console.py::TestTheJudgeSeesOnlyTheirOwn"
             "::test_the_organizers_plan_screen_is_refused_to_a_judge",
+            "-q",
+        ],
+    ),
+    # ---------------------------------------------- FEAT-06: the influence report
+    (
+        "src/reviewer/ballots/influence.py",
+        "    if not vectors:\n        return None\n",
+        "    if not vectors:\n        return {'ranking': []}\n",
+        "the empty case returns a structure instead of None -- F-61 for the FIFTH "
+        "time, and the one that matters most: the shipped fixture has zero votes, so "
+        "this is the path the report takes on the demo data a reviewer actually sees. "
+        "A report that renders as a table of zeroes reads as 'checked, and clean' when "
+        "the truth is 'nothing to check'.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_influence.py::TestTheReportRefusesToBeATableOfZeros"
+            "::test_no_votes_yields_none_and_not_an_empty_report",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/influence.py",
+        "    if not actor.can_read_all_reviews:\n        return None, False\n",
+        "    if not actor.can_read_all_reviews:\n        return None, True\n",
+        "the report opens to every role, so a judge reads exactly how many identities "
+        "are behind every project and which of them voted identically -- a bloc's "
+        "cover, handed to a participant. This is the same mistake the audit view made "
+        "and the reason D-13's report needs a role guard at all.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_influence.py::TestTheReportIsOrganizerOnly"
+            "::test_a_judge_is_refused_and_the_refusal_names_its_guard",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/influence.py",
+        "        if len(members) < 2:\n            continue\n",
+        "        if len(members) < 1:\n            continue\n",
+        "the cluster detector's threshold drops to one, so every identity voting a "
+        "project is reported as a brigade of one. The report would name all 41 "
+        "projects as brigaded, and a report that flags everything flags nothing -- "
+        "the anti-abuse answer becomes an anti-abuse noise generator.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_influence.py::TestTheClusterDetectorIsExact"
+            "::test_a_lone_identity_is_never_a_cluster",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/influence.py",
+        "        signature = repr(sorted(vector.items()))",
+        "        signature = repr(sorted(vector))",
+        "the cluster signature stops including weights, so two identities voting the "
+        "same projects at different weights are called identical. A brigade that "
+        "varies one vote per member to defeat a weight-aware check would pass -- and "
+        "the detector would start accusing the ordinary voter who ranked things "
+        "differently.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_influence.py::TestTheClusterDetectorIsExact"
+            "::test_one_weight_apart_is_not_the_same_ballot",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/influence.py",
+        "    if n == 1:\n        return 0.0\n",
+        "    if n == 1:\n        return 1.0\n",
+        "a single identity reports as maximally concentrated, so a project backed by "
+        "exactly one person tops the report -- F-10's shape, the structural zero "
+        "replaced by a structural one. The most innocent project in the event becomes "
+        "the most suspicious one.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_influence.py::TestGini"
+            "::test_a_single_value_is_a_structural_zero_and_the_docstring_says_why",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/influence.py",
+        "    if not values:\n        return None\n",
+        "    if not values:\n        return 0.0\n",
+        "an empty population reports as perfectly even rather than unknown, so an "
+        "event with no votes renders as maximally innocent. F-13's rule: an empty "
+        "collection is a valid value, so the caller cannot tell the two apart.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_influence.py::TestGini::test_an_empty_population_is_none_and_not_zero",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/influence.py",
+        '            -r["clustered_identities"],',
+        "            0,",
+        "the ranking stops ordering by brigade size, so a synthetic attack with "
+        "identical ballots is no longer surfaced first -- the acceptance clause for "
+        "FEAT-06 ('the influence report renders for a synthetic attack') passes on a "
+        "report that would not put the attack in front of a reader.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_influence.py::TestTheReportRendersForASyntheticAttack"
+            "::test_a_brigade_is_reported_and_ranked_first",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/reviews/api.py",
+        "    payload, permitted = influence_module.report_for_actor(actor)\n"
+        "    if not permitted:\n        return deny(REFUSED_BY_INFLUENCE)\n",
+        "    payload, permitted = influence_module.report_for_actor(actor)\n"
+        "    if not permitted and False:\n        return deny(REFUSED_BY_INFLUENCE)\n",
+        "the API's refusal branch never fires, so a judge receives a 200 with an "
+        "empty ranking -- the single most dangerous shape available, because it "
+        "satisfies every status check while enforcing nothing (the F-32 class, and the "
+        "reason the accessor returns a permitted flag rather than raising).",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_influence.py::TestTheReportIsOrganizerOnly"
+            "::test_a_judge_is_refused_and_the_refusal_names_its_guard",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/ballots/management/commands/influence_report.py",
+        '            self.stdout.write("  NO VOTES HAVE BEEN CAST.")',
+        '            self.stdout.write("  0 projects checked, nothing suspicious.")',
+        "the empty case prints a clean bill of health instead of 'nothing to check' -- "
+        "the one sentence in the whole feature a reader would act on, changed from "
+        "'this is not a finding' to 'this is a finding'. The test below is the only "
+        "thing standing between that edit and a false assurance.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_influence.py::TestTheReportRefusesToBeATableOfZeros"
+            "::test_the_command_says_there_is_nothing_rather_than_printing_a_table",
             "-q",
         ],
     ),

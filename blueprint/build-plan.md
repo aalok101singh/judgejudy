@@ -164,6 +164,28 @@
   - **Verify:** a bias-attack harness shows the estimator is zero-mean under
     position bias; the influence report renders for a synthetic attack
 
+> ### Progress — FEAT-06 in progress; the second clause is DONE, the first is not
+>
+> - **DONE — the influence report.** `ballots/influence.py`, `manage.py
+>   influence_report`, `GET /api/v1/influence`. Vote-mass Gini + identical-ballot
+>   clusters, **no thresholds anywhere**, the caveat printed in the output, and
+>   the empty case saying "NOT a finding" rather than printing zeroes. **Observed
+>   in the container:** a 12-voter brigade ranks first with `clustered 12` and
+>   every organic project reads `clustered 0`. `428 tests`, `59/59` mutations.
+>   See `history/features/06-influence-report.md`.
+> - **DONE — the three `?` columns of the isolation matrix** (`aggregate`,
+>   `export`, `audit`), and the audit chain has a writer that real traffic fills.
+> - **NOT DONE — the bias-attack harness.** This is the acceptance line's
+>   *first* clause, and it is precisely why the report went first: the harness
+>   needs an attack to be visible against, and the report is what makes it
+>   visible.
+> - **NOT STARTED** — voting, comments, randomized ballot order, public result
+>   hiding.
+> - **A metric was cut rather than shipped (F-76).** The `lift` detector is
+>   structurally constant, scored the synthetic attack at exactly 1.0, and is
+>   pinned shut by a test. **Do not re-add it**; the arithmetic is in the module
+>   docstring.
+
 > ### ☕ BREAK-3 — H+40 — **☕ T3**
 > Same protocol. Claim, tag `v-t3-verified`.
 
