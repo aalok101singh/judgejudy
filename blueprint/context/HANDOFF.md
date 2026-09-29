@@ -71,12 +71,10 @@ document:
     git log --oneline -5
     git status --porcelain
 
-**The tree is EXPECTED to be dirty when you arrive** — the previous session
-stopped for review with an uncommitted FEAT-06 increment, and
-`blueprint/context/current-feature.md` lists exactly which files it contains.
-Establish that it is that increment and not something else before you touch
-anything. A dirty tree you did not cause is the first finding, not an
-inconvenience.
+**The tree is EXPECTED TO BE CLEAN at `dd72eb9`** — the previous session committed
+and pushed. If it is not, **stop and say what you found**; an uncommitted
+increment nobody described is the first finding, and this paragraph used to say
+the opposite, which is how a status line rots (trap 18).
 
 ## Read in this order, then stop and work
 
@@ -91,28 +89,51 @@ inconvenience.
    not to fix. Check anything touching the files you are about to touch. Note
    the statuses: `fixed` blocks completion **on purpose**, and a repair is not
    done until a review has looked at the result.
-5. `blueprint/history/features/05-t2-surface-and-export.md` — the most recent
-   archive. What was actually built, what it cost, and the five findings it
-   opened, one of which was **invisible to every gate in the project**.
-6. `blueprint/build-plan.md` — the acceptance line for the current feature.
+5. `blueprint/history/features/06-influence-report.md` — the most recent
+   archive. What was built, what it cost, and **two findings about tests that
+   could not fail** — a structurally constant metric and a fixture whose
+   control was itself a brigade. Read these before writing any test.
+6. `blueprint/history/features/05-t2-surface-and-export.md` — the one before
+   it. The five findings it opened, one of which was **invisible to every gate
+   in the project**.
+7. `blueprint/build-plan.md` — the acceptance line for the current feature.
 
 DO NOT read the `bible/` folder. It is 330KB of research. The overview names the
-section for every kind of question; open that one section. For FEAT-06 you will
-want `bible/08` §7 (the influence report, which D-13 makes the anti-abuse
-answer) and `bible/06` §6 (ballot order, where the claim is **zero-*mean*, not
-zero**). `bible/05` §6 is the isolation primitive you are extending, and
-`bible/07` is the threat model.
+section for every kind of question; open that one section. For the bias-attack
+harness you will want `bible/06` **§6.3** (randomised ballot order, where the
+claim is **zero-*mean*, not zero**, with the literature behind it) and §6.2 for
+what the report is for; `bible/08` §7 is the block-F summary. `bible/05` §6 is
+the isolation primitive you are extending, and `bible/07` is the threat model.
+
+**If you find yourself wanting a fact that is not in a file here, that is itself
+a finding — write it down rather than inferring it.** Do not reconstruct the
+previous session's reasoning from its output, and do not treat a plausible
+number as evidence. Every figure in these documents is produced by a command and
+the command is named beside it. **This has now bitten the project seven times in
+two sessions**: four wrong figures found by a Phase-0 sweep on an untouched tree
+(F-72…F-75), and a metric that looked like a detector and was structurally
+constant (F-76).
+
+**No context leak, and no secrets.** The credentials in `.dogfood.toml` are HMAC
+tokens signed with a key that is **published in the repository on purpose** — they
+are demo credentials, not secrets, and the README says so in plain words. **Never
+paste their values into a document, a commit message, a report, or anything you
+write into the repository**, and do not add any real secret, key or credential.
+`settings.py` generates its `SECRET_KEY` onto the instance volume and it is
+gitignored; a database file is gitignored; `acceptance-report.txt` is generated
+and must never be hand-edited. **Before any commit, check what is staged** —
+`git status --porcelain` and read the diff for token-shaped strings.
 
 ## PHASE 0 — verify the build before you extend it
 
 **Do this first, in this order, and report what you measured. Do not start any
 new feature until it is done.** The previous session's numbers are in `AGENTS.md`
-§Current state, in `README.md` and in the FEAT-05 archive. Regenerate them. Where
-a document disagrees with a run, **the run wins and the document is a finding** —
-write it into `findings.md`.
+§Current state, in `README.md` and in `history/features/06-influence-report.md`.
+Regenerate them. Where a document disagrees with a run, **the run wins and the
+document is a finding** — write it into `findings.md`.
 
     git log --oneline -5           # where you are
-    git status --porcelain         # a dirty tree is the FIRST finding
+    git status --porcelain         # expected EMPTY; anything else is a finding
     just doctor                    # which interpreter, which docker, which tools
     just check                     # THE GATE. Clean volume, build, up, checker, proofs, suite
     just prove-offline             # boots under --network none and probes it
@@ -127,21 +148,22 @@ write it into `findings.md`.
 `mutation-test` are deliberately **not** inside it — each needs a clean volume,
 and `check` has to stay the one command.
 
-**The tree is EXPECTED to be dirty when you arrive.** The previous session stopped
-for review with an uncommitted FEAT-06 increment. Establish what those changes
-are before you touch anything: `git status --porcelain` and `git diff`, and decide
-whether each file is part of that increment or is something unexpected. A dirty
-tree you did not cause is a finding, not an inconvenience.
+**The tree is EXPECTED TO BE CLEAN at `dd72eb9`.** The previous session committed
+and pushed. **If `git status --porcelain` is not empty, stop and say what you
+found** — an uncommitted increment nobody described is the first finding, and
+this file used to tell you the opposite, which is how trap 18 happens. Establish
+`git log --oneline -3` shows `dd72eb9` on top of `be0bc3a`.
 
 **Then decide, and say which you are doing:**
 
 - **If a gate is red, fix it before starting new work.** A green gate on top of a
   known-red one is not a green gate. Say which gate and why in one line.
-- **If everything is green and the uncommitted increment is the work the previous
-  session described**, build forward from it — the influence report first, then
-  the bias harness. Do not redo it; do not revert it.
-- **If the uncommitted increment is half-built**, say "half-built" and name the
-  half, then finish it. `current-feature.md` says which parts exist.
+- **If every gate is green and the tree is clean at the expected commit**, build
+  forward into the **bias-attack harness**. That is the acceptance line's
+  remaining clause and the next action on `current-feature.md`. Do not redo the
+  influence report; do not revert it.
+- **If something is half-built**, say "half-built" and name the half.
+  `current-feature.md` carries a table of which parts of FEAT-06 exist.
 
 Three things to check that a gate does **not** cover, and all three have bitten:
 
@@ -165,11 +187,32 @@ Three things to check that a gate does **not** cover, and all three have bitten:
 **`current-feature.md` is the authority on this — read it before this paragraph,
 because this paragraph is a summary and that file is the one that gets updated.**
 
-FEAT-01 … FEAT-05 are **done, verified and committed**, the last at `be0bc3a`.
-**BREAK-1 is closed** (T1 claimed in writing, `v-t1-verified` tagged).
-**FEAT-06 is in progress with a dirty tree** — increment 1 (the three matrix
-columns and the audit chain) plus a **Phase-0 sweep that found and repaired four
-wrong written figures** (F-72…F-75), all in the uncommitted increment.
+FEAT-01 … FEAT-05 are **done, verified and committed**. **BREAK-1 is closed**
+(T1 claimed in writing, `v-t1-verified` tagged).
+
+**FEAT-06 is in progress and the tree is CLEAN at `dd72eb9`, pushed to `main`.**
+Two increments have landed: the three matrix columns and the audit chain, then
+**the influence report (D-13)**. The four wrong figures below (F-72…F-75) are
+repaired, and the report increment opened two more (F-76, F-77).
+
+**So: there is nothing to review on arrival and nothing to carry forward
+uncommitted.** Establish the commit with `git log --oneline -3` and the clean
+tree with `git status --porcelain`, then go to Phase 0. If either is *not* what
+this says, stop and say so — that is a finding, not a nuisance.
+
+**What FEAT-06 still owes, and it is not "finish the report":**
+
+| Part of FEAT-06 | State |
+|---|---|
+| three `?` isolation columns (`aggregate`, `export`, `audit`) | **done** |
+| the audit chain's missing writer (F-71) | **done** |
+| **the influence report** (D-13) | **done**, observed in the container |
+| **the bias-attack harness** | **NOT STARTED** — the acceptance line's *first* clause |
+| voting, comments, randomized ballot order, public result hiding | **not started** |
+
+**One of the two acceptance clauses is built. The feature is not done, and no
+document should be read as saying otherwise.** The report went first *because*
+the harness needs an attack to be visible against it.
 
 **A clean Phase 0 on arrival found four wrong numbers and every gate was
 green.** This is the single most important thing to carry forward, and it is
@@ -183,6 +226,26 @@ of them.* The application code did not change; the words around it did.
 | **F-73** [P2] | the isolation proof's **shipped footer** pointed at `tests/test_results.py`, which does not exist — a panelist following the pointer would conclude the test was missing, not that the name was stale | footer corrected; a new test asserts **every** `tests/*.py` the proof names exists |
 | **F-74** [P2] | the findings tally's breakdown summed to **59** against its stated total of **71** (closed was really 60) | `48`→`60`; a new check asserts the breakdown **sums to its total** |
 | **F-75** [P3] | cold start published as **12–20 s**, measured **11.8 s** — the floor of the *range* was wrong, which is F-68's own lesson arriving a session late | range widened to **11.8–20 s**; no gate, deliberately |
+
+**And two from the report increment, both about verification rather than
+logic — read these before writing any test:**
+
+- **F-76** — a `lift` metric (first-preference share ÷ voter share) is
+  **structurally constant**: every voter casts one first preference, so a
+  project's backers *are* its first-preferencers and the ratio is identically
+  1.0. The synthetic attack scored it at exactly 1.0. It was **cut**, the
+  arithmetic is in the module docstring, and
+  `TestTheDegenerateMetricStaysCut` pins it shut. **Do not re-add it** —
+  `bible/06` §6.2 is phrased in those terms and the next session's obvious
+  move is to re-derive it.
+- **F-77** — the "organic control" in the report's tests **was itself a brigade
+  of nine**, because every organic voter backed one project at weight 1 and so
+  had a byte-identical vote vector. **24 tests were green and the control was
+  broken.** Found by running `manage.py influence_report` in the container, not
+  by pytest and not by mutation testing, because the code was right and the
+  *scenario* was degenerate. **A fixture needs the same falsifiability
+  discipline as the code it exercises**, and the cheapest check is to assert
+  that the case you expect *not* to fire does not fire.
 
 **The transferable move, and it generalises past this feature: two of the three
 new checks assert a *property*, not an agreement with a value** — "the parts
@@ -199,9 +262,8 @@ claim is made at **BREAK-2, in writing, by the human**, and `.dogfood.toml` stil
 reads `claimed = ["T1"]`, which is correct until then. **Do not write a claim
 into `.dogfood.toml` on your own initiative.**
 
-**What the uncommitted FEAT-06 increment contains** — the three `?` columns of
-`manage.py isolation_proof`, which had been unimplemented since FEAT-02, plus
-this session's Phase-0 repairs:
+**What is already committed at `dd72eb9`** — read the archive rather than this
+summary, because this is a summary:
 
 - `reviewer/reviews/results.py` — the leaderboard and the results-visibility rule.
   `/api/v1/results` is **refused** for a judge, participant and visitor while
@@ -214,14 +276,23 @@ this session's Phase-0 repairs:
   seeded event, and `verify_chain` returned no problems because verifying an empty
   sequence is trivially true. The chain is now populated by real traffic and
   verifies.
-- `tests/test_results_and_audit.py` — and two proof tests rewritten, because they
-  asserted the pre-increment text.
+- `reviewer/ballots/influence.py` — **the influence report (D-13)** — plus
+  `manage.py influence_report` and `GET /api/v1/influence`. Vote-mass Gini,
+  identical-ballot clusters, **no thresholds**, the caveat in the output, and the
+  empty case saying "NOT a finding" rather than printing zeroes. **It is
+  deliberately NOT gated on `results_state`:** an organizer has to see
+  concentration *before* deciding to publish, and two tests exist to stop a
+  future change sharing the leaderboard's guard.
+- `tests/test_results_and_audit.py`, `tests/test_influence.py` — and two proof
+  tests rewritten, because they asserted the pre-increment text.
 
-**The next thing to build is the influence report (D-13), then the bias-attack
-harness.** In that order, deliberately: the harness proves the estimator is
-zero-*mean* by showing a synthetic attack being *detected*, so building the
-detector after the harness would mean writing the test and its target in the
-wrong order.
+**The next thing to build is the bias-attack harness** — the acceptance line's
+*first* clause, and the reason the report went first. It has to show the
+estimator is **zero-*mean*** under position bias, not zero, by running a
+synthetic attack through a seeded, per-voter ballot order and reporting the
+measured drift. The claim D-12 forbids is the one to watch: **randomisation makes
+bias zero-*mean*, not zero**, and `bible/06` §6.3 says so with the literature
+behind it. After the harness: ballot order itself, then voting, then comments.
 
 **F-51 is closed and it went against the interim code.** A judge who *also*
 organises now resolves to the organizer, because the strict reading was not the
@@ -409,6 +480,44 @@ number — so make the number un-typable and assert an invariant instead**
 are written exactly that way, and both were proved by breaking the document on
 purpose. **A number with no derivation path must not be printed three words
 from a number that has one** (that is F-74, and F-58 said it already).
+
+**20. A metric you have not shown to *discriminate* is a tunable constant with a
+decimal point.** F-76: the influence report shipped with a `lift` detector —
+first-preference share ÷ voter share. It is **structurally constant**: every
+voter casts exactly one first preference, so a project's backers *are* its
+first-preferencers in the normal case and the ratio is identically 1.0. The
+synthetic attack scored it at exactly 1.0. So it was a column that looks like a
+detector, reads as a real signal on every row, and carries no information — and
+`bible/06` §6.2 is *phrased in those terms*, so a reader had no way to know.
+**The general move: point a new detector at one case it SHOULD fire on and one
+it should NOT, and require both.** Asking "does it catch the attack?" is half the
+question; the other half is "does it catch anything else?", and the second half
+is the half people skip. D-04 already taught this project what a defensible
+constant costs — a constant we cannot demonstrate is the largest exposure we
+would have had. **And a cut belongs in a test, not only in a docstring**, because
+`TestTheDegenerateMetricStaysCut` is the only thing stopping the next session
+re-deriving it from the bible's phrasing.
+
+**21. A fixture that cannot separate its subject from its control produces green
+output that means nothing.** F-77: every "organic" voter in the report's tests
+backed exactly one project at weight 1, so nine of them had byte-identical vote
+vectors — **the control was itself a brigade of nine.** The report duly printed
+`clustered 9` on every row. **All 24 tests in the file passed**, mutation testing
+passed, and the acceptance clause passed: the code was correct and the *scenario*
+was degenerate, so nothing about the logic was testable. Found only by running
+`manage.py influence_report` in the real container and reading the output.
+
+This is F-41 from the other side. F-41 is a test that cannot fail; this is a
+**fixture that cannot discriminate**, and it is worse, because a test that cannot
+fail at least occupies a slot a reader might question, while a fixture that
+cannot separate its subject from its control produces confident green output. The
+cheapest fix is one assertion: **assert that the case you expect NOT to fire does
+not fire** (`assert row["clustered_identities"] == 0` on every control row). **And
+the general reason pytest did not catch it is worth remembering — the most
+trustworthy gate in this project (`just check`) does not catch it either, because
+everything it runs is correct. Running the command in the container is a
+different class of check, and it is the one that found both F-77 and the F-61
+family.**
 
 ## The rules, which are not negotiable
 
