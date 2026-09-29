@@ -15,14 +15,24 @@ That is the whole setup. Then open <http://localhost:8080>.
 
 ---
 
-## ⚠ Status: T1 is green, T2 is not built yet
+## ⚠ Status: T1 and T2 are green; T2 is earned and deliberately unclaimed
 
 **Read this before judging anything else on this page.** The container, the
 healthcheck, the offline guarantee, the gallery, the seeded fixture, the deadline
-guard, the assignment engine, the judge console, **the scoped score endpoint and
-the CSV export** are real, measured and passing. **All seven of the organizers'
-machine checks now PASS.** What is not built is the public T3 surface, the T4
-bulk-IO and signing layer, and the normalization proof.
+guard, the assignment engine, the judge console, the scoped score endpoint, the
+CSV export, **the influence report and the bias-attack harness** are real, measured
+and passing. **All seven of the organizers' machine checks now PASS.**
+
+**`run.py` prints `claimed T1, verified T1 T2` and that is deliberate.** Every T2
+check passes, so the claim is *available* — but `.dogfood.toml` says
+`claimed = ["T1"]` and that is correct, because **the claim is made at BREAK-2, in
+writing, by a human.** `verified` cannot exceed T2 whatever we build: there are no
+T3 or T4 checks in their program at all. See
+[why it says `claimed T1`](#why-it-says-claimed-t1-and-not-claimed-t2-when-all-seven-checks-pass).
+
+What is not built: randomised ballot order as a product surface, voting, comments,
+public result hiding, the T4 bulk-IO and signing layer, and the normalization
+proof.
 
 | | State |
 |---|---|
@@ -36,7 +46,9 @@ bulk-IO and signing layer, and the normalization proof.
 | Assignment: seeded tiebreak reproducible | ✅ two runs, identical digest over 123 pairs |
 | Judge console, rubric, draft and submit | ✅ built (`/judge/`), refusals are literal 403s with empty bodies |
 | Scoped scores + CSV export | ✅ built (`/api/v1/judge/scores`, `/api/v1/export.csv`) |
-| Voting, comments, influence report | ❌ **not built** (FEAT-06) |
+| Influence report (D-13) | ✅ built (`/api/v1/influence`) — per-project concentration, no thresholds |
+| Bias-attack harness | ✅ built (`manage.py bias_attack`) — fixed order **detected**, randomised **zero-mean** |
+| Voting, comments, ballot order, public result hiding | ❌ **not built** (FEAT-06) |
 | Bulk IO, signed records, OpenAPI | ❌ **not built** (FEAT-07) |
 | Normalization engine + proof | ❌ **not built** (FEAT-08) |
 
@@ -118,13 +130,23 @@ deadline guard was never called. It is green now for the right reason, and
 
 ## What works right now
 
-Four routes, and two of them are features:
+Twelve routes, and the count is **derived from `src/judge_judy/urls.py` by
+`verify_spec.py`, not typed here** — the previous "eleven routes" line was wrong
+and the spec gate now fails if this table and `urls.py` disagree.
 
 | Route | Purpose |
 |---|---|
 | `/` | **The gallery.** 41 fixture projects, first page in fixture order, 24 per page, server-rendered, no JS. Public. |
 | `/projects/new` | **Submit a project.** `GET` is a form; `POST` evaluates the deadline and refuses. The event is born closed, so it refuses — with a 403 that names the guard. |
+| `/judge/` | **The judge console.** Draft, submit, lock. A judge who is not the assignee is refused, not shown a blank page. |
+| `/judge/review/<id>/` | The rubric form for one assignment. Draft, submit, lock. |
+| `/organizer/assignments/` | The assignment plan and the min-cut certificate. |
 | `/healthz` | Liveness probe. `?deep=1` also checks the database. |
+| `/api/v1/judge/scores` | A judge's own scores, and nobody else's. |
+| `/api/v1/export.csv` | The organizer-scoped export. Every other role gets a 403 with an empty body. |
+| `/api/v1/results` | The leaderboard — refused to everyone but an organizer while `results_state = hidden`. |
+| `/api/v1/audit` | The hash-chained audit trail. |
+| `/api/v1/influence` | **The influence report (D-13).** Per-project concentration: distinct identities, first-preference share, vote-mass Gini, identical-ballot clusters. No thresholds. |
 | `/admin/` | Django admin. |
 
 Plus the seed and the harness:
@@ -143,7 +165,8 @@ re-derives the same numbers from `fixtures.json` and **exits non-zero on a
 disagreement**.
 
 Plus the harness: `just check` runs the whole gate, and
-`tools/verify_spec.py` re-derives 67 numbers from the organizers' own files.
+`tools/verify_spec.py` re-derives the load-bearing numbers in the spec layer from
+the organizers' own files.
 
 ---
 
@@ -153,10 +176,10 @@ Plus the harness: `just check` runs the whole gate, and
 just              # list every recipe
 just doctor       # is the toolchain intact? (interpreter, Docker, just)
 just check        # THE GATE — clean volume, build, up, checks, proofs, suite
-just spec         # the 67-check spec gate; stdlib only, no Docker, no venv
+just spec         # the spec gate; stdlib only, no Docker, no venv
 just coldstart    # measure a cold start against the 60 s budget
 just prove-offline # boot the image with --network none and probe it
-just mutation-test # corrupt 18 things on purpose; every one must be caught
+just mutation-test # corrupt things on purpose; every one must be caught
 just accept       # the organizers' checker, against the running container
 just lint         # ruff + formatter + the isolation rule (JJ01)
 just logs         # follow the container

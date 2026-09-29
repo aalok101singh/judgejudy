@@ -659,6 +659,38 @@ def check_structure(r):
             not dangling, "0 dangling", dangling or "0 dangling",
             "A dangling section wastes a build session's time hunting for a heading that is not there.")
 
+    # --- routes: README.md's table against src/judge_judy/urls.py ---------------
+    # F-82. The README said "Four routes, and two of them are features" when
+    # urls.py held twelve. The repair that followed retyped it as "Eleven
+    # routes" -- and eleven was ALSO wrong, and the prose that apportioned the
+    # eleven did not sum over the table's own rows. This is F-67's class applied
+    # to a route count: a number in a shipped document that no command derives.
+    #
+    # The fix is the same one F-72 got: do not retype the number, make it
+    # un-typable. This check derives the routes from urls.py and asserts the
+    # README names every one of them, so the count cannot drift again without
+    # this going red. It asserts a PROPERTY (table and urls.py agree) rather
+    # than agreement with a constant, so it cannot be satisfied by editing both
+    # sides the same wrong way.
+    urls_src = read("src/judge_judy/urls.py")
+    routes = re.findall(r'^\s*path\(\s*r?"([^"]*)"', urls_src, re.M)
+    readme = read("README.md")
+    table_routes = set(re.findall(r"(?m)^\|\s*`(/[^`]*)`", readme))
+    # `/judge/review/<id>/` is written with a placeholder in the README.
+    def _norm(p):
+        return re.sub(r"<[^>]*>", "<id>", p)
+    undocumented = []
+    for rt in routes:
+        if rt in ("", "admin/"):
+            continue
+        norm = "/" + _norm(rt) if not rt.startswith("/") else _norm(rt)
+        if not any(_norm(t).rstrip("/") == norm.rstrip("/") for t in table_routes):
+            undocumented.append(rt)
+    r.check(g, "README names every route in urls.py", not undocumented,
+            "all %d routes" % len(routes), undocumented or "all %d routes" % len(routes),
+            "A route nobody documented is a route a judge cannot find, and a "
+            "route count nobody derives is a number that rots (F-67, F-82).")
+
     # the findings ledger must agree with the tallies printed in the two files
     led = read("blueprint/context/findings.md")
     heads_found = re.findall(r"(?m)^###\s*(F-\d+)\s*\[(P\d)\]\s*([a-z]+)", led)

@@ -275,7 +275,7 @@ verification and the counts live in `AGENTS.md` §Current state,
 
 | | |
 |---|---|
-| Findings | **81** — **0 open blocking**, 0 open, 8 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 62 closed |
+| Findings | **82** — **0 open blocking**, 0 open, 9 fixed (awaiting review), 1 unverified (F-27), 10 accepted by decision, 62 closed |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
 | Gate (FEAT-06) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **68/68** · spec layer green · **479 tests** · lint clean |
 | Next | **randomised ballot order** (the mechanism the harness attacks is now measured but the product path is unbuilt), then voting and comments |

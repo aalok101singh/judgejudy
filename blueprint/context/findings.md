@@ -177,6 +177,45 @@ projects above 1% reach, and the best below 100% — and reach is *measured* by 
 helper rather than asserted from memory, because it is a property of the noise
 model and a transcribed figure is exactly the habit F-72…F-75 exist to prevent.
 
+### F-82 [P2] fixed - The README's route count was wrong twice, and the second "repair" invented a breakdown that did not sum over its own table
+
+**File:** `README.md`, `tools/verify_spec.py`
+**Found:** 2026-09-29, at BREAK-2, while reviewing the README repair that was
+about to be committed
+**Why it matters:** `README.md` said *"Four routes, and two of them are
+features"* when `src/judge_judy/urls.py` held **thirteen** `path()` entries. The
+repair retyped it as **"Eleven routes. Four are the public/organizer surface,
+five are the API, and two are the judge console"** — and that is **also wrong,
+twice over.** The table listed eleven rows but **omitted `/judge/review/<id>/`
+entirely**, and the 4/5/2 apportionment does not sum over the table's own rows
+(public 3, organizer 1, judge console 2, API 5, admin 1 = 12).
+
+**This is F-67's class applied to a route count, and the interesting part is
+that it survived one repair.** A retype fixes the sentence and leaves the
+number just as un-derived as before; the second reader has no way to tell a
+retyped number from a derived one, because they are byte-identical in the
+document. The lesson generalises past the README: **a repair that replaces a
+wrong number with a right number has not fixed anything a check could catch.**
+
+**The fix is F-72's, not a retype: make the number un-typable.** A new
+`verify_spec.py` check derives the routes from `urls.py` and asserts the README
+names every one of them. It asserts a **property** — table and `urls.py` agree —
+not agreement with a constant, so it cannot be satisfied by editing both sides the
+same wrong way. The prose now says the count is derived rather than quoting it at
+all, which is the same move the README already made to the spec-check and
+mutation counts.
+
+**Proved negative before it was trusted:** deleting the `/judge/review/<id>/` row
+on purpose turns it red and names the exact route —
+`expected 'all 13 routes', got ['judge/review/<int:assignment_id>/']`. A check
+that has only ever passed is not evidence of anything (F-33), and this is the
+fourth time that rule has had to be applied in two sessions.
+
+**It was found by reading a diff, not by running a gate.** `just check` was
+green throughout: the README is not application code, and every command in it
+passes. The same class as F-67, where the rot was attached to a *command* rather
+than a file.
+
 ### F-81 [P3] fixed - A mutation's description and detector were wired to each other's tuple, so the harness reported a false failure
 
 **File:** `tools/mutation_test.py`
