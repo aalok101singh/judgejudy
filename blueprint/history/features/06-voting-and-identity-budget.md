@@ -106,8 +106,8 @@ order the voter was never shown.
 
 | | |
 |---|---|
-| Tests | 503 -> **526** (23 in `tests/test_voting.py`) |
-| Mutations | 72 -> **76** (4 new, each naming its detecting test) |
-| Suite | 526 pass - `just check` **GATE GREEN** at 7/7 - spec 72/72 - lint clean |
-| Findings | **F-84 [P1]** |
+| Tests | 503 -> **528** (25 in `tests/test_voting.py`) |
+| Mutations | 72 -> **77** (5 new, each naming its detecting test) |
+| Suite | 528 pass - `just check` **GATE GREEN** at 7/7 - spec 72/72 - lint clean |
+| Findings | **F-84 [P1]**, **F-85 [P2]** |
 | Cuts recorded | quadratic voting; rank-only results weighting; the increment-4 ballot cut marked superseded |

@@ -1413,6 +1413,24 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    (
+        "src/reviewer/ballots/views.py",
+        "    _recompute(context, event, ballot_row)\n"
+        '    return render(request, "ballots/ballot.html", context)',
+        '    return render(request, "ballots/ballot.html", context)',
+        "the page a voter lands on after voting still reports the PRE-cast budget and "
+        "empty weight boxes. F-85: a stale context rendered as a current one -- a lie "
+        "about the voter's own action, on the one number the budget exists to make "
+        "legible. The database is correct throughout, so every database assertion "
+        "passes while the page misreports what just happened.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_voting.py::TestTheBudgetIsVisible",
+            "-q",
+        ],
+    ),
 ]
 
 

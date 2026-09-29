@@ -314,7 +314,7 @@ mutations, so a re-introduction is caught by name.
 ## Increment 5 — voting, the identity budget, and the tally (REQ-T3-01)
 
 **Built:** `ballots/tally.py`, the POST cast path on `/vote/`, and the weighting
-form. **23 tests**, **4 new mutations**.
+form. **25 tests**, **5 new mutations**.
 
 **The budget is one sentence: weight 1 on every project exactly exhausts it.**
 D-12 says voting claims cost *amplification inside an identity budget, not Sybil
@@ -389,5 +389,5 @@ the tie.
 |---|---|
 | **Status** | **FEAT-06 in progress** — the three matrix columns, the audit chain, the influence report, the bias-attack harness, **the randomised ballot as a product path, and voting with its identity budget** are done. **REQ-T3-01 and REQ-T3-04 are now real; REQ-T3-05's influence report shipped at increment 2.** Comments and public result hiding are not started. The feature is NOT complete |
 | **Started** | 2026-09-29 |
-| **Last touched** | FEAT-06 increment 5 — **voting, the identity budget, and the Borda tally**, with the budget binding exactly at weight-1-everywhere. **F-84 [P1]**: an abstention was silently counted as a vote for the random order, found by a test asserting a *tie*. `526 tests`, `76/76` mutations, spec 72/72, lint clean, `just check` **GREEN** at 7 of 7 |
+| **Last touched** | FEAT-06 increment 5 — **voting, the identity budget, and the Borda tally**, with the budget binding exactly at weight-1-everywhere. **F-84 [P1]**: an abstention was silently counted as a vote for the random order, found by a test asserting a *tie*. `528 tests`, `77/77` mutations, spec 72/72, lint clean, `just check` **GREEN** at 7 of 7 |
 | **Next action** | **comments** (REQ-T3-02) — `Comment` ships with its escaped-never-`|safe` rule and moderation statuses; what is missing is the surface and the moderation affordance. Then **public result hiding** (REQ-T3-03), where the API refusal is already built and the public pages are not |

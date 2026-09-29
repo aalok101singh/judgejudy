@@ -316,6 +316,43 @@ class TestTheBudgetIsVisible:
         assert "Budget:" in body
         assert "exactly" in body.lower()
 
+    def test_the_budget_line_updates_after_a_vote_is_cast(self, client, world):
+        """**F-85, pinned — and found by reading a live page, not by a test.**
+
+        The context is assembled once, before the cast, so the page a voter lands
+        on after voting reported "0 of 41 weight spent": a stale value rendered as
+        a current one. **A lie about the voter's own action**, on the one number
+        the budget exists to make legible, and invisible to every shape assertion
+        in the suite.
+
+        The assertion is on the RENDERED number, not the database — the database
+        was always right; only the page was wrong.
+        """
+        _, projects = world
+        get = client.get("/vote/", REMOTE_ADDR="10.0.0.9", HTTP_USER_AGENT="pytest")
+        assert b"0 of 5 weight spent" in get.content
+
+        pks = [p.pk for p in projects]
+        body = {f"weight_{pk}": w for pk, w in zip(pks, [3, 1, 1], strict=False)}
+        post = client.post("/vote/", body, REMOTE_ADDR="10.0.0.9", HTTP_USER_AGENT="pytest")
+        assert b"Vote recorded" in post.content
+        assert b"5 of 5 weight spent" in post.content, (
+            "after casting weight 3+1+1 the page still reports the pre-cast "
+            "budget; the context was reused after the fact it describes changed"
+        )
+
+    def test_the_weight_boxes_show_what_was_just_cast(self, client, world):
+        """The other half of F-85: the boxes came back empty, so a voter who voted
+        could not see their own vote on the page that confirmed it."""
+        _, projects = world
+        pks = [p.pk for p in projects]
+        body = {f"weight_{pk}": w for pk, w in zip(pks, [3, 1, 1], strict=False)}
+        post = client.post(
+            "/vote/", body, REMOTE_ADDR="10.0.0.8", HTTP_USER_AGENT="pytest"
+        ).content.decode()
+        assert f'name="weight_{pks[0]}"' in post
+        assert 'value="3"' in post, "the box the voter just filled in came back empty"
+
     def test_the_page_does_not_claim_the_bias_is_eliminated(self, client, world):
         body = (
             client.get("/vote/", REMOTE_ADDR="10.0.0.5", HTTP_USER_AGENT="pytest")

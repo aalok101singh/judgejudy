@@ -177,6 +177,37 @@ projects above 1% reach, and the best below 100% — and reach is *measured* by 
 helper rather than asserted from memory, because it is a property of the noise
 model and a transcribed figure is exactly the habit F-72…F-75 exist to prevent.
 
+### F-85 [P2] fixed - After casting a vote the page reported the PRE-cast budget and empty weight boxes
+
+**File:** `src/reviewer/ballots/views.py`, `tests/test_voting.py`
+**Found:** 2026-09-29, at FEAT-06 increment 5, **by casting a real vote against
+the running container with `curl`-shaped requests** -- not by pytest
+**Why it matters:** the view builds one `context` dict, renders it on GET, and
+then **reused the same dict after writing**. So the page a voter lands on after
+voting said **"0 of 41 weight spent"** and showed every weight box empty -- a
+**stale value rendered as a current one**, and a lie about the voter's own action
+on the single number the identity budget exists to make legible.
+
+**The database was correct the whole time.** Every assertion in the suite that
+looked at `Vote` rows, at `spent()`, or at `tally()` passed, because the defect
+was entirely in what got rendered afterwards. **This is the seventh appearance
+of the same defect class**: a feature returning structurally correct output whose
+*values* are wrong. The two predecessors in this feature (F-83, F-84) were both
+caught by tests; this one was caught by a human reading an HTTP response, which
+is the honest measure of how much the automated half of this project's checking
+is worth.
+
+**The lesson is about where the tests were looking.** Every test asserted the
+*effect* of the cast, and the effect was right. None asserted what the voter is
+**shown** after casting -- because "the page looks right" felt like a template
+concern. It is not: **the page is the product**, and a template that renders a
+correct value computed before the write is a wrong page.
+
+**Fixed** by `_recompute` refreshing `spent` and the per-project weights after the
+cast, and pinned by two assertions **on the rendered bytes**
+(`b"5 of 5 weight spent"`, `value="3"`) rather than on the database. The sabotage
+was run: removing the recompute turns both red.
+
 ### F-84 [P1] fixed - An abstention silently became a VOTE for the randomised order
 
 **File:** `src/reviewer/ballots/tally.py`, `tests/test_voting.py`

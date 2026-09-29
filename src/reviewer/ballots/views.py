@@ -207,7 +207,34 @@ def _cast(request, event, ballot_row, context) -> HttpResponse:
 
     context["cast"] = True
     context["error"] = ""
+    # F-85: the budget line is RE-READ after the write. It was built with the
+    # context, which happens before the cast, so the page a voter lands on after
+    # voting said "0 of 41 weight spent" -- a stale value rendered as a current
+    # one. Structurally correct, factually a lie about the voter's own action, and
+    # invisible to every shape assertion. A context is a snapshot, and this one
+    # was being reused after the fact it describes had changed.
+    _recompute(context, event, ballot_row)
     return render(request, "ballots/ballot.html", context)
+
+
+def _recompute(context: dict, event, ballot_row) -> None:
+    """Refresh the values a page shows about the voter's own state.
+
+    Split out because the context is assembled once and the ballot changes during
+    the request, and the two must not be confused: ``budget`` is a property of
+    the ballot and never changes, while ``spent`` and the per-project weights are
+    properties of what the voter has done.
+    """
+    context["spent"] = tally.spent(event, ballot_row.voter_key)
+    cast_weights = dict(
+        Vote.objects.filter(event=event, voter_key=ballot_row.voter_key).values_list(
+            "project_id", "weight"
+        )
+    )
+    context["rows"] = [
+        {"project": row["project"], "weight": cast_weights.get(row["project"].pk, "")}
+        for row in context["rows"]
+    ]
 
 
 def ballot_for(event, request, *, user=None) -> Ballot | None:
