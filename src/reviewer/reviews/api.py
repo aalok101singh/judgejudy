@@ -131,24 +131,26 @@ def _log_denial(event, actor, request, object_id: str, guard: str) -> None:
 def _review_label(review) -> str:
     """A stable, readable identifier for one review.
 
-    **``Review.source_key`` is empty on loaded data, and this is why that has to
-    be handled rather than printed.** D-11 puts ``source_key`` on every
-    importable table so a round trip is byte-identical *including natural keys*,
-    and the ``Review`` model inherits the column -- but the loader keys a review
-    on ``(judge, project)`` and never writes the field, so all 126 rows carry an
-    empty string.
+    **History, because the shape of this function is a scar.** It used to print
+    ``Review.source_key`` directly, and produced **a CSV whose first column was
+    126 empty cells**: a structurally perfect export in which one column contains
+    nothing at all. That is F-61's exact shape, and the test that caught it
+    asserts every exported value against the database rather than the header --
+    the column was never the interesting assertion. Recorded as **F-69**.
 
-    Printing it produced **a CSV whose first column was 126 empty cells**: a
-    structurally perfect export in which one column contains nothing at all.
-    That is F-61's exact shape -- a feature returning structurally valid output
-    containing nothing -- and the test that caught it is the one asserting every
-    exported value against the database, not the one asserting the header. The
-    column was never the interesting assertion.
+    The immediate repair was this fallback to the ``(judge, project)`` natural
+    key. **FEAT-07 then fixed the cause** -- the loader now writes
+    ``Review.source_key`` -- which is what a NULL-keyed row needed, because the
+    bulk importer matches on the natural key and a NULL-keyed review could not
+    round-trip at all.
 
-    So the label falls back to the natural key, which is what the loader actually
-    keys on and what a reader can check. Recorded as **F-69**; the underlying
-    gap (populate ``Review.source_key``) belongs to FEAT-07, which owns
-    ``source_key`` and the byte-identical round trip.
+    **So the fallback is now dead on loaded data, and that is worth saying out
+    loud rather than deleting.** It is still reachable for a review created inside
+    the portal, which has no external identity; and the mutation that removes it
+    became *undetectable* the moment the loader started writing the column --
+    which is a warning about every test that only ever exercises the happy path.
+    ``tests/test_bulk_round_trip.py`` now builds a review with no ``source_key``
+    on purpose so this branch stays load-bearing.
     """
     if review.source_key:
         return review.source_key

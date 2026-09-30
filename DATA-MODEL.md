@@ -2,7 +2,7 @@
 
 > **Status: as built in FEAT-02, corrected by FEAT-03.** The migrations that
 > implement this document are `src/reviewer/*/migrations/0001_initial_schema.py`
-> — 12 apps, 24 models, twelve initial migrations — plus **one correction**,
+> — 12 apps, 26 models, twelve initial migrations — plus **one correction**,
 > `teams/0002_remove_team_teams_team_event_name_uniq`. Each migration has a
 > docstring naming the requirement or decision it serves. The model and app
 > counts below are **checked against the Django app registry** by
@@ -105,7 +105,7 @@ reviewer/isolation/     the primitive: Actor, Scope, ScopeReason, ScopedQuerySet
 reviewer/normalization/ the estimator. No model. FEAT-08.
 ```
 
-**24 tables across 12 apps.** Apps are named for the domain (`reviewer.reviews`),
+**26 tables across 12 apps.** Apps are named for the domain (`reviewer.reviews`),
 not for the layer, and none holds more than three models — both asserted by
 `tests/test_schema_contract.py`.
 

@@ -60,10 +60,13 @@ The overview names the section for every kind of question. Open that section:
    seconds**, and only 5 identities get real password hashes; the other ~116 get
    `UNUSABLE_PASSWORD`. `run.py` **always exits 0** — parse its body, never gate
    on its exit code.
-3. **Every number in a shipped document is generated, not transcribed.** Twelve
-   findings, four of them P1, and two were found *after* we had already
-   published a correction log about the first four. A correction log containing
-   un-caught errors teaches the reader to distrust the writer.
+3. **Every number in a shipped document is generated, not transcribed.** Ninety-six
+   findings, twenty-two of them fixed in this session alone, and two were found
+   *after* we had already published a correction log about the first four. A
+   correction log containing un-caught errors teaches the reader to distrust the
+   writer. **I have now typed a count from arithmetic four times** - 91 mutations
+   when the run printed 90, 760 created rows when the manifest said 979 - and both
+   times the *tool that could have told me the number was sitting right there*.
 4. **Every claim about library behaviour is executed, not recalled.** One of our
    documented DRF defaults was backwards, and it would have made the deadline
    check pass without ever testing the deadline.
@@ -141,7 +144,7 @@ a test instead of quietly weakening a document.
 
 ## Current state
 
-FEAT-01 to FEAT-05 built and verified. 24 models across 12 apps; the isolation
+FEAT-01 to FEAT-05 built and verified. 26 models across 12 apps; the isolation
 primitive, the loader, the public gallery, the deadline guard, the assignment
 engine with its min-cut certificate, the judge console, the scoped score
 endpoint and the CSV export are in place, and **`run.py` prints
@@ -156,9 +159,9 @@ decision, and the naming of the cut controls, is the human's.
 
 | | |
 |---|---|
-| Findings | **92** — **0 open blocking**, 0 open, 18 fixed (awaiting review), 1 unverified (F-27), **11 accepted by decision (F-91)**, 62 closed |
+| Findings | **96** — **0 open blocking**, 0 open, 22 fixed (awaiting review), 1 unverified (F-27), **11 accepted by decision (F-91)**, 62 closed |
 | Acceptance | **T1 and T2 green** — **7 of 7 checks pass**, `claimed T1, verified T1 T2`. The `verified` ceiling is arithmetic in `run.py`, not a gap: there are no T3 or T4 checks at all |
-| Suite | **607 tests**, 90/90 mutations, spec layer green (it prints its own tally) |
+| Suite | **636 tests**, 95/95 mutations, spec layer green (it prints its own tally) |
 | Container | cold start **11.8–20 s** observed 2026-09-29 against the 60 s budget (a range, not a value — F-68); `prove-offline` passes |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
 

@@ -49,7 +49,132 @@ worth noticing rather than explaining away: this was the first feature that ran
 our code against the organizers' *data* instead of data we built, and the
 findings are almost all values that agreed with what we expected.
 
-## Resolved — found in FEAT-06, 2026-09-29 (in progress)
+## Resolved — found in FEAT-07, 2026-09-29 (in progress)
+
+*Four findings, and **not one of them was found by reading the code.** Three were
+found by the bulk escape hatch refusing to do its job, and the fourth by the
+mutation harness reporting that the most valuable mutation in the file was
+undetectable. **Every one is about a test that could not be trusted**, which is
+the sixth time this project has paid that bill in a new medium.*
+
+### F-93 [P1] fixed — Five tables shipped with no natural key, and our own escape hatch quarantined all of them
+
+**File:** `src/reviewer/importer/loader.py`, `src/reviewer/io/bundle.py`
+**Found:** 2026-09-29, at FEAT-07, by the importer quarantining 126 reviews
+
+**`Review`, `Score`, `Assignment`, `RoleBinding` and `TeamMembership` all had
+`source_key = NULL` for every row the loader created.** The `io` app shipped at
+FEAT-02 with the manifest model and the column on every table, and nobody had
+ever written one.
+
+The symptom arrived in four *different* disguises, which is what made this
+expensive and is the reason the repair is a test rather than a patch:
+
+| symptom | what it looked like |
+|---|---|
+| a quarantine report listing 126 reviews | "the importer rejected the most important table" |
+| `NOT NULL constraint failed: reviews_review.assignment_id` | "the fixture is malformed" |
+| `NOT NULL constraint failed: reviews_review.status` | "the archive lost a column" |
+| the census reading `123 fixture users / 0 portal-created` | "the census is wrong" |
+
+**Every one of those read as somebody else's bug.** The bug was always the same:
+*there is no natural key to match on*, so the escape hatch could not restore the
+data it existed to restore. F-69 closed this at FEAT-05 with a **fallback at
+render time** — honest, and not a natural key in the database — and the root
+cause was explicitly deferred to FEAT-07. This is it.
+
+**Resolution.** The loader writes a real key on all five tables, and
+`TestEveryLoadedRowHasANaturalKey` now asserts **every exported table carries one,
+with an exemption list that is asserted to be empty.** Finding five tables by
+archaeology is unacceptable when the property is one loop over `apps.get_models()`;
+the test exists because the five were found by four unrelated symptoms and a
+sixth symptom would not have been recognisable.
+
+**The demo identities were the sixth symptom, and the one that mattered.** Two
+portal-created logins had `NULL` keys, which meant a restore silently dropped them
+and **the demo stopped working on the second boot**. `SourceKeyMixin`'s own
+`help_text` says "Null for rows this portal created" — which is true of the
+*source system* and impossible for a round trip, because a NULL-keyed row has
+nothing to match on. Resolved in favour of the round trip: a generated
+`demo:`-prefixed key, which can never collide with one an organizer's system
+issued.
+
+### F-94 [P1] fixed — the byte-identical round trip passed with the importer writing nothing at all
+
+**File:** `tests/test_bulk_round_trip.py`
+**Found:** 2026-09-29, at FEAT-07, by a mutation that reported itself NOT DETECTED
+
+**Making `clear_all` clear nothing left the acceptance line green.** The round
+trip exports, imports, and exports again — and matched byte-for-byte, because the
+importer's upsert re-wrote identical values onto rows that never left.
+
+> **Byte-identical is necessary but not sufficient.** It cannot distinguish
+> "restored correctly" from "never touched anything", and the mutation that
+> exposes this is the single most valuable one in the file because it makes an
+> acceptance criterion pass while testing nothing.
+
+The repair is three assertions that the byte comparison structurally cannot make:
+the tables were **empty** beforehand, the import reported rows **created** rather
+than updated, and the created count matches the manifest's row total. The count is
+**derived from the manifest, not typed** — the first version hardcoded 760 from
+arithmetic and the real figure was 979, which is this project's fourth
+transcription mistake and the first one inside the file whose entire subject is
+not trusting a number you did not compute.
+
+### F-95 [P2] fixed — rule 1 refused nothing, because it checked the archive's own claim
+
+**File:** `src/reviewer/io/bundle.py`
+**Found:** 2026-09-29, at FEAT-07, by a test that asserted a refusal and got none
+
+**"Refuse an unknown `schema_version`" was implemented as
+`manifest["schema_version"] in manifest["compatible_with"]`** — the archive
+checking its own certificate. An archive declaring `schema_version = 99,
+compatible_with = [99]` sailed straight through a v1 importer, which is precisely
+the silent data loss the rule exists to prevent.
+
+> **A self-certifying archive is not a certificate.** The reader has to check
+> against *its own* capability: `SCHEMA_VERSION in manifest["compatible_with"]`.
+
+The failing test is the evidence the rule was real before it was fixed — it
+asserted a refusal, got a successful import, and said so.
+
+### F-96 [P2] fixed — catching a bad row aborted the restore it claimed to report on
+
+**File:** `src/reviewer/io/bundle.py`
+**Found:** 2026-09-29, at FEAT-07, by a dropped-column test hitting a driver error
+
+A row missing a `NOT NULL` column raised `IntegrityError` out of `import_archive`.
+The first repair caught it and quarantined it — **and was worse than the crash**,
+because catching an `IntegrityError` inside an atomic block leaves the transaction
+marked *needs rollback*, so the next query died with
+`TransactionManagementError`. One bad row in 10,000 meant: the report said "1
+quarantined", and **nothing else was restored.**
+
+The fix is a **savepoint** — a nested `atomic()` per row, so the error rolls back
+to the savepoint and leaves the outer transaction usable. Rule 4 applied to a
+malformed row rather than an unmatchable one: quarantine it, name the row, carry
+on.
+
+### Two more mutations, both aimed at the wrong line
+
+- **"Remove the passthrough re-emission" was caught**, but only after the feature
+  was fixed: the first version stored the unknown column's *name* and `None` for
+  its value, and nothing called the writer at all. The feature had been written as
+  "don't crash on an unknown column" and shipped as though it were "keep it".
+- **"Stop writing the archived id back" was undetectable**, because with no `pop`
+  the archived id is written back unchanged — the correct behaviour. **A mutation
+  that cannot be detected is a mutation aimed at the wrong line**, so it now
+  writes `obj.pk` instead, which the byte comparison sees.
+
+### And one that quietly stopped being true
+
+**The F-69 export-label fallback is now dead on loaded data**, because the loader
+writes `source_key` (F-93). The mutation that removed it *became equivalent* and
+stopped being detected — a warning about every test that only exercises the happy
+path. The fallback is still correct for a portal-created review, so rather than
+delete it, `TestTheExportLabelFallbackStaysLoadBearing` builds a review with no
+`source_key` on purpose. **A branch that no fixture reaches is a branch no
+mutation can test.**
 
 *Ten findings. **Four were found by re-running Phase 0 on a tree nobody had
 touched** (F-72…F-75), **two by the influence report's own mutation harness and by

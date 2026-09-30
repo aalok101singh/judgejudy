@@ -79,6 +79,11 @@ SANCTIONED_METHODS = {
     # decision. Sanctioned rather than allowlisted so the rule keeps applying to
     # every other read in the file that calls it -- see the method's own docstring.
     "for_cross_judge_analysis",
+    # FEAT-07's bulk escape hatch: the widest read in the codebase, unfiltered
+    # and with no actor. Sanctioned, not allowlisted, for the same reason as the
+    # line above -- and its blast radius is asserted by a test rather than by a
+    # convention, so this stays the only module that may call it.
+    "for_bulk_transfer",
     # Writes. A test factory calling create() leaks nothing.
     "create",
     "bulk_create",

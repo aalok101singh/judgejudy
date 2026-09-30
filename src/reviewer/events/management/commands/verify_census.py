@@ -27,7 +27,19 @@ from reviewer.core import ROLE_JUDGE
 from reviewer.importer import census as census_module
 
 
-def _census_tables():
+def _portal_emails(census) -> list[str]:
+    """The emails of the demo identities this portal created rather than imported.
+
+    Derived from ``DemoIdentity.from_fixture``, which is the field that actually
+    answers the question. See ``_census_tables`` for why this is not a
+    ``source_key`` test.
+    """
+    from reviewer.importer import demo as demo_module
+
+    return [i.email for i in demo_module.choose(census) if not i.from_fixture]
+
+
+def _census_tables(census):
     """``(label, model, queryset, expected)`` where ``expected`` is a function.
 
     A *function*, not a number, and that is the entire point: this table has no
@@ -50,19 +62,30 @@ def _census_tables():
     from reviewer.teams.models import Team, TeamMembership
 
     criteria = len(census_module.CRITERIA_KEYS)
+    #: The split is by **provenance**, read off the demo identities'
+    #: ``from_fixture`` flag, not by whether ``source_key`` happens to be NULL.
+    #: Those two were the same thing until FEAT-07 gave the portal-created demo
+    #: users a generated ``demo:``-prefixed natural key -- which they need,
+    #: because a NULL-keyed row cannot round-trip and our own escape hatch was
+    #: silently dropping the demo logins. **The census then read 123 fixture
+    #: users and 0 portal-created, and it was the census that was wrong**: it was
+    #: using the presence of a key as a proxy for a question about origin.
+    #: A proxy is fine until the thing it proxies for acquires a second reason to
+    #: be false, and then it is a bug that only fires on the day you fix something
+    #: else.
     return [
         ("events.Event", Event, Event.objects.all(), lambda c: c.events),
         ("events.Track", Track, Track.objects.all(), lambda c: c.tracks),
         (
             "accounts.User (from fixtures.json)",
             User,
-            User.objects.filter(source_key__isnull=False),
+            User.objects.exclude(email__in=_portal_emails(census)),
             lambda c: c.people,
         ),
         (
             "accounts.User (portal-created)",
             User,
-            User.objects.filter(source_key__isnull=True),
+            User.objects.filter(email__in=_portal_emails(census)),
             lambda c: sum(1 for i in demo_module.choose(c) if not i.from_fixture),
         ),
         # F-12, asserted rather than assumed. Hashing all 121 people costs ~48 s
@@ -136,7 +159,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  {'table':<38}{'rows':>6}{'expected':>10}   ")
         self.stdout.write("  " + "-" * 58)
 
-        for label, _model, queryset, expected_of in _census_tables():
+        for label, _model, queryset, expected_of in _census_tables(census):
             expected = expected_of(census)
             actual = queryset.count()
             if actual != expected:

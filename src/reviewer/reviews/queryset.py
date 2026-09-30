@@ -215,6 +215,36 @@ class ReviewQuerySet(ScopedQuerySetMixin, models.QuerySet):
         """
         return self.filter(event_id=event_id)
 
+    def for_bulk_transfer(self) -> ReviewQuerySet:
+        """EVERY review, unfiltered -- the bulk escape hatch, and nothing else.
+
+        **This is the widest read in the codebase and the one that most needs a
+        name.** FEAT-07's importer and exporter cannot scope to an actor: an
+        organizer restoring a lost database is not one of the 30 judges, and a
+        restore that quietly skipped the rows it could not attribute would be a
+        tool that reports success and loses data -- the F-61 shape at the largest
+        possible scale.
+
+        The reasons it is acceptable, in order of how much they matter:
+
+        1. **No request path can reach it.** It is only called from
+           `reviewer/io/bundle.py`, and `tests/test_bulk_round_trip.py` asserts
+           that -- so the accessor's blast radius is one module, greppable, and
+           pinned by a test rather than by a convention.
+        2. **The output leaves the isolation boundary by design.** An archive is
+           the organizer's own data being handed back to the organizer; that is
+           the feature, not a leak.
+        3. **It is not a rendering primitive.** Nothing formats a review with it,
+           so it cannot leak into a page by accident the way
+           `for_cross_judge_analysis` could.
+
+        **It still requires the operator to be an organizer**, which is enforced
+        where the command is, not here. A queryset method has no idea who is
+        asking, and pretending otherwise would be a worse failure than the one it
+        prevents.
+        """
+        return self
+
     # ------------------------------------------------------------- public read
 
     def public_review_counts(self, event_id, project_ids) -> dict:

@@ -533,14 +533,18 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
         "src/reviewer/reviews/api.py",
         "    if review.source_key:\n        return review.source_key\n",
         "    if True:\n        return review.source_key\n",
-        "the review label loses its natural-key fallback, so the export's first "
-        "column is 126 empty cells — F-69, a structurally valid export "
-        "containing nothing, which is F-61's shape one column wide",
+        "the review label loses its natural-key fallback, so a portal-created "
+        "review exports an EMPTY first column - F-69, a structurally valid export "
+        "containing nothing, which is F-61's shape one column wide. **The detector "
+        "was repointed**: it used to name only the CSV cell test, which stopped "
+        "exercising the branch the moment FEAT-07 made the loader write "
+        "`source_key`, so the mutation reported itself equivalent. The class below "
+        "builds a review with no key on purpose.",
         [
             sys.executable,
             "-m",
             "pytest",
-            "tests/test_api.py::TestTheCsvExport::test_no_column_in_the_export_is_empty_throughout",
+            "tests/test_bulk_round_trip.py::TestTheExportLabelFallbackStaysLoadBearing",
             "-q",
         ],
     ),
@@ -1669,6 +1673,96 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-m",
             "pytest",
             "tests/test_normalization.py::TestTheEstimatorDegradesGracefully",
+            "-q",
+        ],
+    ),
+    # --- io/bundle.py: the bulk escape hatch ----------------------------------
+    # The dangerous mutations here are not wrong numbers. They are ones that make
+    # the round trip PASS for the wrong reason, which is the whole risk of an
+    # assertion about an entire database.
+    (
+        "src/reviewer/io/bundle.py",
+        "            count = queryset.count()\n            queryset.delete()",
+        "            count = 0",
+        "clear_all stops deleting, so the round trip exports, imports nothing, and "
+        "exports again - and MATCHES, because the rows never left. This is the "
+        "single most valuable mutation in the file: it makes the acceptance line "
+        "green while testing nothing at all, and no amount of inspecting the "
+        "importer's own output would notice. **The first version targeted "
+        "`if model in exclude:` instead, and the harness correctly reported NOT "
+        "DETECTED -- replacing that with `if False:` makes clear_all delete "
+        "MORE, not less, so the round trip still passed. Third time this file "
+        "has recorded a mutation aimed at the wrong line.**",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bulk_round_trip.py::TestTheRoundTripItself",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/io/bundle.py",
+        "    if SCHEMA_VERSION not in readable:",
+        "    if False:",
+        "rule 1 stops refusing an unknown schema_version. A wrong guess at a "
+        "column layout silently drops data, and the refusal is the only thing "
+        "between an organizer and that.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bulk_round_trip.py::TestTheFourRules",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/io/bundle.py",
+        '            row[field.name] = {"__fk__": related.source_key}',
+        '            row[field.name] = {"__pk__": related.pk}',
+        "foreign keys travel as local primary keys. The round trip still passes - "
+        "the same database is on both sides - and the archive imports into a "
+        "DIFFERENT database, which looks like a successful restore and is not one.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bulk_round_trip.py::TestTheTrapsInTheSerialisation",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/io/bundle.py",
+        "                    row[column_name] = by_key[key]",
+        "                    pass",
+        "the passthrough is stored but never re-emitted, so an organizer's custom "
+        "column survives exactly one round trip and is gone on the second. The "
+        "worst shape this feature can take: it LOOKS like it works.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bulk_round_trip.py::TestThePassthroughIsReal",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/io/bundle.py",
+        '    scalars.pop("id", None)',
+        '    scalars["id"] = 1',
+        "the post-insert UPDATE rewrites every row's primary key to 1, so the "
+        "restore collapses and the foreign keys point nowhere. Detected by the "
+        "byte comparison. **Two earlier versions of this mutation were "
+        "undetectable**: simply removing the pop writes the archived id back "
+        "unchanged, which is correct, and writing `obj.pk` is the same value "
+        "again. A mutation that cannot be detected is a mutation aimed at the "
+        "wrong line - twice in one entry, and once because the replacement was "
+        "semantically identical to the original.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_bulk_round_trip.py::TestTheRoundTripItself",
             "-q",
         ],
     ),

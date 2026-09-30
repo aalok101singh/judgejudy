@@ -109,3 +109,56 @@ class RunSnapshot(SourceKeyMixin, TimeStampedModel, models.Model):
 
     def __str__(self) -> str:
         return f"{self.kind} {self.event_id} v{self.schema_version}"
+
+
+class PassthroughColumn(SourceKeyMixin, TimeStampedModel, models.Model):
+    """A column the portal has never heard of, preserved rather than dropped.
+
+    **This is the highest-value behaviour in the importer and almost nobody
+    ships it** (``bible/05`` §8c). An organizer running a portal with a custom
+    field on ``Project`` exports, upgrades, and imports. The naive importer reads
+    a known column list and writes what it recognises -- and the custom field is
+    gone, silently, with a successful exit code.
+
+    The difference between "you cannot leave" and "we do not lose your data" is
+    exactly this table. An unknown column is recorded here with its name, its
+    per-row values, and the table it came from, so a round trip through a portal
+    that has never heard of the field returns it **byte-identically**.
+    """
+
+    run = models.ForeignKey(
+        "RunSnapshot", on_delete=models.CASCADE, related_name="passthrough_columns"
+    )
+    table = models.CharField(max_length=64)
+    column = models.CharField(max_length=128)
+    #: The JSON-ish type we saw it as, so a later reader knows how to cast back.
+    value_type = models.CharField(max_length=16, default="unknown")
+
+    class Meta:
+        db_table = "io_passthroughcolumn"
+        unique_together = [("run", "table", "column")]
+        ordering = ["table", "column"]
+
+    def __str__(self) -> str:
+        return f"{self.table}.{self.column}"
+
+
+class PassthroughRow(SourceKeyMixin, TimeStampedModel, models.Model):
+    """One row's value for one unknown column, addressed by natural key.
+
+    ``row_key`` is the owning row's ``source_key``, **not** its primary key: a
+    primary key is local to one database and the whole point of this table is to
+    survive the database being replaced.
+    """
+
+    column = models.ForeignKey(PassthroughColumn, on_delete=models.CASCADE, related_name="values")
+    row_key = models.CharField(max_length=255)
+    value = models.JSONField()
+
+    class Meta:
+        db_table = "io_passthroughrow"
+        unique_together = [("column", "row_key")]
+        ordering = ["column_id", "row_key"]
+
+    def __str__(self) -> str:
+        return f"{self.column_id}:{self.row_key}"
