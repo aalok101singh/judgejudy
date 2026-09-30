@@ -51,8 +51,8 @@ findings are almost all values that agreed with what we expected.
 
 ## Resolved — found in FEAT-07, 2026-09-29 (in progress)
 
-*Four findings, and **not one of them was found by reading the code.** Three were
-found by the bulk escape hatch refusing to do its job, and the fourth by the
+*Five findings, and **not one of them was found by reading the code.** Four were
+found by the bulk escape hatch refusing to do its job, and the fifth by the
 mutation harness reporting that the most valuable mutation in the file was
 undetectable. **Every one is about a test that could not be trusted**, which is
 the sixth time this project has paid that bill in a new medium.*
@@ -154,6 +154,85 @@ The fix is a **savepoint** — a nested `atomic()` per row, so the error rolls b
 to the savepoint and leaves the outer transaction usable. Rule 4 applied to a
 malformed row rather than an unmatchable one: quarantine it, name the row, carry
 on.
+
+### F-97 [P1] open — `JudgeCredential` and `SignedRecord` ship with schemas and no writer at all
+
+**File:** `src/reviewer/credentials/models.py`
+**Found:** 2026-09-29, at FEAT-07, by building D-09's replication target and finding it did not exist
+
+**Grepping `src/` for `JudgeCredential.objects` returns exactly one hit: the model
+definition.** After a full `load_fixtures`, the database holds **zero**
+`JudgeCredential` rows and **zero** `SignedRecord` rows.
+
+**This is F-71 again, verbatim, one app over.** `AuditEntry` shipped at FEAT-02
+with a complete hash chain and nothing ever wrote a row; FEAT-06 built the writer
+and found the chain empty. `JudgeCredential` and `SignedRecord` shipped at the
+same moment with complete schemas — `public_key`, `signature`, `record_hash`, the
+in-toto statement, the DSSE envelope — and nothing ever writes one. The shared
+root cause is named in both cases by `RunSnapshot`'s own docstring: **a contract
+invented at the same moment as the code it describes is a contract that fits
+whatever the code happened to do.**
+
+**Why it matters more here than it did for `AuditEntry`.** D-09's whole mechanism
+is *replicating the chain head into every signed judge record*, so that N judges
+who are not the organizer each hold a copy and equivocation becomes detectable.
+**With no signed records there is nothing to replicate into**, and the replication
+logic is correct and complete and runs against nothing. That is the F-61 shape at
+the scale of a whole tier: a feature that reports success and has no data path.
+
+**The consequence for the T4 claim, stated plainly.** "D-09 is implemented" means
+*the replication is implemented and there is not yet anything to replicate to* —
+and the Ed25519/DSSE increment is what makes that sentence untrue. Until then,
+**the signed-records half of T4 is a schema and a replication function, not a
+capability.** Nothing in the acceptance report can detect the difference, because
+the acceptance report cannot verify T4 either.
+
+**Not fixed here, deliberately.** The signer is FEAT-07's signing increment and it
+is the largest item in the block; bolting a credential issuer onto the publication
+increment would have meant shipping a key-management story nobody had reviewed.
+`tests/test_publication.py` builds a `JudgeCredential` **by hand, and says why in
+its own docstring** — the fixture is the evidence, not a convenience.
+
+### F-98 [P2] fixed — the hash's field list and the hash disagreed, and a constant counted as covered
+
+**File:** `src/reviewer/audit/publication.py`
+**Found:** 2026-09-29, at FEAT-07, by the mutation harness **skipping** a mutation
+
+**`_hashable` listed its five fields by hand while `RANKING_FIELDS` named them
+separately, and the two drifted.** By the time the mutation ran, the function
+hashed a `judges` key that no ranking row has — contributing a constant `None` to
+every hash — and had **stopped hashing `reviews_counted`**. Its own docstring said
+"exactly `RANKING_FIELDS`" and was false.
+
+**No test could have caught it, and that is the point.** A consistently-wrong hash
+is indistinguishable from a right one by any test that only checks that hashes
+*agree*: the round trip still matched, an edit still moved the hash, the digest was
+still mixed in. F-61's shape exactly — structurally valid output containing
+nothing.
+
+**It surfaced because the harness SKIPPED a mutation rather than running it.** The
+two-line replacement string no longer matched the source, and a skip is a finding
+about the harness; this time the finding was about the code underneath it. **A
+stale mutation string is a stale code smell, and the harness said so by refusing
+to lie about a green tally.**
+
+The repair is that `_hashable` now **derives from the tuple** rather than
+restating it — one source of truth, the same "called, not reimplemented" rule the
+ballot surface follows with `presentation_order`. And four new tests assert the
+relationship directly:
+
+- the hash covers **exactly** `RANKING_FIELDS`;
+- **every named field exists in a real row** (this is what caught a second
+  defect — the tuple said `position` and the function sets `rank`);
+- **changing any named field changes the hash**, which is the strong form and
+  holds for a legitimately-constant field too.
+
+**And a test of mine was wrong, which is worth recording because I wrote it in
+the same file.** The first version asserted that no named field is constant across
+rows, and it flagged `normalization` — which is constant *on purpose*, because
+"this whole ranking is unnormalized" is precisely the claim. **The assertion was
+wrong about the field and the field was right.** Perturbing each field is the
+property that matters, and it passes for a constant field too.
 
 ### Two more mutations, both aimed at the wrong line
 

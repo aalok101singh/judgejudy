@@ -1766,6 +1766,77 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    # --- audit/publication.py: the claim a stranger has to be able to check -----
+    (
+        "src/reviewer/audit/publication.py",
+        'RANKING_FIELDS = ("rank", "project", "mean", "reviews_counted", "normalization")',
+        'RANKING_FIELDS = ("rank", "project", "mean", "reviews_counted")',
+        "the hash stops recording HOW the ranking was computed. Every hash still "
+        "matches every other hash, so the round trip still passes, an edit still "
+        "moves it, and the digest is still mixed in -- nothing notices. And the "
+        "day a normalized estimator ships, an old publication's hash would describe "
+        "a ranking computed a different way. **This mutation was re-aimed twice.** "
+        "The first version deleted a key from the hand-written dict in `_hashable`; "
+        "F-98's repair replaced that dict with a comprehension over "
+        "RANKING_FIELDS, so the mutation's target stopped existing and the harness "
+        "SKIPPED it. **A stale mutation string is a stale code smell** -- and this "
+        "one had been stale for exactly as long as the bug it described.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_publication.py",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/audit/publication.py",
+        '        if statement.get("results_hash") not in (None, publication.results_hash):'
+        + "\n            continue",
+        "        if False:",
+        "a judge who signed against an older result has their record OVERWRITTEN. "
+        "That destroys the only evidence the result changed after they signed - "
+        "which is the entire reason D-09 replicates into their statement. The "
+        "report then says every record agrees, because it overwrote the "
+        "disagreement it was supposed to surface.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_publication.py::TestD09Replication",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/audit/publication.py",
+        "    if not results_module.results_visible_to(actor):",
+        "    if False:",
+        "publication stops checking whether the actor may publish. Any visitor can "
+        "freeze a result and a hash, and the hash is the thing people trust.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_publication.py::TestPublishingIsARowAndNotASingleton",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/audit/publication.py",
+        '    payload = canonical({"input_digest": digest,'
+        + ' "ranking": [_hashable(row) for row in rows]})',
+        '    payload = canonical({"ranking": [_hashable(row) for row in rows]})',
+        "the digest is no longer mixed into the ranking hash, so a hash from one set "
+        "of scores can be presented as the hash of another that happens to rank the "
+        "same. Two different datasets, one interchangeable signature.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_publication.py::TestTheHashDetectsAnEdit",
+            "-q",
+        ],
+    ),
 ]
 
 

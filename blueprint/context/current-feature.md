@@ -111,7 +111,50 @@ escape hatch refusing to do its job, one by the mutation harness:
 - **F-96 [P2]** — quarantining a malformed row left the transaction poisoned, so
   one bad row in 10,000 restored **nothing**. Fixed with a savepoint.
 
-### The next four items, in the order they earn their place
+### FEAT-07 increment 2 is built: `results_hash` and the D-09 replication
+
+`reviewer/audit/publication.py`, `manage.py publish_results`, and **18 tests**.
+**The claim is that a stranger can recompute it**, and the centrepiece test proves
+it: export, wipe, import, recompute the digest from the restored rows, and it
+matches. **The escape hatch and the publication claim are the same property viewed
+from two sides** -- if you can take the data away and bring it back, the numbers
+still describe it.
+
+`results_hash` covers five named fields, so a rename does not invalidate a
+publication and a changed score does. The digest is mixed in, so a hash from one
+set of scores cannot be presented as the hash of another. An **empty** audit chain
+publishes an empty head rather than a placeholder, which would otherwise look like
+a chain head and mismatch forever after.
+
+### F-97 [P1, OPEN] -- the signed-records half of T4 has no data path
+
+Grepping `src/` for `JudgeCredential.objects` returns **one hit: the model
+definition.** A loaded database holds **zero** `JudgeCredential` and **zero**
+`SignedRecord` rows. **F-71 again, one app over** -- `AuditEntry` shipped with a
+complete chain and no writer, and `JudgeCredential`/`SignedRecord` ship with
+complete schemas and no writer.
+
+So the D-09 replication is **correct, tested, and running against nothing.** The
+signing increment is what makes that sentence untrue, and until it is, "D-09 is
+implemented" means the replication exists and there is nothing to replicate into.
+**The spec layer now reports 1 open blocking finding, which correctly stops
+FEAT-07 being marked done.**
+
+### The next three items, and the one that closes F-97
+
+| # | Item | Note |
+|---|---|---|
+| 3 | **Ed25519 signed records, in-toto Statement v1 in DSSE, keys on their own volume** | **Moved up from 5. It is the only thing that closes F-97**, and F-97 is a P1 that blocks the feature being done. Building the widget while a P1 stands open would be the wrong order. |
+| 4 | OpenAPI 3.1 via `drf-spectacular` | Cheapest win |
+| 5 | Embeddable results widget, pure static HTML + JSON, renders offline | Self-contained |
+
+### FEAT-09 is written
+
+`history/features/09-video-script.md` -- a **3-minute structure with our own
+material in it**, timed, with the two failure sections marked as the parts worth
+rehearsing. Nothing to decide at the recording session.
+
+### Do not
 
 | # | Item | Note |
 |---|---|---|
