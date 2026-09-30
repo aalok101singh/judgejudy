@@ -84,6 +84,12 @@ SANCTIONED_METHODS = {
     # line above -- and its blast radius is asserted by a test rather than by a
     # convention, so this stays the only module that may call it.
     "for_bulk_transfer",
+    # FEAT-07 signing: every review ONE judge wrote in one event, for their own
+    # participation record. Narrower than for_bulk_transfer and deliberately so
+    # separate -- the blast-radius test on that accessor caught the signer
+    # reaching for it, and an allowlist that grows is a rule that stops meaning
+    # anything.
+    "for_judge_signing",
     # Writes. A test factory calling create() leaks nothing.
     "create",
     "bulk_create",

@@ -140,7 +140,54 @@ implemented" means the replication exists and there is nothing to replicate into
 **The spec layer now reports 1 open blocking finding, which correctly stops
 FEAT-07 being marked done.**
 
-### The next three items, and the one that closes F-97
+### FEAT-07 increment 3 is DONE: Ed25519, in-toto v1, DSSE. F-97 is CLOSED.
+
+`credentials/keys.py`, `in_toto.py`, `signing.py`, `manage.py sign_records`, and a
+**second named Docker volume for the keys**. **27 tests, 6 mutations.**
+Archive: `history/features/07-signed-records-dsse.md`.
+
+**0 open blocking findings.** The T4 signed-records data path is real for the first
+time: every table in that half of the schema now has a writer, and D-09's
+replication finally has something to replicate into.
+
+Three things that had to be right, each because a plausible version is silently
+wrong:
+
+- **The DSSE PAE is length-prefixed, and a wrong one still looks like a valid
+  string.** Character-counting instead of byte-counting is correct for the *type*
+  (ASCII) and wrong for the *payload* (UTF-8 JSON), so it passes everything until a
+  judge has an accent in their name. **The test asserts the specification's own
+  worked example, not this implementation's output** — a PAE built by the same
+  code that verifies it agrees with itself forever.
+- **Verification never compares a stored hash to a stored hash.** It recomputes
+  the PAE and asks whether the key signs *these bytes*.
+- **The record commits to digests, never to scores** — and that is the mechanism,
+  not a courtesy: a record carrying scores is not shareable with a judge who was
+  not the organizer, so it would replicate nothing.
+
+**Keys on their own volume because `down -v` is how we reset.** Share a volume with
+the database and every reset destroys every signature, taking the evidence with it.
+A backup of the data volume is then safe to hand to somebody, which you cannot
+retrofit.
+
+### Two more things the gates caught in my own new code
+
+- **The blast-radius test on `for_bulk_transfer` failed**, because the signer had
+  started calling the widest read in the codebase. The fix was **not** a second
+  allowlist entry — it is `for_judge_signing(event_id, judge)`, genuinely narrower,
+  so the guarantee on the wide accessor still says "one caller".
+- **The one-payload guard had a docstring and no test**, and the mutation harness
+  proved it by reporting the mutation that removes it NOT DETECTED. Two tests now
+  cover it. *A docstring asserting a behaviour is not a test of it.*
+
+### The next two items
+
+| # | Item | Note |
+|---|---|---|
+| 4 | OpenAPI 3.1 via `drf-spectacular` | Cheapest win in the block |
+| 5 | Embeddable results widget, pure static HTML + JSON, renders offline | Self-contained |
+
+### Do not
 
 | # | Item | Note |
 |---|---|---|

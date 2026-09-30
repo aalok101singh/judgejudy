@@ -1837,6 +1837,115 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    # --- credentials: the signed records (F-97) --------------------------------
+    # The dangerous mutations here are not wrong bytes. They are ones that make a
+    # signature VERIFY when it should not, which is the only failure mode that
+    # matters in a module whose entire job is to say "not this one".
+    (
+        "src/reviewer/credentials/in_toto.py",
+        ", pae(payload_type, unb64(payloads[0])))",
+        ", unb64(payloads[0])))",
+        "the signature is verified against the raw payload instead of the "
+        "pre-authenticated encoding, so the PAE is never actually exercised. Every "
+        "signature this build creates would verify, and every OTHER build's - and "
+        "every third-party DSSE verifier's - would not. The signature becomes a "
+        "thing only this code believes. **This is the mutation the PAE test exists "
+        "for**: the PAE can be wrong in isolation and nothing else would notice, "
+        "because verification is the only place it is used.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_signing.py::TestSignAndVerify",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/credentials/in_toto.py",
+        '            str(len(payload)).encode("ascii"),',
+        '            str(len(payload.decode("utf-8"))).encode("ascii"),',
+        "the payload length is counted in CHARACTERS rather than bytes. Every ASCII "
+        "payload still works, so the tests that use JSON with no non-ASCII in it "
+        "stay green - and a judge whose name contains an accent silently stops "
+        "verifying for everyone but us. A length-prefixed encoding that is subtly "
+        "wrong is indistinguishable from a right one until another party's verifier "
+        "disagrees, which is why there is no independent witness in this project.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_signing.py::TestThePAEIsTheSpecBytes",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/credentials/in_toto.py",
+        "    if len(payloads) != 1:",
+        "    if len(payloads) < 1:",
+        "an envelope carrying two payloads is read by taking the first. DSSE allows "
+        "several, and 'which one did the signer mean' is exactly the ambiguity the "
+        "PAE exists to remove - so accepting one silently verifies a payload the "
+        "signer may not have intended.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_signing.py",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/credentials/keys.py",
+        "    if path.exists() and not overwrite:",
+        "    if False:",
+        "generating a key overwrites the existing one. Every record the old key "
+        "signed becomes unverifiable, and nothing in the schema records that this "
+        "happened - each record carries its own public key, so a different key "
+        "answering to the same judge is invisible. Losing a key is recoverable; "
+        "losing it without noticing is not.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_signing.py::TestKeysLiveOnTheirOwnVolume",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/credentials/keys.py",
+        "    if not resolved.is_relative_to(root):",
+        "    if False:",
+        "a key file from anywhere on disk may be loaded. The rule that keeps a "
+        "private key out of the image, out of git, and out of the data volume that "
+        "`down -v` destroys - and that makes a data-volume backup safe to hand to "
+        "somebody - becomes documentation.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_signing.py::TestKeysLiveOnTheirOwnVolume",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/credentials/signing.py",
+        "    if claimed == current:\n"
+        + '        return True, f"signature valid and {len(claimed)} review digests unchanged"',
+        "    if True:\n"
+        + '        return True, f"signature valid and {len(claimed)} review digests unchanged"',
+        "verification stops comparing the signed digests against the work, so a "
+        "judge whose reviews were edited AFTER signing still reports valid. The "
+        "signature is still checked - and the signature was never the thing that "
+        "would have noticed. This is the entire reason the record exists, and it is "
+        "invisible in every test that does not edit a review.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_signing.py::TestSignAndVerify",
+            "-q",
+        ],
+    ),
 ]
 
 

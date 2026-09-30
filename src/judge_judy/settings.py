@@ -31,6 +31,29 @@ INSTANCE_DIR = DATA_DIR / "instance"
 MEDIA_ROOT = DATA_DIR / "media"
 STATIC_ROOT = DATA_DIR / "staticfiles"
 
+# ---------------------------------------------------------------------------
+# Signing keys, on their OWN volume
+# ---------------------------------------------------------------------------
+# The Ed25519 private keys that sign the judge participation records. They live
+# on a **separate named volume** from the database, which is the whole point:
+#
+#   * `docker compose down -v` resets the portal, and if the keys were on the data
+#     volume they would be destroyed by the same command that resets the demo --
+#     so every judge's signature would become unverifiable the moment anyone ran
+#     the break protocol. Keeping them apart means a reset costs you the *data*
+#     and keeps the *evidence*.
+#   * A backup of the data volume is then safe to hand to someone. It contains no
+#     key material at all, which is not a property you can retrofit.
+#
+# **Not in the image, not in the database, and `keys.py` refuses to load a key from
+# anywhere else** -- including the source tree, which would put a private key in
+# every image layer and every `git status`.
+#
+# "Keys never leave the container" is a stated deployment posture, not a KMS
+# integration we are pretending to have; `requirements.txt` says so explicitly
+# under the crypto section.
+KEYS_DIR = Path(os.environ.get("DJUDGE_KEYS_DIR", REPO_ROOT / "keys"))
+
 
 # ---------------------------------------------------------------------------
 # Secret key

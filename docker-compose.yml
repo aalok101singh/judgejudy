@@ -34,8 +34,18 @@ services:
       # be. The volume is seeded from the image's /app/data on first use, so
       # it arrives owned by uid 10001 and writable.
       - judgejudy-data:/app/data
+      # The Ed25519 signing keys, on a SEPARATE named volume.
+      #
+      # This is not tidiness. `down -v` is how the break protocol resets the portal,
+      # and if the keys shared a volume with the database then every reset would
+      # destroy every judge's signature -- taking the evidence with it. Separate
+      # volumes mean a reset costs you the DATA and keeps the EVIDENCE, and a
+      # backup of judgejudy-data can be handed to somebody because it contains no
+      # key material at all.
+      - judgejudy-keys:/app/keys
     environment:
       DJUDGE_DATA_DIR: /app/data
+      DJUDGE_KEYS_DIR: /app/keys
       DJANGO_SETTINGS_MODULE: judge_judy.settings
       PORT: "8080"
       # Unset rather than given a value. The settings module generates and
@@ -69,3 +79,5 @@ services:
 volumes:
   judgejudy-data:
     name: judgejudy-data
+  judgejudy-keys:
+    name: judgejudy-keys

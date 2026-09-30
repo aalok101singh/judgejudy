@@ -155,7 +155,7 @@ to the savepoint and leaves the outer transaction usable. Rule 4 applied to a
 malformed row rather than an unmatchable one: quarantine it, name the row, carry
 on.
 
-### F-97 [P1] open — `JudgeCredential` and `SignedRecord` ship with schemas and no writer at all
+### F-97 [P1] closed — `JudgeCredential` and `SignedRecord` ship with schemas and no writer at all
 
 **File:** `src/reviewer/credentials/models.py`
 **Found:** 2026-09-29, at FEAT-07, by building D-09's replication target and finding it did not exist
@@ -188,10 +188,32 @@ capability.** Nothing in the acceptance report can detect the difference, becaus
 the acceptance report cannot verify T4 either.
 
 **Not fixed here, deliberately.** The signer is FEAT-07's signing increment and it
-is the largest item in the block; bolting a credential issuer onto the publication
-increment would have meant shipping a key-management story nobody had reviewed.
-`tests/test_publication.py` builds a `JudgeCredential` **by hand, and says why in
-its own docstring** — the fixture is the evidence, not a convenience.
+**Closed at FEAT-07 increment 3.** `credentials/keys.py`, `credentials/in_toto.py`,
+`credentials/signing.py`, `manage.py sign_records`. Ed25519 (RFC 8032), an in-toto
+Statement v1 inside a DSSE envelope, **keys on their own named volume**.
+
+Three places where a plausible implementation is silently wrong, and each has a
+test:
+
+- **The PAE is length-prefixed, and a wrong PAE still produces a valid-looking
+  string.** DSSE signs `"DSSEv1" SP LEN(type) SP type SP LEN(payload) SP payload`.
+  Counting characters instead of bytes is correct for the *type* (ASCII) and wrong
+  for the *payload* (UTF-8 JSON), so it passes every test until a judge has an
+  accent in their name. The test asserts **the specification's own worked
+  example**, not this implementation's output, because an implementation that is
+  consistently wrong agrees with itself forever.
+- **Verification never compares a stored hash to a stored hash.** It recomputes
+  the PAE and asks whether the key signs *these bytes*. A hash-to-hash check only
+  proves two things the signer produced agree with each other, which is not what a
+  signature is for.
+- **The record commits to digests, never to scores.** That restriction is the
+  mechanism, not a courtesy: D-09 hands a copy to every judge so equivocation
+  becomes a diff between two of them, and a record carrying scores would not be
+  shareable with a judge who was not the organizer, so it would replicate nothing.
+
+**`tests/test_signing.py` keeps a standing assertion of the finding itself**: the
+loader creates zero credentials and zero records, and signing creates one per
+judge. **A finding that lives only in prose rots.**
 
 ### F-98 [P2] fixed — the hash's field list and the hash disagreed, and a constant counted as covered
 

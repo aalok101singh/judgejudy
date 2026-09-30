@@ -215,6 +215,28 @@ class ReviewQuerySet(ScopedQuerySetMixin, models.QuerySet):
         """
         return self.filter(event_id=event_id)
 
+    def for_judge_signing(self, event_id, judge) -> ReviewQuerySet:
+        """Every review ONE judge wrote in one event, for signing their own record.
+
+        **Narrower than ``for_bulk_transfer`` on purpose, and the distinction is
+        the point.** Signing a judge's participation record needs that judge's work
+        and nothing else -- not the whole event -- so this takes an explicit judge
+        and filters on them.
+
+        It exists because the blast-radius test on ``for_bulk_transfer`` **caught
+        the signer using it.** That is the test working: the widest read in the
+        codebase was being called from a second module, and the fix that keeps the
+        guarantee strong is a narrower accessor rather than a second entry in the
+        allowlist. **An allowlist that grows is a rule that stops meaning anything**,
+        and a second sanctioned method costs one small method instead.
+
+        Not a request path. Signing is an operator action against a record the
+        organizer is attesting to, so there is no request actor -- but unlike
+        ``for_bulk_transfer`` the scope is still fully determined by the arguments,
+        which is why it can be this narrow.
+        """
+        return self.filter(event_id=event_id, judge=judge)
+
     def for_bulk_transfer(self) -> ReviewQuerySet:
         """EVERY review, unfiltered -- the bulk escape hatch, and nothing else.
 
