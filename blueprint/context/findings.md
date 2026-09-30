@@ -177,7 +177,72 @@ projects above 1% reach, and the best below 100% — and reach is *measured* by 
 helper rather than asserted from memory, because it is a property of the noise
 model and a transcribed figure is exactly the habit F-72…F-75 exist to prevent.
 
-### F-91 [P1] accepted - the project's own gate FORBIDS claiming T3, and T3 is genuinely built
+### F-92 [P1] fixed - Two of `bible/06`'s published normalization numbers do not regenerate: one is a seed draw, one does not reproduce at all
+
+**File:** `src/reviewer/normalization/detectability.py`,
+`docs/REAL-FIXTURE-RESULTS.md`, `tests/test_normalization.py`
+**Found:** 2026-09-29, at FEAT-08, by **re-deriving every number** rather than
+transcribing it -- which is the only way this class is ever found
+**Why it matters:** FEAT-08's whole value proposition is that its numbers are
+generated. The first thing the generator did was **refuse to reproduce two of
+them.**
+
+| | generated | `bible/06` §4.1b | verdict |
+|---|---|---|---|
+| every variance-decomposition term | 3.5651 / 0.4981 / 0.4079 / **0.0217** / **0.0971** / −0.0754 / 0.0506 | identical to 4 dp | **reproduces exactly** |
+| Brown–Forsythe `F` | 1.0686 | 1.069 | reproduces |
+| **location p** | **0.2266** (seed 0), six-seed range 0.2266–0.2415 | 0.234 | **reproduces as a seed draw** -- 0.234 is inside the range, so the published figure is a legitimate draw at a different seed |
+| **dispersion p** | **0.5376** (seed 0); 0.39 under the other scheme | 0.186 | **DOES NOT REPRODUCE under either scheme** |
+
+**The asymmetry between the two p-values is the finding, and it is worse than
+either being wrong.** A permutation p is a function of a random seed, and
+`bible/06` recorded a value **without one**. The location figure happens to land
+inside the seed-to-seed spread, so it reads as correct; the dispersion figure
+does not, so it reads as wrong. **A reader has no way to tell those apart
+without re-deriving**, which is the whole argument for generating numbers and
+the reason this project now prints the documented value beside the generated one
+*with a verdict*, in the script and in the document.
+
+**The conclusion is unaffected, and that is the half that matters.** Both p-values
+are an order of magnitude above 0.05 and point the same way, so "no severity
+effect on this fixture" is supported by **two independent tests**, and the
+variance decomposition -- the quantitative core -- reproduces to four decimal
+places. So the *number* `0.186` is wrong and the *finding* is right. We report the
+finding and do not report 0.186.
+
+**A second, smaller defect was found while diagnosing this.** The first
+`dispersion_p` permuted the **precomputed** MAD-deviations, which is not a
+permutation of the test statistic: Brown–Forsythe's statistic is `MSB/MSW` on
+absolute deviations from the *group* median, and the group median is part of what
+the test computes, so holding the deviations fixed tests a null that does not
+correspond to any world. It gave `p ≈ 0.39`. Rewritten to permute the **raw
+values** and recompute each group's median inside the loop -- with the grand mean
+recomputed per draw too, since a second version of the same error was introduced
+and caught in the same sitting -- it gives `p ≈ 0.54`. **The published number was
+right and the first implementation was wrong**, which is the more useful order
+for that sentence to be in.
+
+**Neither number is asserted as a value.** The tests assert (a) the variance
+decomposition to four decimals, (b) that the permutation is **seeded and so
+reproducible**, and (c) that both p-values exceed 0.05. Pinning an exact p would
+be pinning a seed, and the seed is the thing that makes the p reproducible in
+the first place.
+
+**This is the second number in this project that a re-derivation refused** — the
+first is F-78's power table in `bible/06` §6.3, which has been open since
+increment 3 and is still wrong in `bible/02` line 109. **Two of this project's
+own published statistics do not regenerate, and both are in the same file.** The
+pattern is now strong enough to be worth stating: `bible/06` is a *research
+document*, and the numbers in it were estimates at the time of writing. **The
+shipped numbers are the generated ones, and they live in
+`docs/REAL-FIXTURE-RESULTS.md`.**
+
+### F-91 [P1] accepted - the project's own gate FORBIDS claiming T3, and the human declined the claim
+
+**DECIDED at BREAK-3, 2026-09-29: option B. The T3 claim is NOT applied, and the
+human chose not to enter it.** `.dogfood.toml` keeps `claimed = ["T1", "T2"]`, the
+gate stays green, and `v-t3-verified` is not tagged. This is a decision, recorded,
+not a deferral: the T3 work is complete and remains complete.
 
 **File:** `tools/run_acceptance.py`, `tools/expected_checks.json`,
 `.dogfood.toml`
@@ -208,7 +273,7 @@ our work** — nothing in this repository is capable of verifying T3. The gate i
 doing its job; the question is what the *job* is for when the checker cannot see
 the tier.
 
-**Three options, and the choice is the human's:**
+**Three options were put to the human, and they chose B:**
 
 | | what it does | cost |
 |---|---|---|

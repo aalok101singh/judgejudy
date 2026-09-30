@@ -42,9 +42,15 @@ options are in `blueprint/history/features/break-3-t3-claim.md`; this is the
 human's call and it is recorded as **F-91 [P1], open on purpose**.
 
 What is not built: comment rate limiting, ballot rate limiting and cookies,
-quadratic voting, the T4 bulk-IO and signing layer, and the normalization proof.
-The published leaderboard is an **UNNORMALIZED raw weighted mean** — judge-severity
-correction is FEAT-08 and the page says so on every render.
+quadratic voting, and the T4 bulk-IO and signing layer.
+
+**The published leaderboard is an UNNORMALIZED raw weighted mean, and now we know
+why.** The normalization proof ([`docs/REAL-FIXTURE-RESULTS.md`](docs/REAL-FIXTURE-RESULTS.md))
+measured the panel and found **no judge-severity effect to correct**: between-judge
+variance `0.0217` against a `0.0971` sampling-noise floor, permutation p = 0.227.
+The estimator was built anyway, and **it would move every one of the 126 scores by
+~0.57 rubric points** (up to 1.44) for nothing measurable — so we do not apply it.
+The page says so on every render.
 
 | | State |
 |---|---|
@@ -65,7 +71,7 @@ correction is FEAT-08 and the page says so on every render.
 | Comments (T3-02) | ✅ built (`/projects/<id>/comments/`) — moderated, plain text, escaped. **Rate limiting is cut and disclosed**; it is the one control `bible/07` V-8 names that we did not ship |
 | Public result hiding (T3-03) | ✅ built (`/results/`) — a bare 403 for judge/participant/visitor while hidden, on the surface a browser actually reaches. Same predicate and aggregate as the API, and a test asserts the two agree |
 | Bulk IO, signed records, OpenAPI | ❌ **not built** (FEAT-07) |
-| Normalization engine + proof | ❌ **not built** (FEAT-08) |
+| Normalization engine + proof (FEAT-08) | ✅ built — `docs/REAL-FIXTURE-RESULTS.md`. **No detectable judge-severity effect** (p = 0.227 location, 0.538 dispersion; between-judge variance 0.0217 sits BELOW the 0.0971 chance floor). Estimator built and **not applied**: it would move every score by ~0.57 points |
 
 ### Why `verified` stops at T2, even when every check passes
 

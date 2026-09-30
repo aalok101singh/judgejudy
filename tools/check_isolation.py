@@ -73,6 +73,12 @@ SANCTIONED_METHODS = {
     # tests/test_gallery.py::test_the_public_count_accessor_returns_no_rows
     # asserts the method's shape rather than its name.
     "public_review_counts",
+    # FEAT-08: the cross-judge normalization proof reads EVERY review in an
+    # event, because a variance decomposition measures the variance BETWEEN
+    # judges and scoping it to one actor is a category error rather than a security
+    # decision. Sanctioned rather than allowlisted so the rule keeps applying to
+    # every other read in the file that calls it -- see the method's own docstring.
+    "for_cross_judge_analysis",
     # Writes. A test factory calling create() leaks nothing.
     "create",
     "bulk_create",

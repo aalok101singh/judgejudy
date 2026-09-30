@@ -1600,6 +1600,78 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    # --- normalization/ (FEAT-08: the proof) --------------------------------------
+    # The first is the one that matters most in this whole file. `excess` is the
+    # SIGNED distance from the sampling-noise floor, and its sign IS the finding:
+    # negative means the observed between-judge variance is below what chance
+    # produces. Taking the absolute value makes "below the noise" always true, so
+    # the null result becomes unfalsifiable -- a metric that can never report the
+    # opposite of its conclusion.
+    (
+        "src/reviewer/normalization/detectability.py",
+        "        excess=between - floor,",
+        "        excess=abs(floor - between),",
+        "the null result becomes UNFALSIFIABLE. `excess` is the signed distance from the "
+        "sampling-noise floor and its sign is the finding; abs() makes 'below the noise' "
+        "always true, so a real severity effect could never be reported. This is the "
+        "most dangerous class of mutation in the project: not a wrong number, a "
+        "conclusion that cannot be contradicted.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_normalization.py::TestTheVarianceDecompositionReproducesThePublishedFigures",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/normalization/estimators.py",
+        "    severity = (n * med + SHRINKAGE_K * panel_median) / (n + SHRINKAGE_K)",
+        "    severity = med",
+        "the shrinkage is removed, so a judge's severity is their own raw median however "
+        "few reviews they have. A one-review judge then reads as authoritative -- the "
+        "exact failure C2 exists to prevent, and exactly the judge the fixture's jdg_01 "
+        "and jdg_23 represent.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_normalization.py::TestTheShrinkageIsWhatItClaims",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/normalization/estimators.py",
+        "    if len(values) < 2:\n        return None",
+        "    if False:\n        return None",
+        "MAD is computed for a single review, so a one-review judge reports zero "
+        "dispersion instead of 'unknown'. Zero and None are different facts and the "
+        "shrinkage branches on them: this is F-84's shape in a helper function, where a "
+        "control reports a confident answer instead of declining to answer.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_normalization.py::TestTheEstimatorDegradesGracefully",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/normalization/estimators.py",
+        "    return max(base, MAD_FLOOR)",
+        "    return base",
+        "the dispersion floor is removed, so a judge whose reviews are identical divides "
+        "by zero. The estimator stops degrading gracefully, which is the property the "
+        "whole design is claimed to have and the reason jdg_07's constant 4s cannot "
+        "distort anyone else.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_normalization.py::TestTheEstimatorDegradesGracefully",
+            "-q",
+        ],
+    ),
 ]
 
 

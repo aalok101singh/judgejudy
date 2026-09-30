@@ -187,6 +187,34 @@ class ReviewQuerySet(ScopedQuerySetMixin, models.QuerySet):
             )
         return self.for_actor(actor)
 
+    # ------------------------------------------------------------- whole-event read
+
+    def for_cross_judge_analysis(self, event_id) -> ReviewQuerySet:
+        """EVERY review in an event, for the normalization proof. No actor.
+
+        **This is the one sanctioned whole-event row read, and it is added at
+        FEAT-08.** The alternative was an allowlist entry for
+        `normalization/loader.py`, and the existing `public_review_counts` comment
+        already says why that is the weaker choice: *an allowlist entry exempts a
+        whole file, whereas a sanctioned method exempts one method in every file,
+        so the rule keeps applying to the rest of the line.*
+
+        **Why the proof needs it, stated plainly, because "it needs everything" is
+        the sentence that has produced every scope bug in this project.** A
+        variance decomposition measures the *variance between judges*, so reading
+        one judge's reviews produces a number and no finding. Scoping the analysis
+        to an actor is not a security decision here, it is a category error: there
+        is no actor, because the unit of analysis is the panel.
+
+        **Which is exactly why it must be named rather than merely allowed.** A
+        whole-event read behind a neutral name is the shape of every future leak;
+        behind *this* name it is greppable, and the sentence next to it says what
+        it is for. `tests/test_normalization.py` asserts the loader uses this
+        accessor, and `tools/check_isolation.py` still fails on every other
+        unscoped read in the codebase including in this module.
+        """
+        return self.filter(event_id=event_id)
+
     # ------------------------------------------------------------- public read
 
     def public_review_counts(self, event_id, project_ids) -> dict:
