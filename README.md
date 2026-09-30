@@ -1,408 +1,340 @@
 # Judge Judy
 
-A self-hostable submission and judging platform for hackathons. Built for
-**DOGFOOD 2026** as a submission *and* as a judging system, because the two
-halves share one schema and the judging half is where the hard problems are.
+A self-hostable submission and judging platform for hackathons. Organizers submit,
+assign, score, publish, and keep their data; judges never see each other's work.
 
-Offline by construction: **one command, no network, no cloud account, no
-hosted database, no external API, no API key.**
+Offline by construction: **one command, no network, no cloud account, no hosted
+database, no external API, no API key.**
 
-```
+```bash
 docker compose up
 ```
 
-That is the whole setup. Then open <http://localhost:8080>.
+That is the whole setup. Then open <http://localhost:8080>. The container seeds
+itself on first boot and prints a reconciliation of what it loaded.
 
 ---
 
-## ⚠ Status: T1 and T2 are green, and T2 is CLAIMED
+## Running an event
 
-**Read this before judging anything else on this page.** The container, the
-healthcheck, the offline guarantee, the gallery, the seeded fixture, the deadline
-guard, the assignment engine, the judge console, the scoped score endpoint, the
-CSV export, **the influence report, the bias-attack harness, the randomised
-ballot, voting, comments and the public results page** are real, measured and
-passing. **All seven of the organizers' machine checks now PASS.**
+The lifecycle an organizer actually walks through.
 
-**`run.py` prints `claimed T1 T2, verified T1 T2`, and both words are deliberate.**
-T2 was **claimed at BREAK-2, in writing**, against what was actually green on a
-clean volume — not in advance, and not in a README. `verified` cannot exceed T2
-whatever we build: **there are no T3 or T4 checks in their program at all**, and
-`verified` is prefix-locked. So a flawless build prints exactly this. See
-[why `verified` stops at T2](#why-verified-stops-at-t2-even-when-every-check-passes).
+**1 — Submit.** `/projects/new` takes a project's name, links and description. The
+event is **born closed**: submissions are refused until you open the window, and
+the refusal is a 403 that names the guard rather than a form that quietly
+disappears.
 
-**T3 is built, tested and documented — and deliberately NOT claimed.** All five
-REQ-T3 requirements ship. **Nothing in this repository can verify T3**, and our
-own gate enforces the organizers' rule `overclaim = claimed − verified`, so
-entering T3 in the field their program parses turns the gate red with the word
-**OVERCLAIM** in it. The brief says that is the one thing that costs points.
-**T3 being built is not the same claim as T3 being entered in the scoring field**,
-and only the first one is ours. The reasoning, the arithmetic and the three
-options are in `blueprint/history/features/break-3-t3-claim.md`; this is the
-human's call and it is recorded as **F-91 [P1], open on purpose**.
+**2 — Assign.** `/organizer/assignments/` runs the assignment engine and shows the
+plan **with a certificate**. The certificate is the part that matters: when the
+instance is feasible it names the tightest per-judge capacity it had to satisfy
+(6, on the seeded data), and when it is infeasible it names *which judges and
+which projects* are short. An assignment you cannot explain to a judge who
+disagrees with it is not an assignment.
 
-What is not built: comment rate limiting, ballot rate limiting and cookies,
-quadratic voting, and the T4 bulk-IO and signing layer.
+**3 — Judge.** `/judge/` is a console of assigned reviews with a rubric, drafts,
+and a lock on submit. A judge who is not the assignee is **refused**, not shown a
+blank page.
 
-**The published leaderboard is an UNNORMALIZED raw weighted mean, and now we know
-why.** The normalization proof ([`docs/REAL-FIXTURE-RESULTS.md`](docs/REAL-FIXTURE-RESULTS.md))
-measured the panel and found **no judge-severity effect to correct**: between-judge
-variance `0.0217` against a `0.0971` sampling-noise floor, permutation p = 0.227.
-The estimator was built anyway, and **it would move every one of the 126 scores by
-~0.57 rubric points** (up to 1.44) for nothing measurable — so we do not apply it.
-The page says so on every render.
+**4 — Read the room.** `/api/v1/influence` reports where public support is
+concentrated: distinct identities per project, first-preference share, vote-mass
+Gini, and identical-ballot clusters. It is deliberately **not** gated on results
+being published — you need to see concentration *before* deciding to publish, or
+the report is a post-mortem. There is no threshold anywhere in it, and it never
+says "brigaded": a report that accuses a table of friends on a number alone is a
+machine for making enemies.
 
-| | State |
-|---|---|
-| `docker compose up` → serving page | ✅ **11.8–20 s** from an empty volume, budget 60 s, observed 2026-09-29 (a range: three runs gave 11.8 s, 12.1 s and 19.9 s on the same machine) |
-| Boots with `--network none` | ✅ **proved** — healthy at **7.9–9.1 s**, four probes pass |
-| Healthcheck from a clean volume | ✅ green |
-| **Acceptance: T1** (gallery public · fixture projects shown · closed event refuses) | ✅ **3 of 3 PASS** |
-| **Acceptance: T2** (judge sees own scores · peer refused · participant blocked · CSV export) | ✅ **4 of 4 PASS** — `run.py` prints `claimed T1 T2, verified T1 T2` |
-| Assignment: feasible instance assigns | ✅ **123 of 123**, tightest per-judge capacity **6**, found by search |
-| Assignment: infeasible instance diagnosed | ✅ at capacity 5, `trk_01` and `trk_08` each short by 3, **bottleneck judges named** |
-| Assignment: seeded tiebreak reproducible | ✅ two runs, identical digest over 123 pairs |
-| Judge console, rubric, draft and submit | ✅ built (`/judge/`), refusals are literal 403s with empty bodies |
-| Scoped scores + CSV export | ✅ built (`/api/v1/judge/scores`, `/api/v1/export.csv`) |
-| Influence report (D-13) | ✅ built (`/api/v1/influence`) — per-project concentration, no thresholds |
-| Bias-attack harness | ✅ built (`manage.py bias_attack`) — fixed order **detected**, randomised **zero-mean** |
-| Randomised ballot order (D-12) | ✅ built (`/vote/`) — calls the *same* `presentation_order` the bias-attack harness attacks, so the claim and the code cannot drift. Zero-**mean**, not zero |
-| Voting + identity budget (D-12) | ✅ built — weight 1 everywhere *exactly* exhausts the budget, so amplification is a trade. Abstaining is free, attributable, and contributes **nothing** to the tally. Borda via the same `schwartzian` the harness attacks |
-| Comments (T3-02) | ✅ built (`/projects/<id>/comments/`) — moderated, plain text, escaped. **Rate limiting is cut and disclosed**; it is the one control `bible/07` V-8 names that we did not ship |
-| Public result hiding (T3-03) | ✅ built (`/results/`) — a bare 403 for judge/participant/visitor while hidden, on the surface a browser actually reaches. Same predicate and aggregate as the API, and a test asserts the two agree |
-| Bulk IO, signed records, OpenAPI | ❌ **not built** (FEAT-07) |
-| Normalization engine + proof (FEAT-08) | ✅ built — `docs/REAL-FIXTURE-RESULTS.md`. **No detectable judge-severity effect** (p = 0.227 location, 0.538 dispersion; between-judge variance 0.0217 sits BELOW the 0.0971 chance floor). Estimator built and **not applied**: it would move every score by ~0.57 points |
+**5 — Publish.** `/results/` is the ranking. It is refused to everyone but an
+organizer until you publish it, and **every row says how it was computed** — see
+[the leaderboard is unnormalized](#the-leaderboard-is-unnormalized-and-why).
 
-### Why `verified` stops at T2, even when every check passes
-
-**This is arithmetic in their checker, not a gap in ours, and it is worth reading
-twice because it looks like an understatement.**
-
-`run.py` walks the tiers in order `["T1","T2","T3","T4"]` and **stops at the
-first tier that has no passing check**. Their program contains **seven checks:
-three in T1 and four in T2. There are no T3 checks and no T4 checks at all.**
-So the string `verified` can ever print, for a flawless submission, is:
-
-```
-verified T1 T2
-```
-
-We print exactly that. `verified` has reached its ceiling — it is not stopping
-early. If you want to see the evidence, `acceptance-report.txt` is generated
-(not hand-written) by `just accept`, and it reads **7 passed, 0 failed, of 7
-checks**.
-
-**So `claimed` and `verified` are answering two different questions**, and the
-report puts them on one line on purpose:
-
-| | who decided it | what it means |
-|---|---|---|
-| `claimed T1 T2` | **us, at BREAK-2**, in writing, against what was green on a clean volume | what we are willing to be judged on |
-| `verified T1 T2` | **their program**, parsing seven checks | what a machine can confirm |
-
-**The T2 claim was applied at BREAK-2 and not before**, because the claim is made
-at a scheduled verification break, in writing, by a human — not in a README and
-not at the end of a feature. The gate enforces it in both directions: claiming a
-tier the report does not verify is a **mutation-tested** failure, and a check
-marked `pass` that fails is a regression. **A tier claim that nothing can falsify
-is not a claim.**
-
-**We also built all of T3, and we do not claim it.** All five REQ-T3
-requirements ship and are tested. **Nothing in this repository can verify T3** —
-their program has no T3 checks — and the acceptance gate enforces the rule
-`overclaim = claimed − verified`, so entering T3 in the field their program
-parses turns it red with the word **OVERCLAIM** in the output. The brief states
-that overclaiming is the one thing that costs points.
-
-> **T3 being built, tested and documented is not the same claim as T3 being
-> entered in the scoring field.** Only the first one is ours to make, and it is
-> the one we are making. The full reasoning, the arithmetic and the three options
-> are in `blueprint/history/features/break-3-t3-claim.md`; it is recorded as
-> **F-91 [P1], open on purpose**, because a decision is not a defect and "fixed"
-> findings block completion until a review has looked at them.
-
-The frozen `acceptance-report.txt` in this repository is the one the panel's
-identical program produces. We do not edit it.
-
-
-### The assignment certificate, and why it is the interesting part
-
-`just check` prints this, from the same code path the organizer's screen uses:
-
-```
-  DEFICIENT trk_01 (Developer tools): demand 3x6 = 18, supply 3 judges x 5 = 15, DEFICIT 3
-    short:  prj_40
-    bottleneck judges (capacity exhausted):
-      - Sofia Duarte     sofia.duarte@example.org -- 5 assigned, cap 5  AT CAPACITY
-      - Diego Herrera    diego.herrera@example.org -- 5 assigned, cap 5  AT CAPACITY
-      - Jonas Vogel     jonas.vogel@example.org -- 5 assigned, cap 5  AT CAPACITY
-    OK [trk_01] invite 1 more judge(s) to trk_01
-         k x c >= demand  ->  k = ceil(18/5) - 3 = 1  ->  4 x 5 = 20 >= 18
-    OK [trk_01] raise the per-judge capacity to 6 for trk_01
-         ceil(demand / judges) = ceil(18 / 3) = 6
-    OK [trk_01] lower trk_01's target to 2
-         floor(supply / projects) = floor(15 / 6) = 2
-```
-
-**That is a minimum cut of the assignment network, so the shortfall is proved
-rather than estimated** — no separate checker can disagree with the plan, because
-it is read off the same graph. It is also a property of the *published fixture*:
-set "max reviews per judge" to a completely reasonable 5 and two tracks become
-arithmetically impossible, before the organizer has done anything wrong.
-
-The numbers above are **generated, not typed**: `just coldstart`,
-`just prove-offline` and `just check` re-measure them. Nothing in this README is
-a number somebody remembered.
-
-`acceptance-report.txt` is committed with its honest failures rather than a
-flattering summary, and the panel runs the identical program. **The tier claim
-is made at a scheduled verification break, against what is actually green** —
-not here, and not in advance. At this milestone `.dogfood.toml` claims nothing,
-and every T2 check reports `FAIL` with a real URL in its message.
-
-**One more thing about that T1 pass, because it is the part worth reading.** The
-checker accepts **any** 4xx for "closed event refuses submissions", so a missing
-route, a CSRF rejection and a bad password all report PASS. Until this milestone
-that is exactly what was happening — the check was green on a 404, and the
-deadline guard was never called. It is green now for the right reason, and
-`tools/run_acceptance.py` re-sends the checker's own request and requires
-`assert_open_for_submission` in the response body, so a CSRF rejection, a 401, a
-404 or an emptied `[auth]` block can no longer stand in for the deadline.
+**6 — Keep your data.** `manage.py export_run` writes the entire database as a
+portable archive; `import_run` reads it back. See
+[leaving with your data](#leaving-with-your-data).
 
 ---
 
-## What works right now
+## What each role can see
 
-Twelve routes, and the count is **derived from `src/judge_judy/urls.py` by
-`verify_spec.py`, not typed here** — the previous "eleven routes" line was wrong
-and the spec gate now fails if this table and `urls.py` disagree.
+Isolation is the product. A judging portal is only worth running if judges cannot
+read each other's work, and that has to be a property of the query layer rather
+than of each view.
+
+**There is one way to read reviews, and it takes an actor.**
+
+```python
+Review.objects.for_actor(actor)
+```
+
+A lint rule (**JJ01**) fails the build on any other read of `Review.objects` —
+**including inside tests**. Two further accessors exist and are named for what they
+expose: `for_cross_judge_analysis(event_id)` for the normalization proof, and
+`for_bulk_transfer()` for the escape hatch. Each has a test asserting who is
+allowed to call it, because a sanctioned accessor with a growing list of callers
+is a rule that has stopped meaning anything.
+
+**A refusal is a 403 with an empty body. Never a redirect.** This is the single
+most important behaviour in the system and it is easy to get wrong in a way that
+looks correct: a client that follows redirects gets a 200 from a login page, so a
+portal that "protects" a score by bouncing you to sign-in passes every manual
+test. Ours does not redirect.
+
+**Scope when it protects somebody.** A published judge sees a ranking over their
+*own* reviews, because their five scores would otherwise carry the standing. A
+visitor sees the whole event, because they have nothing of their own to protect
+and an empty board is worse than a full one.
+
+| | judge | participant | visitor | organizer |
+|---|---|---|---|---|
+| own reviews | ✅ | — | — | ✅ |
+| a peer's reviews | **403** | **403** | **403** | ✅ |
+| the ranking, while hidden | **403** | **403** | **403** | ✅ |
+| the ranking, once published | own only | ✅ | ✅ | ✅ |
+| the full export | **403** | **403** | **403** | ✅ |
+| the audit chain | **403** | **403** | **403** | ✅ |
+| the influence report | **403** | **403** | **403** | ✅ |
+| the influence report, unpublished | **403** | **403** | **403** | ✅ |
+
+---
+
+## Leaving with your data
+
+*A platform you cannot leave is a trap.* This is the escape hatch, and it is built
+to be checked rather than trusted.
+
+```bash
+docker compose exec portal python manage.py export_run /app/data/archive
+docker compose exec portal python manage.py import_run /app/data/archive --dry-run
+docker compose exec portal python manage.py import_run /app/data/archive
+```
+
+**`export → import → export` is byte-identical, including every natural key.** Not
+"equivalent" — byte-identical, and the suite proves it by wiping the database in
+between. Primary keys travel too, which is stricter than portable and is the point:
+an archive whose ids may differ cannot detect a dropped column.
+
+Four behaviours, each a refusal rather than a guess:
+
+1. **An unknown `schema_version` is refused.** Not guessed at — a wrong guess
+   silently drops data, and a refusal costs an afternoon.
+2. **`compatible_with` is an explicit list.** A v1 archive is readable by a v3
+   portal *because the v3 importer says so*.
+3. **Unknown columns are preserved**, values included, and handed back to the next
+   export. Your custom field survives a round trip through a portal that has never
+   heard of it. This is the single most valuable importer behaviour and almost
+   nothing ships it.
+4. **Unmatchable and malformed rows are quarantined with a reason**, never silently
+   discarded, and one bad row does not abort the other ten thousand.
+
+**The keys are on their own volume.** Signing keys live in `judgejudy-keys`,
+separate from the database, because `docker compose down -v` is how you reset the
+portal — and a shared volume would mean every reset destroyed every signature,
+taking the evidence with it. It also means a backup of `judgejudy-data` is safe to
+hand to somebody, because it contains no key material at all.
+
+### Proof you did not change the numbers after publishing
+
+```bash
+docker compose exec portal python manage.py publish_results --show-only
+docker compose exec portal python manage.py publish_results
+docker compose exec portal python manage.py sign_records
+```
+
+`publish_results` freezes the ranking, hashes it, mixes in a digest of the raw
+scores behind it, and **copies the audit chain head into every judge's signed
+record**. The point of that last part is that it makes equivocation detectable
+*from outside* your own database: N judges who are not the organizer each hold a
+copy, so publishing two different results is a five-line diff between any two of
+them.
+
+Both hashes are **re-derivable by anyone holding the export** — the digest from
+the raw scores, the ranking by running the published method. An organizer who
+alters a result and leaves the hash alone has produced a mismatch any third party
+can check without touching your database.
+
+Judges sign with **Ed25519** keys over an **in-toto Statement v1** inside a **DSSE**
+envelope. The record commits to *digests of their reviews*, never to scores — a
+record carrying scores is not shareable with a judge who was not the organizer,
+and an unshareable record replicates nothing.
+
+---
+
+## Routes and API
 
 | Route | Purpose |
 |---|---|
-| `/` | **The gallery.** 41 fixture projects, first page in fixture order, 24 per page, server-rendered, no JS. Public. |
-| `/projects/new` | **Submit a project.** `GET` is a form; `POST` evaluates the deadline and refuses. The event is born closed, so it refuses — with a 403 that names the guard. |
-| `/judge/` | **The judge console.** Draft, submit, lock. A judge who is not the assignee is refused, not shown a blank page. |
-| `/judge/review/<id>/` | The rubric form for one assignment. Draft, submit, lock. |
-| `/organizer/assignments/` | The assignment plan and the min-cut certificate. |
-| `/healthz` | Liveness probe. `?deep=1` also checks the database. |
-| `/api/v1/judge/scores` | A judge's own scores, and nobody else's. |
-| `/api/v1/export.csv` | The organizer-scoped export. Every other role gets a 403 with an empty body. |
-| `/api/v1/results` | The leaderboard — refused to everyone but an organizer while `results_state = hidden`. |
-| `/api/v1/audit` | The hash-chained audit trail. |
-| `/api/v1/influence` | **The influence report (D-13).** Per-project concentration: distinct identities, first-preference share, vote-mass Gini, identical-ballot clusters. No thresholds. |
-| `/vote/` | **The randomised ballot (D-12).** A per-voter order that is stable across requests, rendered with its seed and the zero-**mean** caveat. Weight 1 everywhere exactly exhausts your identity budget, so favouring one project means giving another less. Born closed, like everything else. |
-| `/projects/<id>/comments/` | **Comments on a project.** Plain text, never markup. Every comment is **held for moderation** and nothing is public until a human approves it. Rate limiting is **not** implemented — see the threat model. |
-| `/results/` | **The published ranking (REQ-T3-03).** Refused with a bare 403 while results are hidden — the brief's "hidden from everyone but organizers during the voting window", enforced on the surface a browser actually reaches. Always labelled **unnormalized** |
+| `/` | **The gallery.** 41 seeded projects, first page in fixture order, server-rendered, no JS. Public. |
+| `/projects/new` | Submit a project. Refused while the event is closed. |
+| `/judge/` | **The judge console.** Draft, submit, lock. |
+| `/judge/review/<int:assignment_id>/` | The rubric form for one assignment. |
+| `/organizer/assignments/` | The assignment plan and its min-cut certificate. |
+| `/vote/` | **The public ballot.** A per-voter order, stable across requests, rendered with its seed. Weight 1 on every project *exactly* exhausts the identity budget, so favouring one project means giving another less. |
+| `/projects/<str:project_id>/comments/` | Comments on a project. Plain text, never markup. Everything is **held for moderation**; nothing is public until a human approves it. |
+| `/results/` | The ranking, refused while hidden. Always labelled with how it was computed. |
+| `/healthz` | Liveness probe. |
+| `/healthz/` | The same probe, trailing slash. |
 | `/admin/` | Django admin. |
+| `/api/v1/judge/scores` | **A judge's own scores, and nobody else's.** Any other role gets a 403 with an empty body. |
+| `/api/v1/export.csv` | The full review export, carrying every row's natural key so an archive round-trips. Organizer only. |
+| `/api/v1/results` | The ranking as JSON, with `results_state` and how it was computed. Refused to everyone but an organizer while hidden. |
+| `/api/v1/audit` | The hash-chained audit trail, plus `chain_head` and the verdict of re-walking it. |
+| `/api/v1/influence` | Vote concentration: distinct identities, first-preference share, vote-mass Gini, identical-ballot clusters. No thresholds. |
 
-Plus the seed and the harness:
+**`?deep=1` on `/healthz`** also checks the database.
+
+**[`openapi.yaml`](openapi.yaml) is the full reference** — generated from
+`reviewer/api/documents.py` and **refused if it has drifted from `urls.py`**, so a
+route cannot ship undocumented. Regenerate with `just schema`; `just schema
+--check` fails if the committed copy is stale.
+
+The ballots, the vote tally, the bias-attack harness and the influence report all
+call the *same* functions the tests attack, so a claim and the code that backs it
+cannot drift apart.
+
+---
+
+## Operating it
 
 ```bash
-docker compose logs portal   # the census, the anomalies, and the [auth] block
+just check         # the full gate: clean volume, build, up, checks, proofs, suite
+just doctor        # is the toolchain intact?
+just logs          # follow the container
+just clean         # down -v, a real reset
+just schema        # regenerate openapi.yaml
 ```
 
-The container **seeds itself on every boot** — `load_fixtures` runs between
-`collectstatic` and gunicorn binding, so nothing is half-initialised when the
-port opens — and prints its own reconciliation: every table's row count, both
-census invariants, and the six awkward things in the fixture it deliberately
-kept (the duplicate submission, the nine dual-track judges, the 51 empty
-comments, the team names that collapse onto one slug). `verify_census`
-re-derives the same numbers from `fixtures.json` and **exits non-zero on a
-disagreement**.
+**It boots with no network at all** — `just prove-offline` runs the image with
+`--network none` and probes it. A cold start from an empty volume measures
+**11.8–20 s** against a 60 s budget.
 
-Plus the harness: `just check` runs the whole gate, and
-`tools/verify_spec.py` re-derives the load-bearing numbers in the spec layer from
-the organizers' own files.
+**The container seeds itself on every boot**, between `collectstatic` and the
+server binding, so nothing is half-initialised when the port opens. It prints its
+own reconciliation: every table's row count, both census invariants, and the
+awkward things in the fixture it deliberately kept (a duplicate submission, nine
+dual-track judges, 51 empty comments, team names that collapse onto one slug).
+`verify_census` re-derives the same numbers from `fixtures.json` and **exits
+non-zero on a disagreement**.
 
----
+### Demo credentials
 
-## The gate
+The container prints a ready-to-paste `[auth]` block on every boot — one identity
+per role (admin, organizer, two judges, a participant). They are HMAC-signed demo
+tokens derived from the seeded fixture, **not secrets**: anyone holding this
+repository can mint one, which is the point of a demo. Set
+`DJUDGE_DEMO_TOKEN_KEY` to rotate them; `docker compose logs portal` prints the
+new ones. Only five identities get real password hashes — the rest are
+deliberately unusable, because hashing 121 passwords would blow the checker's
+10-second timeout.
 
-```bash
-just              # list every recipe
-just doctor       # is the toolchain intact? (interpreter, Docker, just)
-just check        # THE GATE — clean volume, build, up, checks, proofs, suite
-just spec         # the spec gate; stdlib only, no Docker, no venv
-just coldstart    # measure a cold start against the 60 s budget
-just prove-offline # boot the image with --network none and probe it
-just mutation-test # corrupt things on purpose; every one must be caught
-just accept       # the organizers' checker, against the running container
-just lint         # ruff + formatter + the isolation rule (JJ01)
-just logs         # follow the container
-just clean        # down -v: a real reset
-```
+### Stack
 
-`just check` is the only command a reviewer needs. It steps through the spec
-gate, a clean `down -v`, the build, `up --wait`, the organizers' checker, the
-isolation proof, the census, and the test suite. `just prove-offline` and
-`just mutation-test` are **not** in it — they each need a clean volume, and
-`check` has to stay the one command — so they are run at every verification
-break.
-
-### Why the gate is not just `run.py`
-
-**`run.py` always exits 0.** It prints `FAIL` and returns 0, in every
-situation, by design — it is the same program for every team in the
-hackathon. A `just check` that gated on its exit code would report a green
-checkpoint for a completely broken portal.
-
-So `tools/run_acceptance.py` runs it unmodified, prints its output verbatim,
-and counts the `PASS`/`FAIL` markers **in the body**. The count is read out of
-the real report rather than recomputed, so the wrapper cannot disagree with the
-program it wraps.
-
-It also holds the report to **two** further things, and the second one is the
-interesting one.
-
-**1. A ratchet.** Every check carries an expectation in
-`tools/expected_checks.json`. Expected-to-pass-and-failed is red. Expected-to-
-fail-and-passed is **also** red, because a stale expectation teaches a reader to
-discount the file.
-
-**2. Preconditions — a `PASS` that does not test what it names is a false pass,
-and it fails the gate.** The checker accepts any 4xx for the deadline check, so
-until now a 404, a 405, a CSRF rejection and a bad password all reported PASS.
-The gate now:
-
-* probes whether the route exists at all, **and**
-* **re-sends the checker's own request** — same method, same JSON body, and the
-  same `[auth]` credential read out of the same `.dogfood.toml` the checker
-  read — and requires `assert_open_for_submission` in the **response body**.
-
-An emptied `[auth]` value is caught there, *before a request is even sent*,
-because the probe cannot present the credential the checker used. That is the
-case that is invisible from inside the portal and the case that mattered most.
-
-### About the demo credentials, plainly
-
-`.dogfood.toml`'s `[auth]` values are HMAC-SHA256-signed tokens
-(`Authorization: JJ1.<hmac>.<email>`) and **the signing key is published in this
-repository**, in `src/reviewer/accounts/demo_tokens.py`. So: **anyone holding
-this repo can mint a token for any of the 121 fixture identities.** That is a
-deliberate trade, not an oversight, and it is worth stating rather than
-discovering:
-
-* The alternative — signing with `SECRET_KEY` — breaks `down -v`, because that
-  key is generated per volume. The committed `.dogfood.toml` would go stale on
-  every reset and the participant probe would **silently become an anonymous
-  request**, which is a check passing for the wrong reason. That is the exact
-  failure this project treats as its worst one, and it is not worth trading for
-  a cosmetic improvement.
-* The organizers' own example uses a guessable fixed session value, so this is
-  the same posture.
-* The real secrets — the signed judge records in T4 — come from
-  `cryptography`'s own key management, not from this token.
-* Set `DJUDGE_DEMO_TOKEN_KEY` to rotate it. That invalidates every pasted value,
-  and `docker compose logs portal` prints the new ones.
-
-**The five demo identities are three of the fixture's 121 people plus two
-portal-created organizers**, and the split is deliberate: the fixture's census is
-a number a panel can check without running anything, so six synthetic accounts
-would have quietly changed it. The identities are *derived* from the fixture by a
-stated rule, not hard-coded, and `tests/test_demo_credentials.py` asserts the
-committed values against whatever the rule currently produces.
+Python 3.13 · Django 5.2 LTS · DRF · drf-spectacular · whitenoise · gunicorn ·
+cryptography · SQLite (WAL) on a named volume. **17 runtime packages.** The
+dependencies we deliberately left out, and why, are in
+[`requirements.txt`](requirements.txt).
 
 ---
 
-## Two environment traps, both already paid for once
+## Decisions that change behaviour
 
-These are documented because they cost this project real time, and because
-both of them produce a *misleading* error rather than an honest one.
+The ones an organizer would notice.
 
-**`docker` is installed per-user.** It lives at
-`…\AppData\Local\Programs\DockerDesktop\resources\bin\`, which was in no PATH
-at all. `docker --version` returned `NOT FOUND` while the daemon was up and
-healthy, and "not installed" was the wrong conclusion for an entire phase of
-the build. `tools/docker.py` resolves the binary by absolute path first, and
-`just doctor` tells you which `docker` it found and how.
+**The leaderboard is unnormalized, and that is a measured decision.** It is a raw
+weighted mean, and the page says so on every render. We built the normalization
+engine the brief asked for and then measured whether it was needed:
+between-judge variance is **0.0217** against a **0.0971** sampling-noise floor for
+30 judges scoring 4 projects each, permutation p = 0.227. **There is no severity
+effect to correct.** Applying the estimator anyway would move all 126 scores by
+~0.57 rubric points for a measured null, so we do not. Full generated tables in
+[`docs/REAL-FIXTURE-RESULTS.md`](docs/REAL-FIXTURE-RESULTS.md).
 
-> A failing command is evidence that a command failed, not evidence about why.
+**Ballot order is randomised, which makes position bias zero-*mean*, not zero.**
+The bias-attack harness attacks the same function the ballot renders. Under a
+fixed order the harness detects the attack; under a randomised one the mean
+drift is ~0 while the standard deviation is not. Anyone claiming position bias was
+*removed* is overstating it.
 
-**The ambient `python` is 3.14.6 and has no Django.** The venv is 3.13.13.
-Django 5.2 declares `Requires-Python: >=3.10` with no upper bound, so the pin
-cannot catch this. Every recipe names `.venv\Scripts\python.exe` explicitly and
-`tools/guard_interpreter.py` asserts the version.
+**The audit chain is append-only.** `AuditEntry.delete()` raises. Deleting an
+entry is indistinguishable from rewriting history, which is the attack the chain
+exists to make detectable. The one exception is the restore path in the escape
+hatch, which re-verifies the chain afterwards — and that is the price of the
+exception, not a caveat on it.
+
+**Comments have no rate limit.** It is the one control our own threat model names
+that we did not ship, and it is disclosed here, in the module docstring, and in the
+cut ledger rather than quietly missing.
+
+### What we did not build
+
+- **Webhook delivery.** Models and a `501` stub ship; delivery, retries and HMAC
+  verification do not. A webhook URL is also a live SSRF bug class to write from
+  scratch.
+- **A Merkle transparency log.** We run the container, so a root we compute proves
+  internal consistency — which the hash chain already proves, for a third of the
+  code. What we have instead is the chain head replicated into every signed
+  record, which needs no witness.
+- **No IRT/MFRM, no TrueSkill.** Measured to lose against the raw mean on this
+  data shape.
+- **No Postgres RLS, Casbin or OPA.** A scoped-accessor layer is the portable
+  equivalent and keeps the rules in one readable place.
 
 ---
 
-## Stack
+## For reviewers
+
+Everything above is the product. This is the rest, condensed.
+
+**Status: T1 and T2 are green, and T2 is claimed.** All seven of the organizers'
+machine checks pass. `run.py` prints `claimed T1 T2, verified T1 T2` — **both
+words are deliberate.**
+
+**`verified` cannot exceed T2, whatever we build**, because `run.py` contains no
+T3 or T4 checks at all: three T1, four T2, seven in total, and `verified` is
+prefix-locked to the tiers it has checks for. A flawless build prints exactly
+that string.
+
+**T3 is built, tested and documented, and deliberately not claimed.** All five
+REQ-T3 requirements ship — voting with an identity budget and a Borda tally,
+moderated comments, results hidden on both the API and the public page,
+randomised ballot order, and the influence report. Nothing in this repository can
+*verify* T3, and our own gate enforces the organizers' rule
+`overclaim = claimed − verified`, so entering T3 in the field their program parses
+turns the gate red with the word **OVERCLAIM** in it. **T3 being built is not the
+same as T3 being entered in the scoring field**, and only the first is ours to
+decide. Proved by running it, then reverted; recorded as F-91, accepted by
+decision, with the arithmetic in
+`blueprint/history/features/break-3-t3-claim.md`. A T4 claim is blocked the same
+way.
+
+**`run.py` always exits 0.** It prints `FAIL` and returns 0 in every situation, by
+design — it is the same program for every team. Our gate parses its **body**; a
+gate on its exit code would report a green checkpoint for a completely broken
+portal. It is also **unmodified**, so the panel runs the identical program.
+
+**The gate is more than `run.py`.** `just check` runs the spec layer, a clean
+`down -v`, the build, the organizers' checker, the isolation proof, the census and
+the suite. Two more run at every verification break because each needs a clean
+volume: `just prove-offline` and `just mutation-test`, which **corrupts 105 things
+on purpose and requires every one to be caught** by a named test.
+
+**Findings.** [`blueprint/context/findings.md`](blueprint/context/findings.md) is
+the full record: **98 findings**, what was wrong, what was fixed with a test, and
+what was declined and why. Several are the same class of defect in a new medium —
+a min-cut certificate that named no judges, a leaderboard that would have been
+refused for the wrong reason, a CSV column of nothing, an acceptance criterion
+that passed with the importer writing nothing at all.
 
 | | |
 |---|---|
-| Python | 3.13.13 (venv) · 3.13.15 (container, `python:3.13-slim` pinned by digest) |
-| Django | 5.2 LTS — LTS, not 6.1, because this is meant to be forked and run for a decade |
-| DRF | 3.18.1 |
-| drf-spectacular | 0.30.0 |
-| whitenoise · gunicorn · cryptography | 6.12.0 · 26.2.0 · 50.0.1 |
-| Database | SQLite, WAL, on a named volume |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | the container, boot order, layering |
+| [`DATA-MODEL.md`](DATA-MODEL.md) | the schema and the fixture it holds |
+| [`JUDGING.md`](JUDGING.md) | rubric, assignment, isolation, normalization |
+| [`docs/REAL-FIXTURE-RESULTS.md`](docs/REAL-FIXTURE-RESULTS.md) | the normalization proof, fully generated and asserted in CI |
+| `blueprint/history/features/` | one file per feature, including the four that were wrong |
 
-**17 runtime packages. Deliberately absent, with reasons in
-[`requirements.txt`](requirements.txt):** numpy, scipy, networkx (measured
-unnecessary — 126 rows, a 40-node graph), celery/redis (a second service is a
-disqualification), any cloud SDK.
-
-The local venv is a fast inner loop and **not a substitute for the container**.
-The deliverable is the container.
-
----
-
-## Repository layout
-
-```
-.dogfood.toml          routes + honest tier claims, read by the checker
-acceptance-report.txt  the checker's output, committed whatever it says
-docker-compose.yml     one service, one volume, one healthcheck
-Dockerfile             pinned base digest, non-root, runtime deps only
-justfile               the gate
-src/judge_judy/        settings, urls, wsgi, the healthcheck
-src/reviewer/          twelve domain apps + isolation/ (the accessor) and
-                       importer/ (census, demo identities, loader) — the two
-                       non-app packages hold no model, and say so
-src/templates/         server-rendered HTML
-src/static/            one stylesheet, no CDN, no build step
-docker/entrypoint.sh   migrate -> collectstatic -> seed -> THEN bind the port
-docker/healthcheck.py  the single definition of "healthy"
-tests/                 the suite, including the four Hypothesis invariants
-tools/                 the gates: spec verify, acceptance wrapper, coldstart,
-                       offline proof, interpreter guard, docker resolver,
-                       mutation test, isolation lint (JJ01)
-blueprint/             the plan, the ledger, the in-flight feature
-bible/                 330 KB of research. Read by section, never whole.
-```
-
-`run.py` and `fixtures.json` are the organizers' files. **`run.py` is
-unmodified** — the panel runs the identical program, and any edit to it would
-invalidate every result in `acceptance-report.txt`.
-
----
-
-## Documents
-
-| | |
-|---|---|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | the container, the boot order, the layering, the decisions |
-| [`DATA-MODEL.md`](DATA-MODEL.md) | the schema and the fixtures it holds *(FEAT-02, corrected by FEAT-03)* |
-| [`JUDGING.md`](JUDGING.md) | rubric, assignment, isolation, normalization *(FEAT-04…08)* |
-| [`blueprint/context/findings.md`](blueprint/context/findings.md) | **55 findings**: what we got wrong, what we declined to fix, and why |
-
-### What we did not build, and why
-
-Recorded rather than quietly omitted, because a gap you can see is better
-than one you discover:
-
-- **Webhook delivery** — models and a `501` stub ship; delivery, retries and
-  HMAC verification do not. 2 hours, zero points on all four criteria, and
-  SSRF via a webhook URL is a real bug class to write from scratch under time
-  pressure.
-- **No Merkle transparency log** — a hash chain plus one published chain head
-  replicated into every signed judge record is strictly stronger here, for a
-  third of the code. Certificate transparency's value is *witnessing* and this
-  project has no witness.
-- **No IRT/MFRM, no TrueSkill** — measured to lose. See `bible/06` §4.3e.
-- **No Postgres RLS, Casbin or OPA** — a scoped-accessor layer is the portable
-  equivalent and keeps the rules in one place.
-
----
+**Repository layout.** `src/reviewer/` holds the domain apps;
+`isolation/` (the accessor), `importer/` (loader and census) and `io/` (bulk
+export and import) are non-app packages. `blueprint/` is the plan and the ledger,
+`bible/` is 330 KB of research to be read by section, never whole.
 
 ## Licence
 

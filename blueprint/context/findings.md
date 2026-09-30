@@ -256,6 +256,67 @@ rows, and it flagged `normalization` — which is constant *on purpose*, because
 wrong about the field and the field was right.** Perturbing each field is the
 property that matters, and it passes for a constant field too.
 
+### F-99 [P2] fixed — `manage.py spectacular` emitted `paths: {}`, a valid document describing nothing
+
+**File:** `tools/…` → `justfile`, `src/reviewer/api/schema.py`
+**Found:** 2026-09-30, at FEAT-07 increment 4, by running the recipe
+
+`just schema` ran `manage.py spectacular`, and drf-spectacular's generator
+enumerates **DRF views**. This API is plain Django functions *on purpose* — DRF
+populates `request.user` from its own authentication classes and would ignore the
+user our credential middleware assigns, so three of the four T2 checks would get
+a **false pass instead of a 403**. So the introspector found nothing and wrote:
+
+```yaml
+openapi: 3.0.3
+paths: {}
+```
+
+**That is F-61's shape with a `paths:` key.** A valid, committed, authoritative
+document describing zero endpoints, produced by a command that exited 0.
+
+**The fix is a table, not a wrapper.** Wrapping the views in `@api_view` to satisfy
+the introspector would have put that false-pass risk straight back. So the
+declarations live in `reviewer/api/documents.py`, `api/schema.py` assembles the
+document from them, and **the generator raises rather than emitting a partial
+document** — for an undocumented route *and* for a declaration whose route is
+gone. Both directions, because a document that advertises a 404 is worse than one
+that is silent.
+
+### F-100 [P2] fixed — a predicate tested, and the refusal it drives not tested
+
+**File:** `src/reviewer/api/schema.py`
+**Found:** 2026-09-30, by a mutation reported NOT DETECTED
+
+`stale_declarations()` had a test. The **`if stale: raise RuntimeError`** two
+lines below it, inside `build_schema`, did not. Removing the raise left every test
+green, because the predicate was still correct and nothing observed what it was
+for.
+
+**This is the second time in one session, and the identical shape as the DSSE
+one-payload guard.** A helper is tested; the behaviour its existence justifies is
+not. A predicate is worth testing for **what it causes**, not for what it
+computes — the first is the product and the second is an implementation detail
+that can be right while the feature is absent.
+
+Both now have a test that asserts the refusal, and both mutations are caught.
+
+### Two more from the same increment, both real
+
+- **An empty map was emitted as the quoted string `"{}"`.** Every refusal's
+  `content` is exactly that, so the document stayed valid YAML, still looked
+  right, and told a client generator there was a body called `{}` to parse. Found
+  by a test asserting `content == {}` — **the assertion that a *predicate* style
+  check gives you for free, and the reason this one exists.**
+- **`test_an_unreachable_portal_fails_differently` asserted one of the tool's two
+  wordings.** `run_acceptance.py` says "nothing is listening on …" when the portal
+  is down and nothing else is wrong, and "the portal is not answering on …" when
+  it is down *and* something else failed. Both correct; which one prints depends on
+  state the test does not control. It passed standalone and failed under
+  `just check` — the same hermeticity problem its own docstring describes, one
+  layer down, in the assertion rather than the fixture. It now asserts the
+  property (reported as unreachable, never as a REGRESSION) and both wordings.
+
 ### Two more mutations, both aimed at the wrong line
 
 - **"Remove the passthrough re-emission" was caught**, but only after the feature

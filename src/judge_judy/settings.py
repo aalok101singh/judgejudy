@@ -143,6 +143,11 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "whitenoise.runserver_nostatic",
     "reviewer.accounts",
+    # Holds no models. It is here because the OpenAPI document is assembled by a
+    # management command, and Django only discovers commands under an installed
+    # app -- so this package has to be one to be able to generate its own
+    # documentation.
+    "reviewer.api",
     "reviewer.audit",
     "reviewer.ballots",
     "reviewer.comments",

@@ -317,9 +317,12 @@ lint-isolation:
 proof:
     @{{pyq}} src/manage.py isolation_proof
 
-# Generate the OpenAPI 3.1 document. Additive, non-zero on failure.
+# Generate the OpenAPI 3.1 document. NOT `manage.py spectacular`: that introspects
+# DRF views, and this API is plain Django views on purpose, so it emitted
+# `paths: {}`. `build_openapi` assembles the document from the declarations and
+# REFUSES if they have drifted from urls.py. Additive, non-zero on failure.
 schema:
-    @{{pyq}} src/manage.py spectacular --file openapi.yaml
+    @{{pyq}} src/manage.py build_openapi
 
 # Reset the local (host-side) database, which is not the container's.
 reset-local:

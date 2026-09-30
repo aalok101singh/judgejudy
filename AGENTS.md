@@ -144,7 +144,7 @@ a test instead of quietly weakening a document.
 
 ## Current state
 
-FEAT-01 to FEAT-05 built and verified. 26 models across 12 apps; the isolation
+FEAT-01 to FEAT-05 built and verified. 26 models across 13 apps; the isolation
 primitive, the loader, the public gallery, the deadline guard, the assignment
 engine with its min-cut certificate, the judge console, the scoped score
 endpoint and the CSV export are in place, and **`run.py` prints
@@ -159,9 +159,9 @@ decision, and the naming of the cut controls, is the human's.
 
 | | |
 |---|---|
-| Findings | **98** - **0 open blocking**, 0 open, 24 fixed (awaiting review), 1 unverified (F-27), **11 accepted by decision (F-91)**, 62 closed |
+| Findings | **100** - **0 open blocking**, 0 open, 26 fixed (awaiting review), 1 unverified (F-27), **11 accepted by decision (F-91)**, 62 closed |
 | Acceptance | **T1 and T2 green** — **7 of 7 checks pass**, `claimed T1, verified T1 T2`. The `verified` ceiling is arithmetic in `run.py`, not a gap: there are no T3 or T4 checks at all |
-| Suite | **686 tests**, 105/105 mutations, spec layer green (it prints its own tally) |
+| Suite | **700 tests**, 108/108 mutations, spec layer green (it prints its own tally) |
 | Container | cold start **11.8–20 s** observed 2026-09-29 against the 60 s budget (a range, not a value — F-68); `prove-offline` passes |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
 

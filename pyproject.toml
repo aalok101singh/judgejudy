@@ -101,6 +101,12 @@ ignore = [
 # injection. S101 (assert) and S603/S607 are noise in this directory.
 # tests/** and run.py are the organizers' file...
 "tests/**" = ["S101", "S105", "S106", "S603", "S607", "S311"]
+# The OpenAPI declarations are `dict(...)` on purpose. They are the arguments to
+# `@extend_schema(**documents.X)`, and rewriting them as literals would mean
+# `{"method": "GET", ...}` -- adding quotes and colons to every key for a
+# lint rule, in the one file whose readability is the deliverable. C408 is the
+# rule telling you to do that; the answer here is no.
+"src/reviewer/api/documents.py" = ["C408"]
 # The demo credentials are hardcoded password LITERALS, and that is the design
 # rather than a leak: `bible/04` §5.2 and §3.2 both record them as published,
 # non-secret demo passwords, because the portal is a single-tenant self-hosted

@@ -1946,6 +1946,59 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    # --- api/schema.py: the generated document ---------------------------------
+    # A stale API document does not crash. It parses, it is served, and it lies --
+    # so these mutations attack the checks that make it honest.
+    (
+        "src/reviewer/api/schema.py",
+        "    missing = undocumented_routes()\n    if missing:",
+        "    missing = set()\n    if missing:",
+        "the generator stops refusing when a route is undocumented, so a new "
+        "endpoint ships with no description. The document still generates, still "
+        "parses, and describes an API that is not the one running -- and the "
+        "committed openapi.yaml is exactly the artefact a client author trusts and "
+        "should not.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_openapi.py::TestTheDocumentMatchesTheApplication",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/api/schema.py",
+        "    stale = stale_declarations()\n    if stale:",
+        "    stale = set()\n    if stale:",
+        "a declaration for a route that no longer exists is never reported, so a "
+        "renamed endpoint stays advertised in the document and a client built from "
+        "it calls a 404. **Worse than silence**, because the document looks "
+        "authoritative.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_openapi.py::TestTheDocumentMatchesTheApplication",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/api/schema.py",
+        '        return " {}" if not value else',
+        "        return f' \"{value}\"' if not value else",
+        'an empty map is emitted as the quoted STRING "{}" rather than an empty '
+        "map. Every refusal's `content` is exactly that, so the document stays "
+        "valid YAML, still looks right, and a client generator is told the refusal "
+        "has a body called {} to parse. **F-61's shape, and it shipped inside the "
+        "one file whose purpose is not to ship a document that quietly omits.**",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_openapi.py::TestTheDocumentIsWellFormed",
+            "-q",
+        ],
+    ),
 ]
 
 

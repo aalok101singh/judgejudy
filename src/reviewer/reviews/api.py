@@ -53,8 +53,10 @@ import logging
 
 from django.http import HttpResponse
 from django.views.decorators.http import require_http_methods
+from drf_spectacular.utils import extend_schema
 
 from reviewer.accounts.models import User
+from reviewer.api import documents
 from reviewer.audit import chain as audit_chain
 from reviewer.ballots import influence as influence_module
 from reviewer.isolation import Actor
@@ -261,6 +263,7 @@ def _score_rows(qs) -> list[dict]:
     ]
 
 
+@extend_schema(**documents.JUDGE_SCORES)
 @require_http_methods(["GET"])
 def judge_scores(request, event) -> HttpResponse:
     """``/api/v1/judge/scores`` -- the caller's own scores, and nothing else.
@@ -329,6 +332,7 @@ def judge_scores(request, event) -> HttpResponse:
 # ------------------------------------------------------------------- csv export
 
 
+@extend_schema(**documents.CSV_EXPORT)
 @require_http_methods(["GET"])
 def csv_export(request, event) -> HttpResponse:
     """``/api/v1/export.csv`` -- every score in the event, for an organizer.
@@ -462,6 +466,7 @@ def _export_rows(qs, criteria) -> list[list]:
 # ---------------------------------------------------------------- the leaderboard
 
 
+@extend_schema(**documents.RESULTS)
 @require_http_methods(["GET"])
 def results(request, event) -> HttpResponse:
     """``/api/v1/results`` -- the ranking, when the actor is allowed to see one.
@@ -498,6 +503,7 @@ def results(request, event) -> HttpResponse:
 # ------------------------------------------------------------------ the audit view
 
 
+@extend_schema(**documents.AUDIT)
 @require_http_methods(["GET"])
 def audit(request, event) -> HttpResponse:
     """``/api/v1/audit`` -- the chain, its head, and whether it verifies.
@@ -543,6 +549,7 @@ def audit(request, event) -> HttpResponse:
 # ------------------------------------------------------------ the influence report
 
 
+@extend_schema(**documents.INFLUENCE)
 @require_http_methods(["GET"])
 def influence(request, event) -> HttpResponse:
     """``/api/v1/influence`` -- the anti-abuse report, before publication (D-13).

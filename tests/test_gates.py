@@ -567,7 +567,29 @@ class TestAcceptanceWrapper:
             Path(fake).unlink(missing_ok=True)
 
         assert unreachable.returncode == 1
-        assert "nothing is listening" in unreachable.stdout
+        # **Assert the property, not one of the tool's two wordings.**
+        # `run_acceptance.py` says "nothing is listening on <url>" when the portal
+        # is down and there is nothing else wrong, and "the portal is not answering
+        # on <url>; the checks above are being reported against nothing" when the
+        # portal is down *and* something else also failed. Both are correct, and
+        # which one prints depends on state this test does not control.
+        #
+        # The first version asserted the first wording and it failed inside
+        # `just check` while passing standalone -- the same hermeticity problem
+        # this test's own docstring describes, one layer down, in the assertion
+        # rather than the fixture. A test that fails because the tool chose
+        # different words is a change-detector, and the distinction that matters is
+        # that the run was reported as UNREACHABLE and never as a REGRESSION.
+        said_unreachable = (
+            "nothing is listening" in unreachable.stdout or "not answering" in unreachable.stdout
+        )
+        assert said_unreachable, (
+            "an unreachable portal must be reported as unreachable, not as a "
+            f"result:\n{unreachable.stdout}"
+        )
+        assert "REGRESSION" not in unreachable.stdout, (
+            "the portal being down is not a regression in the portal"
+        )
         assert "FALSE PASSES" not in unreachable.stdout, (
             "A portal that is not running cannot be probed for its routes, so "
             "no false pass can be established. Reporting one anyway would be "

@@ -180,7 +180,39 @@ retrofit.
   proved it by reporting the mutation that removes it NOT DETECTED. Two tests now
   cover it. *A docstring asserting a behaviour is not a test of it.*
 
-### The next two items
+### FEAT-07 increment 4 is DONE: OpenAPI 3.1, and the README is now written for the product
+
+`reviewer/api/documents.py` (the declarations), `reviewer/api/schema.py` (the
+assembler), `manage.py build_openapi`, a committed **`openapi.yaml`**, and **15
+tests**. Plus a **README rewrite**: 23 KB organised around tiers → 17 KB organised
+around an organizer's week, with the reviewer material condensed into one section.
+
+**F-99 [P2]** — `just schema` ran `manage.py spectacular`, which enumerates **DRF
+views**. This API is plain Django functions *on purpose*, so the introspector found
+nothing and wrote `paths: {}`: **a valid, committed, authoritative document
+describing zero endpoints, from a command that exited 0.** F-61's shape with a
+`paths:` key. The fix is a table plus a generator that **raises rather than emitting
+a partial document** — for an undocumented route *and* for a declaration whose
+route is gone. Wrapping the views in `@api_view` to satisfy the introspector would
+have put the false-pass risk straight back.
+
+**F-100 [P2]** — a predicate tested, and the refusal it drives not. `stale_declarations()`
+had a test; the `raise` two lines below it did not. **Second time this session, and
+the identical shape as the DSSE one-payload guard.** A predicate is worth testing
+for what it *causes*.
+
+Also fixed: an empty map emitted as the quoted string `"{}"` — so every refusal's
+`content` told a client generator to parse a body that does not exist — and a
+pre-existing test that asserted one of `run_acceptance.py`'s two unreachable
+wordings, which passed standalone and failed under `just check`.
+
+**FEAT-07 has one item left.**
+
+| # | Item | Note |
+|---|---|---|
+| 5 | Embeddable results widget, pure static HTML + JSON, renders offline | Self-contained. **Must render with no network** — the same constraint the container boot is proved against |
+
+### Do not
 
 | # | Item | Note |
 |---|---|---|

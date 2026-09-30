@@ -41,7 +41,7 @@
 ## Phase B — Schema and isolation primitive (FEAT-02, 5h)
 
 - [x] **FEAT-02 Schema and the isolation primitive** — 5h
-  - 26 models, 12 apps; SQLite WAL; **Postgres-portable** — no SQLite-only types
+  - 26 models, 13 apps; SQLite WAL; **Postgres-portable** — no SQLite-only types
   - Indexes for the three hot paths: judge-on-track, judge-on-project, event gallery
   - `Review.objects.for_actor(actor)` → scoped queryset **+ scope receipt**
   - `isolation_proof` management command skeleton, exiting 0 on pass

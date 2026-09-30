@@ -1,0 +1,173 @@
+openapi: 3.1.0
+info:
+  title: "Judge Judy API"
+  version: "1.0.0"
+  description: "Submission and judging platform for DOGFOOD 2026."
+paths:
+  "/api/v1/audit":
+    get:
+      summary: "The audit chain, and whether it verifies"
+      description: "Every audit entry for the event, the chain head, and the verdict of re-walking the hashes. `verified: false` means the chain does not hash consistently -- the signal an organizer needs, and the reason the chain is readable by a human and not only by the verifier."
+      responses:
+        "200":
+          description: "The chain."
+          content:
+            "application/json":
+              schema:
+                type: "object"
+                properties:
+                  count:
+                    type: "integer"
+                  chain_head:
+                    type: "string"
+                  verified:
+                    type: "boolean"
+                  entries:
+                    type: "array"
+                    items:
+                      type: "object"
+                  problems:
+                    type: "array"
+                    items:
+                      type: "string"
+        "403":
+          description: "This actor may not read the audit chain. Refused. The response body is EMPTY and there is no Location header -- a redirect would return 200 to a client that follows one, which is why this is a 403 and not a 302."
+          content: {}
+      tags:
+        - "T2"
+        - "audit"
+  "/api/v1/export.csv":
+    get:
+      summary: "Every review as CSV"
+      description: "The complete review export, carrying the natural key of every row so that an export can be imported again and round-trips byte-for-byte. Organizer only. Every exported cell is checked against the database by a test, because a structurally perfect export whose first column is empty once shipped here (F-69)."
+      responses:
+        "200":
+          description: "text/csv."
+          content:
+            "text/csv":
+              schema:
+                type: "string"
+        "403":
+          description: "This actor may not export reviews. Refused. The response body is EMPTY and there is no Location header -- a redirect would return 200 to a client that follows one, which is why this is a 403 and not a 302."
+          content: {}
+      tags:
+        - "T2"
+        - "export"
+  "/api/v1/influence":
+    get:
+      summary: "Vote concentration"
+      description: "Per project: distinct identities, first-preference share, vote-mass Gini, and identical-ballot cluster sizes. **Deliberately not gated on `results_state`** -- an organizer has to see concentration before deciding to publish, or the report becomes a post-mortem. No threshold is applied: Gini and cluster size are reported and ranked, and the report never says 'brigaded'."
+      responses:
+        "200":
+          description: "The report, or `status: no_votes` when no ballot exists."
+          content:
+            "application/json":
+              schema:
+                type: "object"
+                properties:
+                  status:
+                    type: "string"
+                  projects:
+                    type: "array"
+                    items:
+                      type: "object"
+        "403":
+          description: "This actor may not read the influence report. Refused. The response body is EMPTY and there is no Location header -- a redirect would return 200 to a client that follows one, which is why this is a 403 and not a 302."
+          content: {}
+      tags:
+        - "T3"
+        - "abuse"
+  "/api/v1/judge/scores":
+    get:
+      summary: "A judge's own scores, and only their own"
+      description: "Returns the requesting judge's submitted scores. Any other judge, a participant and a visitor are refused. The scoping is a query-level guarantee (`for_actor`), not a filter applied after the rows are read, so there is no code path in which a peer's score reaches this response."
+      responses:
+        "200":
+          description: "The judge's own scores."
+          content:
+            "application/json":
+              schema:
+                type: "object"
+                properties:
+                  actor:
+                    type: "object"
+                    properties:
+                      email:
+                        type: "string"
+                        nullable: true
+                      roles:
+                        type: "array"
+                        items:
+                          type: "string"
+                  scores:
+                    type: "array"
+                    items:
+                      type: "object"
+                required:
+                  - "actor"
+                  - "scores"
+        "403":
+          description: "This actor may not read scores. Refused. The response body is EMPTY and there is no Location header -- a redirect would return 200 to a client that follows one, which is why this is a 403 and not a 302."
+          content: {}
+      tags:
+        - "T2"
+        - "isolation"
+      examples:
+        "1":
+          summary: "A refusal that carries a reason. Only some do."
+          value:
+            error: "refused"
+            refused_by: "role"
+        "2":
+          summary: "Asking about a peer -- the case this endpoint exists for."
+          value:
+            error: "refused"
+            refused_by: "peer"
+  "/api/v1/results":
+    get:
+      summary: "The published ranking"
+      description: "The leaderboard, when this actor is allowed one. **Refused for everyone but an organizer until results are published** -- the same rule the public page enforces. Every row carries `normalization`, which is `unnormalized-raw-weighted-mean`: the shipped ranking is a raw weighted mean. The normalization engine was built and measured, and it is not applied because the measurement found no judge-severity effect to correct."
+      responses:
+        "200":
+          description: "The ranking."
+          content:
+            "application/json":
+              schema:
+                type: "object"
+                properties:
+                  actor:
+                    type: "object"
+                  results_state:
+                    type: "string"
+                    enum:
+                      - "hidden"
+                      - "published"
+                  normalization:
+                    type: "string"
+                    enum:
+                      - "unnormalized-raw-weighted-mean"
+                  rows:
+                    type: "array"
+                    items:
+                      type: "object"
+                      properties:
+                        rank:
+                          type: "integer"
+                        project:
+                          type: "string"
+                        title:
+                          type: "string"
+                        mean:
+                          type: "number"
+                          nullable: true
+                        reviews_counted:
+                          type: "integer"
+                        normalization:
+                          type: "string"
+        "403":
+          description: "Results are hidden, or this actor may not read a ranking. Refused. The response body is EMPTY and there is no Location header -- a redirect would return 200 to a client that follows one, which is why this is a 403 and not a 302."
+          content: {}
+      tags:
+        - "T3"
+        - "aggregate"
+components: {}
