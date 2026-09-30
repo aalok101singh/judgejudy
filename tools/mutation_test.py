@@ -1999,6 +1999,110 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
             "-q",
         ],
     ),
+    # --- src/reviewer/widget/build.py -----------------------------------------
+    # **The escaping mutation is the one that matters in this file**, and before
+    # these were added the whole widget had ZERO mutations. A file whose entire
+    # job is to interpolate a reviewer's project title into a document, tested
+    # only by tests, is exactly the shape where a green suite and a broken
+    # builder look identical.
+    #
+    # **The first version of this entry reported NOT DETECTED, and the cause was
+    # a defect in the CODE, not in the test.** The builder escaped the title in
+    # its own f-string while every other cell went through `_cell`, so deleting
+    # the `_cell` escape changed nothing the hostile fixture reached: the
+    # mutation was aimed at the wrong line, which this project has now recorded
+    # four times. The repair was to collapse both copies into `_cell`, so one
+    # rule is implemented once and one hostile input per cell exercises it.
+    (
+        "src/reviewer/widget/build.py",
+        'return f"<{tag}{attrs}>{html.escape(value)}</{tag}>"',
+        'return f"<{tag}{attrs}>{value}</{tag}>"',
+        "the cell stops escaping, so a project called `<img src=x onerror=...>` "
+        "becomes a live element inside a document that is about to be embedded in "
+        "somebody else's page. The document still renders, still ranks, and every "
+        "status-code assertion still passes. This is the XSS mutation, and it is "
+        "why the escaping tests put a hostile title AND a hostile track in the "
+        "DATABASE rather than trusting the reviewer.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_widget.py::TestItEscapes",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/widget/build.py",
+        """<footer>Ranking: <code>{method}</code>.""",
+        "<footer>See the portal for details.",
+        "the footer stops naming the method, so the ONE place a reader is told how "
+        "the ranking was produced becomes a sentence that says nothing. **The "
+        "first version of this entry reported NOT DETECTED**, because the test "
+        "asserted the string was present *somewhere* in the document while the "
+        "same string also appears in the meta line and on all 41 rows -- three "
+        "copies of a fact and one assertion about its presence, which is F-84's "
+        "shape. The test is now scoped to the <footer> element.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_widget.py::TestItSaysHowTheRankingWasComputed",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/widget/build.py",
+        '    "normalization": row["normalization"],',
+        '    "normalization": "",',
+        "each row's own method label is emptied while the document's label stays, "
+        "so the page looks labelled and the data does not carry it. The JSON and "
+        "the HTML then disagree about the same ranking -- F-84 and F-89's shape, "
+        "and the reason this feature compares its two renderings row by row.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_widget.py",
+            "-q",
+        ],
+    ),
+    # --- src/reviewer/widget/views.py -----------------------------------------
+    (
+        "src/reviewer/widget/views.py",
+        "    if event.results_state != RESULTS_PUBLISHED:",
+        "    if False:",
+        "the published gate never fires, so the ranking is served to every "
+        "visitor, to an iframe on any site in the world, while the voting window "
+        "is still open. D-02 and REQ-T3-03: this is the most valuable single line "
+        "in the feature, and it is the same refusal the portal already makes -- "
+        "so a mutation here is a regression against a rule the rest of the system "
+        "depends on, not a new invention.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_widget.py::TestItRefusesUntilPublished",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/widget/views.py",
+        "    actor = Actor.anonymous(event)",
+        '    actor = Actor.anonymous(Event.objects.order_by("pk").first())',
+        "the public board is scoped to the FIRST event rather than the one being "
+        "asked about, so with a second event the widget ranks the wrong "
+        "competition. The response is a structurally perfect ranking of 41 rows "
+        "and not one assertion notices, because every test in this repository "
+        "runs on a single-event fixture. F-61's shape at the multi-tenant "
+        "boundary.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_widget.py",
+            "-q",
+        ],
+    ),
 ]
 
 

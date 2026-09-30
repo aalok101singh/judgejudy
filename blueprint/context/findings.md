@@ -301,6 +301,73 @@ that can be right while the feature is absent.
 
 Both now have a test that asserts the refusal, and both mutations are caught.
 
+### F-101 [P1] fixed — the escaping rule was implemented twice, and one copy was untested
+
+**File:** `src/reviewer/widget/build.py`
+**Found:** 2026-09-30, by a mutation reported NOT DETECTED
+
+The widget's builder escaped the project title with its own `html.escape` in the
+row f-string, while every other cell went through `_cell`, which has its own
+`html.escape`. Two copies of one rule.
+
+Deleting the escape from `_cell` — **the XSS mutation, the single most important
+one in the file** — left the whole suite green, because the hostile fixture put its
+payload in the *title*, and the title never touched `_cell`.
+
+**So this was a code defect that the mutation harness found and the tests could
+not.** The suite was not weak; the code had an untested branch. The repair was not
+a new test but a **collapse**: the title is now a `_cell` like everything else, so
+one rule is written once and one hostile input per cell exercises it.
+
+This is the **fourth** recorded instance of a mutation aimed at the wrong line
+(after `io/bundle.py` twice and `audit/publication.py` once), and the first where
+the wrong line was a *duplication* rather than a near-equivalent edit. The general
+lesson is worth more than the fix: **two copies of one rule means one of them is
+untested**, and no amount of coverage on the copy you happen to read will tell you.
+
+### F-102 [P2] fixed — a fact rendered three times, asserted once, anywhere
+
+**File:** `tests/test_widget.py`
+**Found:** 2026-09-30, by a mutation reported NOT DETECTED
+
+The test asserted `NORMALIZATION in html` — that the method label appears
+*somewhere* in the document. It appears in the meta line, on all 41 rows, **and in
+the footer**, so deleting the footer's copy changed nothing the assertion could see.
+
+The footer is the one place a reader is told how the ranking was produced, and it
+had become decorative under a test that appeared to cover it. F-84's shape exactly:
+**one fact, several renderings, one presence assertion.**
+
+The test is now scoped to the `<footer>` element with a regex. Generalisation: when
+a fact is rendered more than once, the assertion must name *which* rendering, or it
+is really only asserting the first one and hoping.
+
+### Three more from the widget increment, all caught before commit
+
+- **`project.track.slug = …` then `project.save()` never persisted the slug.**
+  Assigning to a related object's field mutates it in memory; `project.save()`
+  writes the *Project*. The hostile track payload silently never reached the page,
+  so the new `_cell` test passed for the wrong reason — it would have caught a
+  broken escape only if the payload had arrived. It now saves the track explicitly.
+  **A test that passes because its fixture did nothing is a test that has not run.**
+- **The first escaping test asserted `"onerror=" not in html` and FAILED against
+  correctly escaped output**, where `onerror=&quot;` is inert text in a `<td>`. F-86's
+  lesson, walked into one session after writing it: *a substring's absence is a
+  proxy; what a browser acts on is an element.* A third assertion in the same test
+  (`no =" in the body`) then failed on `<p class="meta">` and the `<meta>` tag — our
+  own markup, escaped correctly. **An assertion that trips on the template is an
+  assertion about the template.** Both are recorded in the test's docstring so
+  neither is re-added.
+- **`reviewer.widget` was registered as a Django app, against a rule
+  `DATA-MODEL.md` already stated.** The app has no models, and the document says
+  *"listing an app with no models would add a `models` module that does not exist and
+  a migration that creates nothing"* — the reason `isolation/` and `normalization/`
+  are packages. `test_schema_contract.py` caught the count (13 → 14). Reverted:
+  the widget is a package, and `verify_widget_offline` lives in `reviewer.audit`,
+  which owns the `ResultPublication` gate the widget obeys. **Rewriting the rule to
+  excuse the addition was the alternative, and it is goalpost-moving** — the plan
+  said 13 apps and it is still true.
+
 ### Two more from the same increment, both real
 
 - **An empty map was emitted as the quoted string `"{}"`.** Every refusal's

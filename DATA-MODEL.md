@@ -124,9 +124,20 @@ not for the layer, and none holds more than three models — both asserted by
 | `webhooks` | WebhookEndpoint, WebhookDelivery | schema only, D-14 |
 | `io` | RunSnapshot | the escape hatch manifest |
 
-`reviewer/isolation/` and `reviewer/normalization/` are **packages, not apps**.
-They define no model, and listing an app with no models would add a `models`
-module that does not exist and a migration that creates nothing.
+`reviewer/isolation/`, `reviewer/normalization/` and `reviewer/widget/` are
+**packages, not apps**. They define no model, and listing an app with no models
+would add a `models` module that does not exist and a migration that creates
+nothing.
+
+`reviewer/widget/` joined them in FEAT-07 and **the rule was applied rather than
+amended.** It serves two routes (`/widget/results/`, `/widget/results.json`) and
+builds one self-contained document, none of which needs a table — so making it an
+app purely so Django would discover
+`manage.py verify_widget_offline` would have bought a fourteenth app and two
+useless files to keep a number in this document at thirteen. The command lives in
+`reviewer.audit` instead, which owns the `ResultPublication` gate the widget
+obeys. The alternative — registering the app and rewriting the paragraph above to
+excuse it — was rejected as goalpost-moving for a feature that did not need it.
 
 ### Four rules that apply to every table
 

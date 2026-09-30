@@ -29,11 +29,22 @@ from reviewer.projects.views import current_event
 from reviewer.reviews import api as api_views
 from reviewer.reviews import console as console_views
 from reviewer.reviews import results_view as results_page_views
+from reviewer.widget import views as widget_views
 
 
 def _results_page(request):
     """Resolve the event, then delegate. One event per install, by design."""
     return results_page_views.results_page(request, current_event())
+
+
+def _widget(request):
+    """Resolve the event, then delegate. One event per install, by design."""
+    return widget_views.widget(request, current_event())
+
+
+def _widget_json(request):
+    """The widget's data half."""
+    return widget_views.widget_json(request, current_event())
 
 
 def _ballot(request):
@@ -167,6 +178,13 @@ urlpatterns = [
     # gated on the voting window and on having a derivable identity, and both
     # refusals are literal 403s with empty bodies.
     path("vote/", _ballot, name="ballot"),
+    # FEAT-07. The embeddable widget: ONE self-contained document and the JSON
+    # beside it, with no external reference of any kind, so an organizer can drop
+    # it in an iframe on a page we do not control and it still works with the
+    # network off. Gated on `results_state` alone -- an embedder holds no
+    # credential and is not a participant.
+    path("widget/results/", _widget, name="widget"),
+    path("widget/results.json", _widget_json, name="widget_json"),
     # REQ-T3-02. Public comments, one thread per project.
     #
     # **Deliberately NOT on the gallery.** `run.py` reads `projects[:3]`

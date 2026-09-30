@@ -140,19 +140,37 @@ def main() -> int:
     run(["cp", str(PROBE), f"{NAME}:/probe.py"])
     print("\n$ probing from inside the container (same empty netns)")
     probe = run(["exec", NAME, "python", "/probe.py"], capture=False)
+
+    # The widget's acceptance line, proved HERE rather than in pytest. The suite
+    # asserts the document contains no external reference; this asserts the server
+    # produced it with no way to reach anything else while doing so. It publishes
+    # the event, fetches, and restores -- so the T1 check that depends on
+    # `results_state = hidden` still passes on the next run.
+    #
+    # `/app/src/manage.py`, not `/app/manage.py`: the image copies the project into
+    # `/app/src/`, and the first draft of this line got it wrong. **Exit code 2
+    # with no output is what a wrong path looks like**, so the failure branch below
+    # says which of the two exited non-zero instead of reporting one number.
+    print("\n$ widget renders offline (publish, fetch, assert, restore)")
+    widget = run(
+        ["exec", NAME, "python", "/app/src/manage.py", "verify_widget_offline"],
+        capture=False,
+    )
+
     cleanup()
 
     print()
-    if probe.returncode == 0:
+    if probe.returncode == 0 and widget.returncode == 0:
         print("=" * 62)
         print(" PROVED: the portal boots and serves with no network namespace.")
         print(" No CDN, no hosted database, no external API, no API key.")
         print(" The shipped healthcheck also passes offline.")
+        print(" The embeddable widget renders and ranks with no network at all.")
         print("=" * 62)
         return 0
 
     print("=" * 62)
-    print(f" NOT PROVED: the in-namespace probe exited {probe.returncode}.")
+    print(f" NOT PROVED: probe exited {probe.returncode}, widget check {widget.returncode}.")
     print("=" * 62)
     return 1
 

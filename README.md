@@ -178,6 +178,21 @@ and an unshareable record replicates nothing.
 | `/api/v1/results` | The ranking as JSON, with `results_state` and how it was computed. Refused to everyone but an organizer while hidden. |
 | `/api/v1/audit` | The hash-chained audit trail, plus `chain_head` and the verdict of re-walking it. |
 | `/api/v1/influence` | Vote concentration: distinct identities, first-preference share, vote-mass Gini, identical-ballot clusters. No thresholds. |
+| `/widget/results/` | **The embeddable widget.** One self-contained HTML document — no script, no stylesheet link, no CDN, no webfont — so it renders inside somebody else's page with no network at all. Refused with a bare 403 while hidden. Carries standings only, never scores, and labels the method on every row. |
+| `/widget/results.json` | The same ranking as canonical JSON, for an embedder that would rather draw it than paste it. Same gate, same fields. |
+
+**Embedding it.** Once results are published, an organizer can paste
+
+```html
+<iframe src="https://your-host/widget/results/" width="520" height="720"
+        style="border:0" title="Results"></iframe>
+```
+
+into any page. Nothing is fetched on the organizer's behalf and no credential is
+involved — which is why the widget is public, why it is refused until the event is
+published, and why it carries no scores. `just prove-offline` renders it inside a
+container started with `--network none`, so the claim is measured rather than
+asserted.
 
 **`?deep=1` on `/healthz`** also checks the database.
 

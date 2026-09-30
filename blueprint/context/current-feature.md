@@ -258,9 +258,9 @@ rehearsing. Nothing to decide at the recording session.
 
 | | |
 |---|---|
-| **Status** | FEAT-07 increment 1 done (the byte-identical round trip); items 2-5 not started. FEAT-01..FEAT-06 and FEAT-08 built, verified, committed |
+| **Status** | **FEAT-07 COMPLETE.** All five increments shipped: byte-identical round trip, `results_hash` + publication, DSSE signed records, OpenAPI 3.1, and the offline results widget. FEAT-01..FEAT-06 and FEAT-08 built, verified, committed |
 | **Started** | 2026-09-29 |
-| **Last touched** | FEAT-08 committed as `8116125`: **636** tests, `95/95` mutations, spec `72/72`, lint clean, `just check` **GREEN** at 7 of 7, acceptance-report diff empty |
+| **Last touched** | FEAT-07 increment 5 (the widget) committed as the next commit: **721** tests passing (1 skipped), `113/113` mutations, spec `72/72`, lint clean, `just check` **GREEN** at 7 of 7, `just prove-offline` **PASS** with the widget rendering 41 rows and no external reference, acceptance-report diff empty |
 | **Claim** | `claimed = ["T1", "T2"]`. T3 fully built and **unclaimed** (F-91, accepted by decision). `v-t3-verified` untagged, deliberately |
-| **Next action** | **FEAT-07 item 2: `results_hash` at publication, replicated into every signed judge record (D-09).** Then OpenAPI, then the widget, then DSSE. Item 1 is done and F-93 closed five tables with no natural key. |
+| **Next action** | **Nothing in FEAT-07 remains.** Next is the human's: BREAK-3, which decides whether the built-and-unclaimed T3 becomes a claim. **It must not be claimed on my say-so** — `run.py` has no T3 checks, so any T3 claim is `OVERCLAIM` and a red gate. FEAT-09's video script is drafted at `blueprint/history/features/09-video-script.md` and needs a human recording it |
 | **Tag** | `v-t1-verified` (BREAK-1), `v-t2-verified` (BREAK-2) |
