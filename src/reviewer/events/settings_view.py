@@ -44,6 +44,7 @@ from __future__ import annotations
 import datetime as dt
 
 from django.contrib import messages
+from django.db import transaction
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
@@ -70,6 +71,11 @@ VOTING_MODES = (
 )
 
 LABEL = "organizer_settings"
+
+#: Mirrors `Event.name`'s `max_length`, and is **asserted equal to it** by a test.
+#: Two places that both say 200 will drift; a test that reads the model is the only
+#: thing that notices.
+NAME_LIMIT = 200
 
 
 def _event(request):
@@ -195,10 +201,25 @@ def settings_view(request):
     name = (request.POST.get("name") or "").strip()
     if not name:
         errors["name"] = "The event needs a name; it is the title on every page."
+    elif len(name) > NAME_LIMIT:
+        # **Refused, not truncated.** `name` is `CharField(max_length=200)`, so an
+        # over-long name cannot be stored -- and silently cutting it would store a
+        # *different event name* than the one the organizer typed, on the field
+        # that titles every page. The cap was previously applied as `name[:200]`,
+        # which is the same defect as writing `None` into a required column: a
+        # refusal the organizer cannot see.
+        errors["name"] = (
+            f"The name has to be {NAME_LIMIT} characters or fewer; this one is {len(name)}."
+        )
     else:
-        after["name"] = name[:200]
+        after["name"] = name
 
-    after["description"] = (request.POST.get("description") or "")[:5000]
+    # **`description` is a `TextField` with no maximum, and is stored whole.**
+    # The view previously cut it at 5000 characters. Nothing in the schema asks
+    # for that number, so the effect was that the tail of an organizer's prose
+    # disappeared on save, with a success message -- the one field on this form
+    # that exists to be read by people, quietly losing the part they wrote last.
+    after["description"] = request.POST.get("description") or ""
 
     for field, label in (
         ("starts_at", "Start"),
@@ -272,11 +293,19 @@ def settings_view(request):
             status=400,
         )
 
-    _record(event, actor, "event.settings", None, after)
+    # **The chain and the event move together or not at all.**
+    # `chain.append` opens its *own* `transaction.atomic()`, so left alone it
+    # commits independently of the `event.save()` below it. A save that then
+    # raises leaves a committed entry claiming a deadline moved while the event
+    # still holds the old one -- a falsified row in the chain this project calls
+    # its tamper evidence, and one `verify_audit` walks. The nested atomic
+    # degrades to a savepoint, so the append rolls back with the event.
+    with transaction.atomic():
+        _record(event, actor, "event.settings", None, after)
 
-    for field, value in after.items():
-        setattr(event, field, value)
-    event.save()
+        for field, value in after.items():
+            setattr(event, field, value)
+        event.save()
 
     messages.success(request, "Settings saved.")
     return HttpResponseRedirect("/organizer/settings/")

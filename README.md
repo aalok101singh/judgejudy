@@ -451,11 +451,11 @@ portal. It is also **unmodified**, so the panel runs the identical program.
 **The gate is more than `run.py`.** `just check` runs the spec layer, a clean
 `down -v`, the build, the organizers' checker, the isolation proof, the census and
 the suite. Two more run at every verification break because each needs a clean
-volume: `just prove-offline` and `just mutation-test`, which **corrupts 114 things
+volume: `just prove-offline` and `just mutation-test`, which **corrupts 116 things
 on purpose and requires every one to be caught** by a named test.
 
 **Findings.** [`blueprint/context/findings.md`](blueprint/context/findings.md) is
-the full record: **124 findings**, what was wrong, what was fixed with a test, and
+the full record: **126 findings**, what was wrong, what was fixed with a test, and
 what was declined and why. Several are the same class of defect in a new medium —
 a min-cut certificate that named no judges, a leaderboard that would have been
 refused for the wrong reason, a CSV column of nothing, an acceptance criterion

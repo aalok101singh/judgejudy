@@ -2,7 +2,7 @@
 
 **2026-10-01** · `src/reviewer/events/settings_view.py`,
 `src/templates/organizer/settings.html`, `tests/test_organizer_settings.py`
-**29 tests, 7 findings (3 P1, 4 P2), 0 open blocking.**
+**33 tests, 9 findings (4 P1, 5 P2), 0 open blocking. Reviewed; F-118…F-124 closed.**
 
 ---
 
@@ -161,19 +161,27 @@ file is a rule being applied by memory.
 
 | Gate | Result |
 |---|---|
-| `pytest` | **906 passed**, 1 skipped (907 collected) |
-| `just mutation-test` | **114/114** caught |
+| `pytest` | **910 passed**, 1 skipped (911 collected) |
+| `just mutation-test` | **116/116** caught (2 added by the review) |
 | `tools/verify_spec.py` | **75/75** |
 | `just lint` | All checks passed, 167 files formatted, JJ01 clean over **196** files |
 | `just check` | **GATE GREEN** — 7 of 7, `claimed T1 T2, verified T1 T2` |
 | `just prove-offline` | **PROVED** — healthy after 8.2 s, widget renders with no network |
 | `just report` | 7 of 7 PASS, **`git diff acceptance-report.txt` empty** |
 
-The spec gate earned its place during this feature: **within a minute of adding
+The spec gate earned its place twice during this feature. **Within a minute of adding
 the seven findings it failed three checks**, because the tallies in `AGENTS.md`,
-`project-overview.md` and `README.md` were still 117. They are now 124, and the
-suite count was corrected from 877 to 906 in the same pass. **Generated, not
-transcribed** — F-72.
+`project-overview.md` and `README.md` were still 117. And after the review added
+two more it failed again — plus a **fourth** failure nobody had seen coming:
+`project-overview.md` had crossed its 20,000-byte cap, because this file's own
+findings section had pushed the one page loaded on every session past the budget
+that keeps it loadable. **A gate that only fails on the thing you are looking at
+is not a gate**, and this one caught a stale summary *and* a growing one.
+
+**And it caught me transcribing.** The per-status breakdown — `45 fixed`, `69
+closed` — is **not** checked by any gate, and I typed `9 fixed` into `AGENTS.md`.
+It was caught only by deriving the number from the last verified state. That gap
+is recorded in the review below rather than quietly corrected.
 
 ---
 
@@ -193,3 +201,69 @@ The next honest step is not more features. It is that **every surface an
 organizer touches is now reachable, and each of them was found to be broken in a
 way its own tests could not see** — which is the argument for treating the
 existing surfaces, rather than adding new ones, as the next place to look.
+
+---
+
+## The review
+
+`fixed` is blocking by design: a repair is done when a **review** has looked at the
+result, not when the code changed. So the seven findings above were re-read against
+the finished page rather than against the suite that had already passed.
+
+**The review found two more defects. That is the argument for the rule.**
+
+### F-125 [P1] — the chain recorded a deadline change for a save that never happened
+
+`_record(...)` appends to the audit chain, and `event.save()` follows it.
+**`chain.append` opens its own `transaction.atomic()`**, so the two commit
+independently. Make the save raise and the chain keeps a committed entry saying
+the deadline moved, while the event still holds the old value.
+
+Proved rather than argued — `TestTheChainCannotOutliveTheWrite` makes
+`Event.save` raise. Before the fix it produced
+`audit evt_01#2 event.settings.submissions_close`: **a falsified row in the chain
+this project calls its tamper evidence**, and the one `verify_audit` walks.
+
+**This is the F-80 shape at its worst.** F-80 was *noise* in an append-only log.
+This was a **false statement** in one. A log that is merely long is
+inconvenient; a log that asserts something untrue is the specific failure the
+chain exists to prevent, and it was reachable by making the database say no. The
+fix is an outer `transaction.atomic`, where the nested one degrades to a
+savepoint so the append rolls back with the event.
+
+It was also a **plain oversight rather than a subtlety** — `publish()` in the same
+codebase is `@transaction.atomic` for exactly this reason. The rule was already
+written down and applied one file over.
+
+### F-126 [P2] — an organizer's description was silently cut at 5000 characters
+
+`description` is a **`TextField` with no maximum**. Nothing in the schema asks for
+5000, so the effect was that the tail of an organizer's prose disappeared on save
+behind a success message — the one field on this form that exists to be read by
+people, losing the part written last, with no error anywhere.
+
+The same shape in `name`, which is `CharField(max_length=200)`: `name[:200]`
+silently stored a **different event name** than the one typed, on the field that
+titles every page. **Truncation is not a validation strategy** — it is F-118's
+`None` again, a refusal the organizer cannot see. It is now refused with a
+message stating both the limit and the length, and `NAME_LIMIT` is **asserted
+equal to the model's `max_length`** by a test, because two places that both say
+200 will drift and only a test that reads the model notices.
+
+### What the review could not settle, recorded rather than hidden
+
+- **The `?published=1` redirect parameter is read by nothing.** The page decides
+  "published" from `results_state`, which is the correct source; the query
+  parameter is vestigial. Harmless, and left alone rather than fixed quietly,
+  because removing it changes a URL a bookmark may already hold.
+- **The per-status findings breakdown in `AGENTS.md` is not machine-checked.**
+  `verify_spec` verifies the findings **total** (and caught three stale tallies
+  within a minute of writing them), but not the `fixed`/`closed`/`accepted` split
+  — so the split can be wrong while the gate is green. It was wrong here: I typed
+  `9 fixed` where the derivation gives `45`, and caught it only by deriving it.
+  **The next spec check should verify the split the way it verifies the total.**
+- **Concurrency is asserted, not tested.** The audit chain's own
+  `select_for_update` handles two organizers saving at once, and nothing here
+  exercises it. Two writers is a plausible Saturday, so it is worth a test that
+  the second write's `seq` does not collide — but that is a spec-layer question,
+  not this page's.

@@ -7,14 +7,14 @@
 
 ---
 
-## In flight: FEAT-13 — Organizer settings (built; awaiting review)
+## In flight: FEAT-13 — Organizer settings — **DONE, reviewed**
 
-**Phase G** · **Gate:** BREAK-4 ☕ (the T4 claim decision)
+**Phase G** · **Gate:** BREAK-4☕ (the T4 claim decision)
 
-**The code is done and every gate is green. The feature is not marked done
-because `fixed` is blocking by design** — a repair is done when a review has
-looked at the result, and seven findings on one page is exactly the case where
-that distinction earns something. Archive: `13-organizer-settings.md`.
+**Built, every gate green, and the review has looked at the result** — so
+F-118…F-124 move `fixed` → `closed`. **The review then found two more defects**
+(F-125, F-126), which is the argument for the rule rather than against it.
+Archive: `13-organizer-settings.md`.
 
 ### The one-line state
 
@@ -74,9 +74,9 @@ now means **unchanged**.
 
 | | |
 |---|---|
-| **Status** | **FEAT-13 built and green, awaiting review.** FEAT-01…FEAT-08 and FEAT-10…FEAT-12 shipped and verified. FEAT-09 is scripted and timed; recording it needs a human and a voice |
+| **Status** | **FEAT-13 reviewed and closed.** FEAT-01…FEAT-08 and FEAT-10…FEAT-13 shipped and verified. FEAT-09 is scripted and timed; recording it needs a human and a voice |
 | **Started** | 2026-09-29 |
-| **Last touched** | FEAT-13 `/organizer/settings/`: **906** tests passing (1 skipped), `114/114` mutations, spec `75/75`, lint clean over 196 files, `just check` **GREEN** at 7 of 7 with `claimed T1 T2, verified T1 T2`, `just prove-offline` **PROVED**, acceptance-report diff empty |
+| **Last touched** | FEAT-13 `/organizer/settings/` **reviewed and closed**: **910** tests passing (1 skipped), `116/116` mutations, spec `75/75`, lint clean over 196 files, `just check` **GREEN** at 7 of 7 with `claimed T1 T2, verified T1 T2`, `just prove-offline` **PROVED**, acceptance-report diff empty |
 | **Claim** | `claimed = ["T1", "T2"]`. T3 built and **unclaimed** (F-91). `v-t3-verified` untagged, deliberately |
-| **Next action** | **A review of FEAT-13**, since seven findings in one feature is the case the `fixed`-is-blocking rule exists for. After that: FEAT-09's recording (a human and a voice) and BREAK-4, which asks "how much of T4 is green?" — and the honest answer is *all of it or none of it*, because there is no T4 check |
+| **Next action** | **Nothing in software.** FEAT-09's recording needs a human and a voice, and BREAK-4 asks "how much of T4 is green?" — where the honest answer is *all of it or none of it*, because there is no T4 check. **Before any FEAT-14: read the FEAT-13 review note first.** Nine findings in one feature, three of them 500s invisible to passing guard tests, says the existing organizer-facing surfaces deserve the same fresh-eyes pass rather than another new one |
 | **Tag** | `v-t1-verified` (BREAK-1), `v-t2-verified` (BREAK-2), `v-submission` |

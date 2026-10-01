@@ -707,7 +707,7 @@ practice while its guard tests all passed. The pattern is the FEAT-12 one again:
 the tests that existed were the tests that had been written to pass, and the ones
 that failed were the ones asserting a property nobody had thought to state.*
 
-### F-118 [P1] fixed — a form that omitted a date wrote `None` into it, and the Publish button was the trigger
+### F-118 [P1] closed — a form that omitted a date wrote `None` into it, and the Publish button was the trigger
 
 **File:** `src/reviewer/events/settings_view.py`
 **Found:** 2026-10-01, by the first run of the new page's own test file
@@ -730,7 +730,7 @@ path means the weaker form's omissions are the stronger form's bugs.* Absent now
 means **unchanged** — a field is only ever written when the request actually
 carries it.
 
-### F-119 [P1] fixed — the validation path raised `KeyError`, so the validation error could never render
+### F-119 [P1] closed — the validation path raised `KeyError`, so the validation error could never render
 
 **File:** `src/reviewer/events/settings_view.py`
 **Found:** 2026-10-01, same run
@@ -745,7 +745,7 @@ by restoring the previous value from the event made the `KeyError` *reachable*
 where it had been masked. **Neither the 400 nor the 500 was observable by the
 guard tests, because both live past the guard.**
 
-### F-120 [P2] fixed — a partial POST skipped every ordering check
+### F-120 [P2] closed — a partial POST skipped every ordering check
 
 **File:** `src/reviewer/events/settings_view.py`
 **Found:** 2026-10-01, by reading the fix back rather than by a failing test
@@ -759,7 +759,7 @@ crafted request walks past is a validation that documents an intention rather th
 enforcing it.** The checks now resolve each field as *what the event would hold
 after the save*.
 
-### F-121 [P2] fixed — a no-op save wrote audit entries, because a form cannot express sub-second precision
+### F-121 [P2] closed — a no-op save wrote audit entries, because a form cannot express sub-second precision
 
 **File:** `src/reviewer/events/settings_view.py`
 **Found:** 2026-10-01, by a test written to assert the opposite
@@ -775,7 +775,7 @@ to answer "when did judging close", and "sub-second precision was dropped by a
 date picker" is not an answer to that. The audit trail is a record of decisions,
 and a change nobody made is noise in it.
 
-### F-122 [P1] fixed — every settings save 500'd, on the `Actor`/`User` confusion
+### F-122 [P1] closed — every settings save 500'd, on the `Actor`/`User` confusion
 
 **File:** `src/reviewer/events/settings_view.py`
 **Found:** 2026-10-01, first run of the page's tests
@@ -791,7 +791,7 @@ project uses both on purpose.** The conversion point is `actor.user`, and gettin
 it wrong is not a typo — it is the isolation layer refusing to be bypassed, which
 is the one property in this codebase that is never negotiable.
 
-### F-123 [P1] fixed — publishing an event with no rubric was a 500, behind a button that offered it
+### F-123 [P1] closed — publishing an event with no rubric was a 500, behind a button that offered it
 
 **File:** `src/reviewer/events/settings_view.py`, `src/templates/organizer/settings.html`
 **Found:** 2026-10-01, by the publish tests failing on `ValueError`
@@ -811,7 +811,7 @@ test was really testing the refusal, and the actual publication path — hash,
 digest, chain head — **was never executed at all**. Adding `make_rubric` to the
 fixture is what turned F-123 from a crash into a coverage hole.
 
-### F-124 [P2] fixed — `errors.__all__`, again, in the sixth template that needed it
+### F-124 [P2] closed — `errors.__all__`, again, in the sixth template that needed it
 
 **File:** `src/templates/organizer/settings.html`
 **Found:** 2026-10-01, by lint, on a template written an hour earlier
@@ -833,6 +833,57 @@ does and the bug was in everything after it. **One was a fixture that made three
 tests pass while testing nothing** (F-123), and **one was a defect in the fix for
 another** (F-119, introduced by repairing F-118). Nothing here was found by
 reading the code.*
+
+### Found by the FEAT-13 review, 2026-10-01 — F-118…F-124 are now CLOSED
+
+`fixed` is blocking until a review has looked at the result, so these seven were
+re-read against the finished page rather than against the tests that had already
+passed. **The review found two more defects, which is the argument for the rule
+rather than an argument against it.**
+
+### F-125 [P1] fixed — the audit chain committed a deadline change for a save that never happened
+
+**File:** `src/reviewer/events/settings_view.py`
+**Found:** 2026-10-01, by the FEAT-13 review, and proved before it was fixed
+
+`_record(...)` appends to the chain and `event.save()` follows it. **`chain.append`
+opens its own `transaction.atomic()`**, so the two commit independently: if the
+save raises, the chain keeps a committed entry saying the deadline moved while the
+event still holds the old value.
+
+Proved rather than argued — `TestTheChainCannotOutliveTheWrite` makes
+`Event.save` raise and asserts the chain is clean. Before the fix it produced
+`audit evt_01#2 event.settings.submissions_close`, a **falsified row in the chain
+this project calls its tamper evidence** and that `verify_audit` walks. The
+nested `atomic` degrades to a savepoint, so the append rolls back with the event.
+
+**This is the F-80 shape at its worst.** F-80 was *noise* in an append-only log;
+this was a *false statement* in one. A log that is merely long is inconvenient; a
+log that asserts something untrue is the specific failure the chain exists to
+prevent, and it was reachable by making the database say no.
+
+**And it was a plain oversight, not a subtlety.** `publish()` in the same codebase
+is `@transaction.atomic` for exactly this reason. The rule was already written
+down and applied one file over.
+
+### F-126 [P2] fixed — an organizer's description was silently cut at 5000 characters
+
+**File:** `src/reviewer/events/settings_view.py`
+**Found:** 2026-10-01, by the FEAT-13 review
+
+`after["description"] = ...[:5000]`. **`description` is a `TextField` with no
+maximum** — nothing in the schema asks for 5000, so the effect was that the tail
+of an organizer's prose disappeared on save, behind a success message. The one
+field on this form that exists to be read by people, losing the part written last,
+and no error anywhere. The cap is gone; the field is stored whole.
+
+The same shape in `name`, which is `CharField(max_length=200)`: `name[:200]`
+silently stored a *different event name* than the one typed, on the field that
+titles every page. Truncation is not a validation strategy — it is the same defect
+as F-118's `None`, a refusal the organizer cannot see. It is now **refused with a
+message that states the limit and the length**, and `NAME_LIMIT` is **asserted
+equal to the model's `max_length`** by a test, because two places that both say
+200 will drift and only a test that reads the model notices.
 
 *Ten findings. **Four were found by re-running Phase 0 on a tree nobody had
 touched** (F-72…F-75), **two by the influence report's own mutation harness and by

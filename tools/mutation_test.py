@@ -71,6 +71,46 @@ _DOCKER_PER_USER_PATH = (
 
 # (file, find, replace, description, detector command)
 MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
+    # --- settings_view.py (FEAT-13 review) ------------------------------------
+    # Both of these exist because the *review* found the defect, not a test. The
+    # tests were written and passing at the time, which is the whole reason a
+    # review pass exists and the reason these two lines are now pinned.
+    (
+        "src/reviewer/events/settings_view.py",
+        "    with transaction.atomic():\n        _record(event, actor",
+        "    if True:\n        _record(event, actor",
+        "the chain and the event stop moving together, so a save that raises leaves "
+        "a committed audit entry claiming a deadline changed when it did not -- F-125, "
+        "a falsified row in the chain this project calls its tamper evidence. The "
+        "detector makes Event.save raise, which is the only way to reach the window "
+        "between the two commits",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_organizer_settings.py::TestTheChainCannotOutliveTheWrite",
+            "-q",
+        ],
+    ),
+    (
+        "src/reviewer/events/settings_view.py",
+        '        errors["name"] = (\n'
+        '            f"The name has to be {NAME_LIMIT} characters or fewer; '
+        'this one is {len(name)}."\n'
+        "        )",
+        '        after["name"] = name[:NAME_LIMIT]',
+        "an over-long event name is silently truncated instead of refused, so the "
+        "portal stores a different event name than the organizer typed -- on the "
+        "field that titles every page. F-126: truncation is not validation, it is "
+        "a refusal the organizer cannot see",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_organizer_settings.py::TestNothingIsSilentlyTruncated",
+            "-q",
+        ],
+    ),
     # --- run_acceptance.py ----------------------------------------------------
     # The detectors are the PYTEST tests, not the tool. The first draft ran the
     # tool against the live portal; with no routes built, all seven checks

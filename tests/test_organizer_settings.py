@@ -367,6 +367,84 @@ class TestPublishingWithNothingToPublish:
         assert "nothing to publish" in body
 
 
+class TestNothingIsSilentlyTruncated:
+    def test_an_over_long_name_is_refused_rather_than_cut(self, as_organizer, world):
+        """**Truncating a name stores a different event than the one typed.** It is
+        the same defect as writing `None` into a required column -- a refusal the
+        organizer cannot see, on the field that titles every page."""
+        typed = "R" * 240
+        response = as_organizer.post(URL, {"name": typed, "voting_mode": VOTING_CLOSED})
+        assert response.status_code == 400
+        assert b"200 characters or fewer" in response.content
+        world[0].refresh_from_db()
+        assert world[0].name == "Ridgeway Hack 2026", "a 240-character name was stored truncated"
+
+    def test_the_limit_is_the_models_own_max_length(self):
+        """The view and the model must not each hold their own 200."""
+        from reviewer.events.models import Event
+        from reviewer.events.settings_view import NAME_LIMIT
+
+        assert NAME_LIMIT == Event._meta.get_field("name").max_length
+
+    def test_a_long_description_is_stored_whole(self, as_organizer, world):
+        """`description` is a `TextField` with **no maximum**. The view used to cut
+        it at 5000 characters, so the tail of an organizer's prose vanished on save
+        behind a success message -- and nothing in the schema asked for that cap."""
+        prose = "Judging rubric and venue notes. " * 300  # comfortably over 5000
+        assert len(prose) > 5000
+        as_organizer.post(
+            URL,
+            {
+                "name": "Ridgeway Hack 2026",
+                "description": prose,
+                "voting_mode": VOTING_CLOSED,
+            },
+        )
+        world[0].refresh_from_db()
+        assert world[0].description == prose, "the description was silently shortened"
+
+
+class TestTheChainCannotOutliveTheWrite:
+    def test_a_failed_save_leaves_no_audit_entry_claiming_the_change(
+        self, as_organizer, world, monkeypatch
+    ):
+        """**The audit chain must never record a change that did not happen.**
+
+        `chain.append` opens its **own** `transaction.atomic()`, so it commits
+        independently of the `event.save()` that follows it. If that save raises,
+        the chain keeps an entry saying the deadline moved while the event still
+        holds the old one -- and this chain is the tamper evidence, and
+        `verify_audit` walks it. A falsified entry is worse than a missing one.
+        """
+        from reviewer.audit.models import AuditEntry
+        from reviewer.events.models import Event
+
+        event = world[0]
+        before = event.submissions_close
+
+        def boom(self, *a, **kw):
+            raise RuntimeError("the database said no")
+
+        monkeypatch.setattr(Event, "save", boom)
+        with pytest.raises(RuntimeError):
+            as_organizer.post(
+                URL,
+                {
+                    "name": "Ridgeway Hack 2026",
+                    "starts_at": "2026-03-01T09:00",
+                    "submissions_close": "2026-03-09T17:00",
+                    "voting_mode": VOTING_CLOSED,
+                },
+            )
+        monkeypatch.undo()
+
+        assert not AuditEntry.objects.filter(action__contains="submissions_close").exists(), (
+            "the chain recorded a deadline change for a save that never happened"
+        )
+        event.refresh_from_db()
+        assert event.submissions_close == before
+
+
 class TestTheRouteIsReachable:
     def test_it_reverses(self):
         assert reverse("organizer_settings") == URL

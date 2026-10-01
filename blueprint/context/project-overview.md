@@ -162,20 +162,21 @@ parses out of this table and cross-checks, which is why they are not prose.
 | **BREAK-2** | 1 | **☕ T2.** Tag `v-t2-verified` — *the fallback state* | **T2** |
 | FEAT-06 | 9 | Voting, comments, results hiding, ballot order, **influence report** | — |
 | **BREAK-3** | 1 | **☕ T3.** Claim, tag | **T3** |
-| FEAT-07 | 13 | T4: bulk IO + round trip, signed records, `results_hash`, widget, OpenAPI | — || **BREAK-4** | 1 | **☕ T4.** How much is green? Claim that. | **T4** |
+| FEAT-07 | 13 | T4: bulk IO + round trip, signed records, `results_hash`, widget, OpenAPI | — |
+| **BREAK-4** | 1 | **☕ T4.** How much is green? Claim that. | **T4** |
 | FEAT-08 | 7 | Normalization engine + proof. **Protected** | — |
 | FEAT-09 | 3 | Demo video | recorded |
 | FEAT-10 | 4 | Docs, acceptance report, commit. **Protected** | **FREEZE at H+65** |
 
-**The claim is decided at a break, not at kickoff.** We build to T4; each break
-decides what is actually green. If Break 4 arrives with two T4 items outstanding,
-we claim T3 and name which two. A T4 claim with half-working endpoints scores
-worse than an honest T3 — the brief says so three times. **T2 is earned as of
-FEAT-05 and still unclaimed**, which is the rule working rather than aspirational.
+**The claim is decided at a break, not at kickoff.** Each break decides what is
+actually green. A T4 claim with half-working endpoints scores worse than an honest
+T3 — the brief says so three times. **T1 and T2 are claimed and verified; T3 is
+built, unclaimed by decision (F-91), because `run.py` contains no T3 or T4 checks
+at all, which prefix-locks `verified` to `T1 T2`.**
 
-**Break protocol (1 hour, fixed):** clean `down -v` → `up` network off ·
-`run.py` · `isolation_proof` exits 0 · full suite · **update the slippage ledger**
-(`bible/08` §1c) · decide the claim and write it down · tag.
+**Break protocol (1 hour, fixed):** clean `down -v` → `up` network off · `run.py` ·
+`isolation_proof` exits 0 · full suite · **update the slippage ledger** (`bible/08`
+§1c) · decide the claim and write it down · tag.
 
 ## 8. Verify — two gates, at different times
 
@@ -217,18 +218,15 @@ test instead of quietly weakening the document.
 "empty section, delete the heading" defect in a second file and **F-66** in a
 third.
 
-- **No git repository (F-14)** — **closed.** The repository exists, on `main` at
-  `github.com/aalok101singh/judgejudy`, with the findings ledger and the
-  correction log versioned — the Write Up Quest material F-14 existed to protect.
-- **The ambient `python` is 3.14.6 with no Django (F-38)** — **closed at FEAT-01**,
-  and **still true**, so it stays a live warning: use `.venv\Scripts\python.exe`
-  explicitly. Django 5.2.17's `Requires-Python: >=3.10` has no upper bound, so the
-  pin will not save you. `just doctor` names the interpreter it resolved.
-
-**Docker is no longer a blocker (F-13 closed).** 29.6.2 on WSL2, Compose v5.3.1,
-`just` 1.58.0, `python:3.13-slim` pre-pulled. One trap remains: it is installed
-**per-user**, so `docker` was on no PATH at all until F-34 was fixed, and a stale
-shell still will not see it.
+- **F-14, no git repository** — closed. The repository exists on `main`, with the
+  ledger and correction log versioned, which is the Write Up Quest material F-14
+  existed to protect.
+- **F-38, the ambient `python` is 3.14.6 with no Django** — closed at FEAT-01 and
+  **still true**, so use `.venv\Scripts\python.exe` explicitly. Django 5.2.17's
+  `Requires-Python: >=3.10` has no upper bound, so the pin will not save you.
+- **F-13, Docker** — closed and verified: 29.6.2 on WSL2, Compose v5.3.1, `just`
+  1.58.0, `python:3.13-slim` pre-pulled. Installed **per-user**, so a stale shell
+  will not see it (F-34).
 
 ## 11. Where the depth lives
 
@@ -268,33 +266,34 @@ question; open that one section.
 
 ## 13. Current state
 
-**FEAT-01 to FEAT-06 built and verified; BREAK-2 is done, T2 is earned and
-unclaimed pending the human's diff, and FEAT-06 is COMPLETE — all five REQ-T3
-requirements ship.** The T3 claim is therefore *available* and BREAK-3 has not
-been run. The narrative, the per-feature
-verification and the counts live in `AGENTS.md` §Current state,
-`context/current-feature.md` and `history/features/`.
+**The build is complete through FEAT-13, T1 and T2 are claimed and verified, and
+the product is a working self-hosted event with no shell step anywhere in it.**
+The live detail — per-feature verification, exact counts, the next action — lives
+in `AGENTS.md` §Current state, `context/current-feature.md` and
+`history/features/`. **This section is deliberately short: it is the one page
+loaded on every session, and a stale summary of a moving project costs more than
+a missing one.**
 
 | | |
 |---|---|
-| Findings | **124** - **0 open blocking**, 0 open, 50 fixed (awaiting review), 1 unverified (F-27), **11 accepted by decision (F-91)**, 62 closed |
+| Findings | **126** - **0 open blocking**, 0 open, 45 fixed (awaiting review), 1 unverified (F-27), **11 accepted by decision (F-91)**, 69 closed |
+| Gate | **green** — **7 of 7 checks PASS**, `claimed T1 T2, verified T1 T2` · `mutation-test` **116/116** · spec layer green · **910 tests** · lint clean |
 | Environment | **fully verified** — Docker 29.6.2 (WSL2), `just` 1.58.0, `python:3.13-slim` pre-pulled |
-| Gate (FEAT-06) | **green** — **7 of 7 checks PASS**, `claimed T1, verified T1 T2` · `mutation-test` **114/114** · spec layer green · **700 tests** · lint clean |
-| Next | **BREAK-3.** All five REQ-T3 requirements ship, so the T3 claim is *available* for the first time. Per `bible/08` §1b the decision is the human's |
 
 **Two things that changed the shape of the project.**
 
-**FEAT-03 was the only feature that met genuinely new input** — the organizers'
-data rather than ours — and it opened **three P1s at once** (F-49, F-50, F-55).
-Every feature since has found its serious defect in *our own reasoning* or *our
-own documents*. **The rate tracks how much new input meets the code**, so expect
-fewer findings, not fewer bugs.
+**Every feature since FEAT-03 has found its serious defect in *our own reasoning*
+or *our own documents*.** FEAT-03 was the only one that met genuinely new input —
+the organizers' data — and it opened three P1s at once (F-49, F-50, F-55). **The
+rate tracks how much new input meets the code**, so expect fewer findings, not
+fewer bugs.
 
-**And the same defect has now appeared FIVE times in five media: a feature
-returning structurally valid output containing nothing** — a min-cut certificate
-naming no judges (F-61), 126 empty export cells (F-69), an audit chain with
-`count() == 0` (F-71), and at FEAT-06 a **structurally constant metric that read
-as a detector** (F-76) and a **quality ladder that made a harness measure exactly
-one project** (F-80). **The rule: assert values, not shapes — and assert that a
-control does not fire.** A fixture that cannot separate its subject from its
-control produces green output that means nothing.
+**And one defect has appeared six times in six media: a feature returning
+structurally valid output containing nothing** — a min-cut certificate naming no
+judges (F-61), 126 empty export cells (F-69), an audit chain with `count() == 0`
+(F-71), a structurally constant metric that read as a detector (F-76), a quality
+ladder that made a harness measure one project (F-80), and **FEAT-13's publish
+tests green while executing nothing**, because the fixture built no rubric so
+every publication raised and counted as a refusal (F-123). **The rule: assert
+values, not shapes; assert a control does not fire; and when a test passes, ask
+what it actually executed.**
