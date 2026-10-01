@@ -67,14 +67,44 @@ organizers' program** rather than as an open question.
 ## The clean clone
 
 `git clone` of the repository into a scratch directory, then the spec layer from
-there: **72/72 PASSED** on the committed tree, and `git ls-files --others
---exclude-standard` in the source returned **nothing** — no untracked source
-exists to make the working tree look better than what a panel would get.
+there: **75/75 PASSED**, and `git ls-files --others --exclude-standard` in the
+source returned **nothing** — no untracked source exists to make the working tree
+look better than what a panel would get.
 
-The image then builds from that clone with no network, which is the check that
-actually matters: it proves the Dockerfile's `COPY` set is sufficient, so a panel
-cannot be handed an image that only exists because of something in my working
-directory.
+Then the part that actually matters. `docker build` from the clone with no
+network: **BUILD=0**. And then the image that clone produced was *run* on port
+8080, the main stack was stopped so nothing else could answer, and the clone's own
+`run.py` was pointed at it with the repository's `.dogfood.toml`:
+
+```
+T1  gallery is public ................. PASS
+T1  project from fixtures shown ....... PASS
+T1  closed event refuses submissions .. PASS
+T2  judge sees own scores ............. PASS
+T2  judge cannot see peer scores ...... PASS
+T2  participant blocked ............... PASS
+T2  csv export works .................. PASS
+
+claimed T1 T2, verified T1 T2
+```
+
+**A build, a clone and a checker that had never shared a directory with the
+working tree all agree.** That is the acceptance line, literally satisfied rather
+than argued for, and it is the one check in this project that would have caught an
+image which only exists because of something sitting in my working directory.
+
+## Everything green at the tag
+
+| Gate | Result |
+|---|---|
+| `just lint` (ruff + JJ01) | clean, 175 files |
+| `tools/verify_spec.py` | **75/75** |
+| `just check` | **GREEN** — 7 of 7, `claimed T1 T2, verified T1 T2` |
+| `just prove-offline` | **PROVED** — widget renders 41 rows, 6,658 bytes, no external reference |
+| `just mutation-test` | **113/113** |
+| `just report` | regenerated, diff empty |
+| clean clone → build → `run.py` | **7 of 7 PASS** |
+| suite | **721 passed**, 1 skipped |
 
 ## What this did not do
 
