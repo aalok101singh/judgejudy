@@ -1,17 +1,69 @@
-# Judge Judy
+<div align="center">
 
-A self-hostable submission and judging platform for hackathons. Organizers submit,
-assign, score, publish, and keep their data; judges never see each other's work.
+```
+   ╔═╗ ╦ ╦ ╦ ╔╗ ╔  ╔╦╗ ╦   ╦ ╦   ╔╦╗╔ ╦ ╦
+   ║║ ║ ║ ╠╩╗ ║║  ║║ ║║   ║ ╚╗╔╝ ║ ║
+   ╚══╝ ╩ ╩╚═ ╝╚═╝═╝╝ ╩╚══╝ ╩ ╚╝  ╩ ╚═╝
+```
 
-Offline by construction: **one command, no network, no cloud account, no hosted
-database, no external API, no API key.**
+### The bench that keeps its own records.
+
+**A self-hostable submission and judging platform for hackathons.**
+Submissions, assignment, scoring, public voting, and a published result you can
+prove you did not change afterwards.
+
+**One command. No network. No cloud account. No hosted database. No API key.**
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB.svg)](https://www.python.org/)
+[![Django 5.2 LTS](https://img.shields.io/badge/Django-5.2-092E20.svg)](https://www.djangoproject.com/)
+[![Docker](https://img.shields.io/badge/docker-29.6.2-2496ED.svg)](https://www.docker.com/)
+[![No network required](https://img.shields.io/badge/network-none%20required-8B0000.svg)](#operating-it)
+[![T1 + T2 verified](https://img.shields.io/badge/acceptance-7%2F7%20PASS-2E7D32.svg)](#for-reviewers)
+
+</div>
+
+---
 
 ```bash
 docker compose up
 ```
 
-That is the whole setup. Then open <http://localhost:8080>. The container seeds
-itself on first boot and prints a reconciliation of what it loaded.
+That is the whole installation. Open <http://localhost:8080>, and the container
+comes up with an **empty database** — which is deliberate, because it leaves the
+first-run wizard open for your own event.
+
+**To run your own hackathon**, open <http://localhost:8080/setup/> — a browser
+wizard that creates your event, your dates, your tracks, and a starting rubric.
+Prefer to look at a finished example first? See
+[the demo is opt-in](#the-demo-is-opt-in).
+
+---
+
+## Why Judge Judy
+
+Three things this project is actually about, in the order they mattered.
+
+**1. Judges must not read each other's work.** A judging portal is only worth
+running if that is a property of the *query layer* rather than of each view — so
+there is exactly one way to read a review, it takes an actor, and a lint rule
+fails the build on any other read, **including inside tests**. See
+[what each role can see](#what-each-role-can-see).
+
+**2. A refusal has to be a refusal.** Every denial in this portal is a **403 with
+an empty body — never a redirect.** This sounds pedantic and is the single most
+important behaviour in the system, because a client that follows redirects gets a
+200 from a login page. A portal that "protects" a score by bouncing you to sign-in
+passes every manual test and leaks to every automated one.
+
+**3. The result has to be provable.** You can take the entire database away and
+bring it back, byte-identical. You can hand judges signed records and detect
+equivocation *from outside* the organizer's database. And you can re-derive the
+published hash from the raw scores yourself. See
+[proof you did not change the numbers after publishing](#proof-you-did-not-change-the-numbers-after-publishing).
+
+**And it runs offline.** `just prove-offline` starts the image with
+`--network none` and probes it, so the claim is *measured* rather than asserted.
 
 ---
 
@@ -31,23 +83,39 @@ your event, your dates, your tracks, and a starting rubric. It **refuses once an
 event exists** — a bare 403 with an empty body, like every other refusal in this
 portal — so it cannot be used to quietly add a second event to a deployment.
 
-You are signed in as the organizer when it finishes. Add judges and participants
-from the admin, or paste a roster:
+You are signed in as the organizer when it finishes.
+
+### First-run answers
+
+| Field | What it does |
+|---|---|
+| **Name, email, password** | You become the organizer, with an organizer binding. At least 12 characters. |
+| **Event name** | Also becomes the URL slug. Any hackathon. |
+| **Starts / submissions close / judging closes** | The windows every other page reads. Times are read in the server's timezone. |
+| **Tracks** | One per line, optional. Judges are assigned per track and a project is only ever compared inside its own. |
+| **Rubric** | Three criteria, weights summing to 1. Editable, and **locked** once a judge has scored — otherwise a leaderboard would move underneath the people who produced it. |
+
+### Add your people
+
+Add judges and participants from the admin, or paste a roster — one email per
+line:
 
 ```bash
 docker compose exec portal python src/manage.py invite judges.txt --role judge
 ```
 
-Where `judges.txt` is one email per line. Each person gets an account with an
-**unusable password**, because this deployment has no mail service on purpose —
-so they set one themselves at `/login/`, or you set it for them:
+Each person gets an account with an **unusable password**, because this
+deployment has no mail service on purpose — so they set one themselves at
+`/login/`, or you set it for them:
 
 ```bash
 docker compose exec portal python src/manage.py set_password judge@example.org
 ```
 
-**Load your entries.** An organizer with forty projects should not fill in forty
-forms. Export them from whatever you already used to collect them, and:
+### Load your entries
+
+An organizer with forty projects should not fill in forty forms. Export them from
+whatever you already used to collect them, and:
 
 ```bash
 docker compose exec portal python src/manage.py import_projects entries.csv
@@ -75,10 +143,10 @@ acceptance gate; **nothing in the application requires it.**
 ### The demo is opt-in
 
 A fresh `docker compose up` starts with an **empty database** and no event, which
-is what leaves `/setup/` open. That default is deliberate: if the organizers'
-demo hackathon were seeded on every boot, every deployment would already have an
-event, and the wizard — whose entire authorisation is *"no event exists"* — would
-be unreachable in the shipped product.
+is what leaves `/setup/` open. That default is deliberate: if the demo hackathon
+were seeded on every boot, every deployment would already have an event, and the
+wizard — whose entire authorisation is *"no event exists"* — would be unreachable
+in the shipped product.
 
 To see the demo instead, ask for it:
 
@@ -86,19 +154,9 @@ To see the demo instead, ask for it:
 JJ_SEED_DEMO=1 docker compose up
 ```
 
-That loads their 41-project, 121-person fixture. **`just check` sets this for
-you**, because the acceptance checker scores exactly that data. If you have never
-run a real event, this is the interesting thing to look at.
-
-### First-run answers
-
-| Field | What it does |
-|---|---|
-| **Name, email, password** | You become the organizer, with an organizer binding. At least 12 characters. |
-| **Event name** | Also becomes the URL slug. Any hackathon. |
-| **Starts / submissions close / judging closes** | The windows every other page reads. Times are read in the server's timezone. |
-| **Tracks** | One per line, optional. Judges are assigned per track and a project is only ever compared inside its own. |
-| **Rubric** | Three criteria, weights summing to 1. Editable, and **locked** once a judge has scored — otherwise a leaderboard would move underneath the people who produced it. |
+That loads the 41-project, 121-person fixture. **`just check` sets this for you**,
+because the acceptance checker scores exactly that data. If you have never run a
+real event, this is the interesting thing to look at.
 
 ---
 
@@ -111,18 +169,24 @@ event is **born closed**: submissions are refused until you open the window, and
 the refusal is a 403 that names the guard rather than a form that quietly
 disappears.
 
-**2 — Assign.** `/organizer/assignments/` runs the assignment engine and shows the
+**2 — Open the windows.** `/organizer/settings/` is the whole lifecycle in a
+browser: the submission and judging windows, the voting mode and its window, and
+publishing. Every change writes an audit entry with its old and new value, and the
+chain and the event move **in one transaction**, so the record cannot describe a
+change that did not happen.
+
+**3 — Assign.** `/organizer/assignments/` runs the assignment engine and shows the
 plan **with a certificate**. The certificate is the part that matters: when the
 instance is feasible it names the tightest per-judge capacity it had to satisfy
 (6, on the seeded data), and when it is infeasible it names *which judges and
 which projects* are short. An assignment you cannot explain to a judge who
 disagrees with it is not an assignment.
 
-**3 — Judge.** `/judge/` is a console of assigned reviews with a rubric, drafts,
+**4 — Judge.** `/judge/` is a console of assigned reviews with a rubric, drafts,
 and a lock on submit. A judge who is not the assignee is **refused**, not shown a
 blank page.
 
-**4 — Read the room.** `/api/v1/influence` reports where public support is
+**5 — Read the room.** `/api/v1/influence` reports where public support is
 concentrated: distinct identities per project, first-preference share, vote-mass
 Gini, and identical-ballot clusters. It is deliberately **not** gated on results
 being published — you need to see concentration *before* deciding to publish, or
@@ -130,11 +194,13 @@ the report is a post-mortem. There is no threshold anywhere in it, and it never
 says "brigaded": a report that accuses a table of friends on a number alone is a
 machine for making enemies.
 
-**5 — Publish.** `/results/` is the ranking. It is refused to everyone but an
+**6 — Publish.** `/results/` is the ranking. It is refused to everyone but an
 organizer until you publish it, and **every row says how it was computed** — see
 [the leaderboard is unnormalized](#the-leaderboard-is-unnormalized-and-why).
+Publishing computes a content hash, mixes in a digest of the scores behind it, and
+replicates the audit chain head into every judge's signed record.
 
-**6 — Keep your data.** `manage.py export_run` writes the entire database as a
+**7 — Keep your data.** `manage.py export_run` writes the entire database as a
 portable archive; `import_run` reads it back. See
 [leaving with your data](#leaving-with-your-data).
 
@@ -142,8 +208,7 @@ portable archive; `import_run` reads it back. See
 
 ## What each role can see
 
-Isolation is the product. A judging portal is only worth running if judges cannot
-read each other's work, and that has to be a property of the query layer rather
+Isolation is the product, and it has to be a property of the query layer rather
 than of each view.
 
 **There is one way to read reviews, and it takes an actor.**
@@ -159,11 +224,8 @@ expose: `for_cross_judge_analysis(event_id)` for the normalization proof, and
 allowed to call it, because a sanctioned accessor with a growing list of callers
 is a rule that has stopped meaning anything.
 
-**A refusal is a 403 with an empty body. Never a redirect.** This is the single
-most important behaviour in the system and it is easy to get wrong in a way that
-looks correct: a client that follows redirects gets a 200 from a login page, so a
-portal that "protects" a score by bouncing you to sign-in passes every manual
-test. Ours does not redirect.
+**A refusal is a 403 with an empty body. Never a redirect.** One shared function
+produces every denial in the portal, so no view can invent its own softer answer.
 
 **Scope when it protects somebody.** A published judge sees a ranking over their
 *own* reviews, because their five scores would otherwise carry the standing. A
@@ -172,14 +234,22 @@ and an empty board is worse than a full one.
 
 | | judge | participant | visitor | organizer |
 |---|---|---|---|---|
-| own reviews | ✅ | — | — | ✅ |
-| a peer's reviews | **403** | **403** | **403** | ✅ |
-| the ranking, while hidden | **403** | **403** | **403** | ✅ |
-| the ranking, once published | own only | ✅ | ✅ | ✅ |
-| the full export | **403** | **403** | **403** | ✅ |
-| the audit chain | **403** | **403** | **403** | ✅ |
-| the influence report | **403** | **403** | **403** | ✅ |
-| the influence report, unpublished | **403** | **403** | **403** | ✅ |
+| own reviews | yes | — | — | yes |
+| a peer's reviews | **403** | **403** | **403** | yes |
+| the ranking, while hidden | **403** | **403** | **403** | yes |
+| the ranking, once published | own only | yes | yes | yes |
+| the full export | **403** | **403** | **403** | yes |
+| the audit chain | **403** | **403** | **403** | yes |
+| the influence report | **403** | **403** | **403** | yes |
+
+### And what this page deliberately cannot change
+
+The settings page edits the windows, the voting mode, and publication — and
+nothing else. **No setting there can widen what any actor reads.** Not the
+rubric's weights (a leaderboard must not move under the judges who produced it),
+not a project's track (that decides which judges can see it), and not anything
+about isolation. That is asserted as an **absence** — the tests read the rendered
+form and fail if a field that would reach any of them ever appears.
 
 ---
 
@@ -243,6 +313,10 @@ envelope. The record commits to *digests of their reviews*, never to scores — 
 record carrying scores is not shareable with a judge who was not the organizer,
 and an unshareable record replicates nothing.
 
+**Publishing always goes through one function**, whether you press the button or
+run the command, so a result published by a browser and a result published by a
+shell produce the same hash and the same audit entry.
+
 ---
 
 ## Routes and API
@@ -252,12 +326,12 @@ and an unshareable record replicates nothing.
 | `/setup/` | **First-run wizard.** Creates your hackathon: you, the event, the dates, the tracks, a starting rubric. Refuses with a bare 403 once an event exists, so it cannot add a second one. The only write path an unauthenticated browser can reach, and CSRF-protected for exactly that reason. |
 | `/login/` | Sign in. Five wrong tries in five minutes locks that account for fifteen, per-email so one attacker cannot lock every judge out. No password reset: there is no mail service on purpose. |
 | `/logout/` | Sign out. POST-only — a GET logout is a drive-by. |
-| `/` | **The gallery.** 41 seeded projects, first page in fixture order, server-rendered, no JS. Public. |
+| `/` | **The gallery.** Server-rendered, no JS, public. |
 | `/projects/new` | Submit a project. Refused while the event is closed. |
 | `/judge/` | **The judge console.** Draft, submit, lock. |
 | `/judge/review/<int:assignment_id>/` | The rubric form for one assignment. |
 | `/organizer/assignments/` | The assignment plan and its min-cut certificate. |
-| `/organizer/settings/` | **The lifecycle, in a browser.** The submission window, the voting mode and its window, and publishing results. Every change is an audit entry with its old and new value. The rubric is deliberately *not* editable here — weights stop changing once a judge has scored, so a leaderboard cannot move underneath the people who produced it. |
+| `/organizer/settings/` | **The lifecycle, in a browser.** The submission window, the voting mode and its window, and publishing results. Every change is an audit entry with its old and new value. The rubric is deliberately *not* editable here. |
 | `/vote/` | **The public ballot.** A per-voter order, stable across requests, rendered with its seed. Weight 1 on every project *exactly* exhausts the identity budget, so favouring one project means giving another less. |
 | `/projects/<str:project_id>/comments/` | Comments on a project. Plain text, never markup. Everything is **held for moderation**; nothing is public until a human approves it. |
 | `/results/` | The ranking, refused while hidden. Always labelled with how it was computed. |
@@ -309,16 +383,14 @@ just schema        # regenerate openapi.yaml
 ```
 
 **It boots with no network at all** — `just prove-offline` runs the image with
-`--network none` and probes it. A cold start from an empty volume measures
-**11.8–20 s** against a 60 s budget.
+`--network none` and probes it, including rendering the widget. A cold start from
+an empty volume measures **11.8–20 s** against a 60 s budget.
 
 **The container seeds itself on every boot**, between `collectstatic` and the
 server binding, so nothing is half-initialised when the port opens. It prints its
 own reconciliation: every table's row count, both census invariants, and the
-awkward things in the fixture it deliberately kept (a duplicate submission, nine
-dual-track judges, 51 empty comments, team names that collapse onto one slug).
-`verify_census` re-derives the same numbers from `fixtures.json` and **exits
-non-zero on a disagreement**.
+awkward things in the fixture it deliberately kept. `verify_census` re-derives the
+same numbers from `fixtures.json` and **exits non-zero on a disagreement**.
 
 ### Demo credentials
 
@@ -327,16 +399,17 @@ per role (admin, organizer, two judges, a participant). They are HMAC-signed dem
 tokens derived from the seeded fixture, **not secrets**: anyone holding this
 repository can mint one, which is the point of a demo. Set
 `DJUDGE_DEMO_TOKEN_KEY` to rotate them; `docker compose logs portal` prints the
-new ones. Only five identities get real password hashes — the rest are
-deliberately unusable, because hashing 121 passwords would blow the checker's
-10-second timeout.
+new ones.
 
 ### Stack
 
-Python 3.13 · Django 5.2 LTS · DRF · drf-spectacular · whitenoise · gunicorn ·
-cryptography · SQLite (WAL) on a named volume. **17 runtime packages.** The
-dependencies we deliberately left out, and why, are in
-[`requirements.txt`](requirements.txt).
+Python 3.13 · Django 5.2 LTS · Django REST Framework · drf-spectacular ·
+whitenoise · gunicorn · cryptography · SQLite (WAL) on a named volume.
+
+**Six direct dependencies, eighteen packages installed** — measured in the shipped
+image, and every one of them is commented in
+[`requirements.txt`](requirements.txt) with the reason it is there and the
+dependencies that were deliberately left off.
 
 ---
 
@@ -344,35 +417,47 @@ dependencies we deliberately left out, and why, are in
 
 The ones an organizer would notice.
 
-**The leaderboard is unnormalized, and that is a measured decision.** It is a raw
-weighted mean, and the page says so on every render. We built the normalization
-engine the brief asked for and then measured whether it was needed:
-between-judge variance is **0.0217** against a **0.0971** sampling-noise floor for
-30 judges scoring 4 projects each, permutation p = 0.227. **There is no severity
-effect to correct.** Applying the estimator anyway would move all 126 scores by
-~0.57 rubric points for a measured null, so we do not. Full generated tables in
-[`docs/REAL-FIXTURE-RESULTS.md`](docs/REAL-FIXTURE-RESULTS.md).
+### The leaderboard is unnormalized, and why
 
-**Ballot order is randomised, which makes position bias zero-*mean*, not zero.**
+It is a raw weighted mean, and the page says so on every render. We built the
+normalization engine the brief asked for and then measured whether it was needed:
+between-judge variance is **0.0217** against a **0.0971** sampling-noise floor for
+30 judges scoring 4 projects each, permutation **p = 0.227**. **There is no
+severity effect to correct.** Applying the estimator anyway would move all 126
+scores by ~0.57 rubric points for a measured null, so we do not. Full generated
+tables in [`docs/REAL-FIXTURE-RESULTS.md`](docs/REAL-FIXTURE-RESULTS.md).
+
+We would rather ship the disappointing number than the comfortable one.
+
+### Ballot order is randomised, which makes position bias zero-*mean*, not zero
+
 The bias-attack harness attacks the same function the ballot renders. Under a
-fixed order the harness detects the attack; under a randomised one the mean
-drift is ~0 while the standard deviation is not. Anyone claiming position bias was
+fixed order the harness detects the attack; under a randomised one the mean drift
+is ~0 while the standard deviation is not. Anyone claiming position bias was
 *removed* is overstating it.
 
-**The audit chain is append-only.** `AuditEntry.delete()` raises. Deleting an
-entry is indistinguishable from rewriting history, which is the attack the chain
-exists to make detectable. The one exception is the restore path in the escape
-hatch, which re-verifies the chain afterwards — and that is the price of the
-exception, not a caveat on it.
+### The audit chain is append-only, and it cannot lie
 
-**Comments are rate limited, and the anonymous version is weak.** Five per hour per
-identity, refused with the portal's bare 403. A **signed-in** poster is keyed by
-their account, so the limit follows them across browsers. An **anonymous** poster
-is keyed by a hash of their session, so **clearing cookies resets the budget** —
-IP would be the alternative, and this project refuses it everywhere else because it
-is a poor identity that gets innocent people in trouble. A limit that a private
-window resets is still a limit against the naive case, and the strong case is
-reachable by giving people accounts.
+`AuditEntry.delete()` raises. Deleting an entry is indistinguishable from
+rewriting history, which is the attack the chain exists to make detectable. The one
+exception is the restore path in the escape hatch, which re-verifies the chain
+afterwards — and that is the price of the exception, not a caveat on it.
+
+A chain entry and the change it describes are written **in one transaction**. An
+earlier version let the chain commit independently of the event, so a failed save
+left a permanent entry claiming a deadline had moved when it had not — a falsified
+row in the evidence the whole design rests on. That was found by review, not by a
+test, which is why `fixed` findings stay open until somebody re-reads them.
+
+### Comments are rate limited, and the anonymous version is weak
+
+Five per hour per identity, refused with the portal's bare 403. A **signed-in**
+poster is keyed by their account, so the limit follows them across browsers. An
+**anonymous** poster is keyed by a hash of their session, so **clearing cookies
+resets the budget** — IP would be the alternative, and this project refuses it
+everywhere else because it is a poor identity that gets innocent people in trouble.
+A limit that a private window resets is still a limit against the naive case, and
+the strong case is reachable by giving people accounts.
 
 This was cut for most of the build and disclosed rather than quietly missing. It
 is the control our own threat model names, and shipping it honestly — including
@@ -414,6 +499,9 @@ reasoning in [`blueprint/project-plan.md`](blueprint/project-plan.md) §6.
   data shape.
 - **No Postgres RLS, Casbin or OPA.** A scoped-accessor layer is the portable
   equivalent and keeps the rules in one readable place.
+- **No simultaneous events in one deployment.** One deployment runs one
+  hackathon, deliberately. The wizard's entire authorisation is "no event exists",
+  and a multi-tenant version would need a tenancy story this one does not have.
 
 ---
 
@@ -427,21 +515,20 @@ words are deliberate.**
 
 **`verified` cannot exceed T2, whatever we build**, because `run.py` contains no
 T3 or T4 checks at all: three T1, four T2, seven in total, and `verified` is
-prefix-locked to the tiers it has checks for. A flawless build prints exactly
-that string.
+prefix-locked to the tiers it has checks for. A flawless build prints exactly that
+string.
 
 **T3 is built, tested and documented, and deliberately not claimed.** All five
 REQ-T3 requirements ship — voting with an identity budget and a Borda tally,
-moderated comments, results hidden on both the API and the public page,
-randomised ballot order, and the influence report. Nothing in this repository can
-*verify* T3, and our own gate enforces the organizers' rule
-`overclaim = claimed − verified`, so entering T3 in the field their program parses
-turns the gate red with the word **OVERCLAIM** in it. **T3 being built is not the
-same as T3 being entered in the scoring field**, and only the first is ours to
-decide. Proved by running it, then reverted; recorded as F-91, accepted by
-decision, with the arithmetic in
-`blueprint/history/features/break-3-t3-claim.md`. A T4 claim is blocked the same
-way.
+moderated comments, results hidden on both the API and the public page, randomised
+ballot order, and the influence report. Nothing in this repository can *verify*
+T3, and our own gate enforces the organizers' rule `overclaim = claimed −
+verified`, so entering T3 in the field their program parses turns the gate red
+with the word **OVERCLAIM** in it. **T3 being built is not the same as T3 being
+entered in the scoring field**, and only the first is ours to decide. Proved by
+running it, then reverted; recorded as F-91, accepted by decision, with the
+arithmetic in `blueprint/history/features/break-3-t3-claim.md`. A T4 claim is
+blocked the same way.
 
 **`run.py` always exits 0.** It prints `FAIL` and returns 0 in every situation, by
 design — it is the same program for every team. Our gate parses its **body**; a
@@ -459,7 +546,15 @@ the full record: **126 findings**, what was wrong, what was fixed with a test, a
 what was declined and why. Several are the same class of defect in a new medium —
 a min-cut certificate that named no judges, a leaderboard that would have been
 refused for the wrong reason, a CSV column of nothing, an acceptance criterion
-that passed with the importer writing nothing at all.
+that passed with the importer writing nothing at all, and a test suite whose
+fixture omitted a precondition so three "passing" publication tests executed
+nothing whatsoever.
+
+**Every number in this file is generated, not transcribed**, and a spec gate
+re-derives the counts from the ledger and the harness — it caught three stale
+tallies within a minute of writing them, and caught this file breaching its own
+size budget. Two defects it does *not* yet check are named in the FEAT-13 archive
+rather than left for the next session to assume.
 
 | | |
 |---|---|
@@ -467,12 +562,14 @@ that passed with the importer writing nothing at all.
 | [`DATA-MODEL.md`](DATA-MODEL.md) | the schema and the fixture it holds |
 | [`JUDGING.md`](JUDGING.md) | rubric, assignment, isolation, normalization |
 | [`docs/REAL-FIXTURE-RESULTS.md`](docs/REAL-FIXTURE-RESULTS.md) | the normalization proof, fully generated and asserted in CI |
-| `blueprint/history/features/` | one file per feature, including the four that were wrong |
+| `blueprint/history/features/` | one file per feature, including the ones that were wrong |
 
-**Repository layout.** `src/reviewer/` holds the domain apps;
-`isolation/` (the accessor), `importer/` (loader and census) and `io/` (bulk
-export and import) are non-app packages. `blueprint/` is the plan and the ledger,
-`bible/` is 330 KB of research to be read by section, never whole.
+**Repository layout.** `src/reviewer/` holds the domain apps; `isolation/` (the
+accessor), `importer/` (loader and census) and `io/` (bulk export and import) are
+non-app packages. `blueprint/` is the plan and the ledger, `bible/` is 330 KB of
+research to be read by section, never whole.
+
+---
 
 ## Licence
 
