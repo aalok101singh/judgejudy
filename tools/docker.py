@@ -88,6 +88,21 @@ def main() -> int:
         print("usage: docker.py <docker-subcommand> [args...]", file=sys.stderr)
         return 2
 
+    # `--seed-demo` is ours, consumed here rather than passed on to docker. It is
+    # the only portable way to put an environment variable in front of a compose
+    # command from a justfile on this machine: **just runs recipes through
+    # cmd.exe**, so `export VAR := "1"` fails with "not recognized as an internal
+    # or external command", and a shell `set VAR=1` sets positional parameters
+    # rather than the environment. Both were tried; both silently did nothing,
+    # which is how the acceptance gate came to score an empty portal and report
+    # three regressions that were not regressions. Doing it in Python is
+    # dialect-free and testable.
+    seed_demo = False
+    argv = sys.argv[1:]
+    if argv and argv[0] == "--seed-demo":
+        seed_demo = True
+        argv = argv[1:]
+
     binary = resolve()
     if not binary:
         sys.stderr.write(
@@ -111,8 +126,15 @@ def main() -> int:
     # The exit code is propagated verbatim. A wrapper that reported success
     # because IT succeeded, rather than because docker did, would be a second
     # place for the F-32 class of bug to hide.
+    # `env=None` inherits this process's environment unchanged, which is the
+    # default for everything except `--seed-demo`.
+    env = None
+    if seed_demo:
+        env = os.environ.copy()
+        env["JJ_SEED_DEMO"] = "1"
+
     try:
-        return subprocess.run([binary, *sys.argv[1:]], cwd=os.getcwd()).returncode
+        return subprocess.run([binary, *argv], cwd=os.getcwd(), env=env).returncode
     except OSError as exc:
         sys.stderr.write(f"docker resolved to {binary} but could not be run: {exc}\n")
         return 127

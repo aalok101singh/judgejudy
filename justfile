@@ -76,6 +76,15 @@ pyguard := pyq + " tools/guard_interpreter.py --expect 3.13"
 # a failure that reads like a missing interpreter rather than a quoting bug.
 compose_base := pyq + " tools/docker.py compose -f docker-compose.yml"
 
+# The same, plus the demo fixture. The flag is consumed by `tools/docker.py` and
+# turned into an environment variable there, because **just runs recipes through
+# cmd.exe on this machine**: `export VAR := "1"` is "not recognized as an internal
+# or external command", and a shell `set VAR=1` sets positional parameters rather
+# than the environment. Both were tried and both silently did nothing, so the
+# acceptance gate scored an empty portal and reported three regressions that were
+# not regressions. A Python-side flag is dialect-free.
+compose_base_seed := pyq + " tools/docker.py --seed-demo compose -f docker-compose.yml"
+
 # ------------------------------------------------------------------ recipes ---
 #
 # DOC COMMENT CONVENTION. `just --list` renders the LAST line of a recipe's doc
@@ -250,7 +259,12 @@ check:
     @echo ""
     @echo "=========================================================="
     @echo " 3/6  up, wait for health"
-    @{{compose_base}} up -d --wait --wait-timeout 120
+    @echo "=========================================================="
+    @echo "      --seed-demo -- the checker scores the ORGANIZERS' fixture, so the gate"
+    @echo "      asks for it. A plain `docker compose up` does not, and gets an empty"
+    @echo "      portal with /setup/ open instead. The flag goes through tools/docker.py"
+    @echo "      rather than a shell export because just runs recipes through cmd.exe."
+    @{{compose_base_seed}} up -d --wait --wait-timeout 120
     @echo ""
     @echo "=========================================================="
     @echo " 4/6  the organizers' checker (7 checks: 3x T1, 4x T2)"

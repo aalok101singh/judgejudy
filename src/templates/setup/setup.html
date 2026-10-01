@@ -1,0 +1,110 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up your hackathon &middot; Judge Judy</title>
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+</head>
+<body>
+  <main class="wrap">
+    <p class="eyebrow">First run</p>
+    <h1>Set up your hackathon</h1>
+    <p class="lede">
+      One deployment runs one hackathon. This page creates it: you, your event,
+      your window, and a starting rubric. It refuses once an event exists, so it
+      cannot be used to add a second one.
+    </p>
+
+    {% if errors.form %}
+      <p class="notice notice--warn" role="alert">{{ errors.form }}</p>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <fieldset>
+        <legend>You</legend>
+        <p class="hint">You become the organizer, and can do everything here.</p>
+
+        <label for="organizer_name">Name</label>
+        <input id="organizer_name" name="organizer_name" autocomplete="name"
+               value="{{ values.organizer_name }}" required>
+        {% if errors.organizer_name %}<p class="field-error">{{ errors.organizer_name }}</p>{% endif %}
+
+        <label for="organizer_email">Email</label>
+        <input id="organizer_email" name="organizer_email" type="email"
+               autocomplete="username" value="{{ values.organizer_email }}" required>
+        {% if errors.organizer_email %}<p class="field-error">{{ errors.organizer_email }}</p>{% endif %}
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="new-password"
+               minlength="12" required>
+        <p class="hint">At least 12 characters. This is the one password you set by hand.</p>
+        {% if errors.password %}<p class="field-error">{{ errors.password }}</p>{% endif %}
+
+        <label for="password_confirm">Confirm password</label>
+        <input id="password_confirm" name="password_confirm" type="password"
+               autocomplete="new-password" required>
+        {% if errors.password_confirm %}<p class="field-error">{{ errors.password_confirm }}</p>{% endif %}
+      </fieldset>
+
+      <fieldset>
+        <legend>The hackathon</legend>
+
+        <label for="event_name">Name</label>
+        <input id="event_name" name="event_name" value="{{ values.event_name }}" required>
+        {% if errors.event_name %}<p class="field-error">{{ errors.event_name }}</p>{% endif %}
+
+        <label for="starts_at">Starts</label>
+        <input id="starts_at" name="starts_at" type="datetime-local"
+               value="{{ values.starts_at }}" required>
+        {% if errors.starts_at %}<p class="field-error">{{ errors.starts_at }}</p>{% endif %}
+
+        <label for="submissions_close">Submissions close</label>
+        <input id="submissions_close" name="submissions_close" type="datetime-local"
+               value="{{ values.submissions_close }}" required>
+        {% if errors.submissions_close %}<p class="field-error">{{ errors.submissions_close }}</p>{% endif %}
+
+        <label for="judging_closes_at">Judging closes</label>
+        <input id="judging_closes_at" name="judging_closes_at" type="datetime-local"
+               value="{{ values.judging_closes_at }}" required>
+        {% if errors.judging_closes_at %}<p class="field-error">{{ errors.judging_closes_at }}</p>{% endif %}
+
+        <p class="hint">Times are read in this server's timezone.</p>
+
+        <label for="tracks_text">Tracks, one per line</label>
+        <textarea id="tracks_text" name="tracks_text" rows="4"
+                  placeholder="General&#10;Hardware">{{ values.tracks_text }}</textarea>
+        <p class="hint">
+          Optional. Judges get assigned per track, and a project is only ever
+          compared inside its own.
+        </p>
+        {% if errors.tracks_text %}<p class="field-error">{{ errors.tracks_text }}</p>{% endif %}
+      </fieldset>
+
+      <fieldset>
+        <legend>Rubric</legend>
+        <p class="hint">
+          You can change these later. Weights must sum to 1, and they stop
+          changing once a judge has scored &mdash; otherwise a leaderboard would
+          move underneath the people who produced it.
+        </p>
+        <table class="grid">
+          <thead><tr><th>Criterion</th><th>Weight</th></tr></thead>
+          <tbody>
+            {% for key, label, description, weight in criteria %}
+              <tr>
+                <td><strong>{{ label }}</strong><br><span class="hint">{{ description }}</span></td>
+                <td class="num">{{ weight }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </fieldset>
+
+      <button type="submit">Create the hackathon</button>
+    </form>
+  </main>
+</body>
+</html>

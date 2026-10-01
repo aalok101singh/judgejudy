@@ -48,6 +48,14 @@ services:
       DJUDGE_KEYS_DIR: /app/keys
       DJANGO_SETTINGS_MODULE: judge_judy.settings
       PORT: "8080"
+      # Whether to load the organizers' DEMO hackathon on first boot.
+      # **Defaults to off, and that default is the product.** With it off, a
+      # fresh `docker compose up` gives an empty portal with `/setup/` open;
+      # with it on, the database already holds somebody else's event, and the
+      # wizard's guard -- "no event exists" -- means the one page a new user
+      # needs is the one page they cannot reach. `just check` sets this to 1
+      # because the acceptance checker scores that fixture.
+      JJ_SEED_DEMO: "${JJ_SEED_DEMO:-0}"
       # Unset rather than given a value. The settings module generates and
       # persists a key on first boot; hardcoding one here would put the same
       # key in every fork of this repository, and a signed judge record is

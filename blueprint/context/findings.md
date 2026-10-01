@@ -396,7 +396,156 @@ of a smaller number.
   excuse the addition was the alternative, and it is goalpost-moving** — the plan
   said 13 apps and it is still true.
 
-### Two more from the same increment, both real
+### F-104 [P1] fixed — the login lockout fired on the FIRST failure, not the fifth
+
+**File:** `src/reviewer/accounts/views.py`
+**Found:** 2026-09-30, by writing the test for the fifth failure
+
+`_locked_out()` returned a lock as soon as **any** failure existed inside the
+window. The counter `n` was compared against `MAX_ATTEMPTS` nowhere. So the
+**second** sign-in attempt was refused — a portal where one typo locks you out,
+and where the throttle cannot be exercised at all because attempt two never
+reaches the password check.
+
+The window was doing the wrong job: it was written as "when old failures stop
+counting" and used as "when the lock lifts", so `LOCKED - elapsed` was already
+15 minutes at the moment of the first failure.
+
+**The lesson is about which number a guard is comparing.** The constant was
+right, the arithmetic was wrong, and no amount of reading the function shows it
+— only the *fifth* attempt distinguishes "locks after five" from "locks after
+one". **A rate limit is only tested by the attempt it refuses**, so the test that
+matters is the one where the correct password is refused *because* of the limit,
+and that is the assertion that found this.
+
+### F-105 [P1] fixed — `test_csrf_is_required` asserted nothing about CSRF
+
+**File:** `tests/test_setup_wizard.py`
+**Found:** 2026-09-30, while checking why the test returned 200
+
+Django's test `Client` **disables CSRF enforcement by default**. The test used
+the shared `client` fixture, so a POST with no token was accepted and the test
+would have failed — but for the wrong reason (a re-rendered form, because the
+POST was missing required fields), which is not CSRF being enforced.
+
+The one write path an unauthenticated browser can reach had a CSRF test that
+could not have detected its absence. It now constructs
+`Client(enforce_csrf_checks=True)`, **and a second test proves the same request
+succeeds when the token is present** — without that control, "CSRF is required"
+is satisfied by an endpoint that refuses every POST.
+
+### F-106 [P2] fixed — the wizard 500'd on every request
+
+**File:** `src/templates/setup/setup.html`
+**Found:** 2026-09-30, by the first test that rendered the page
+
+The non-field error was rendered as `{{ errors.__all__ }}`. Django's template
+language **rejects a variable or attribute beginning with an underscore**, so the
+page raised `TemplateSyntaxError` and returned a 500 — the first-run wizard, the
+one page a new user always sees. Renamed to `errors.form`.
+
+**F-88's shape, in a template I had just written.** The lesson from that finding
+was that a template edit is not covered by gates that only ever exercise `.py`;
+this is the same trap reached from the other direction — a `.py` gate passing
+while the `.html` it drives 500s.
+
+### F-107 [P2] fixed — `set_password` could not be driven from a pipe
+
+**File:** `src/reviewer/accounts/management/commands/set_password.py`
+**Found:** 2026-09-30, by the test that tried to script it
+
+The command read `sys.stdin` under a `--stdin` flag; `getattr(self, "stdin")`
+was tried first on the theory that `BaseCommand` carries the stream. In this
+Django version the attribute is **not reliably set** by `execute()`, so the flag
+silently fell through to the interactive `getpass` prompt — the command worked at
+a terminal and could not be scripted, which is the only reason `--stdin` existed.
+
+Now it reads `sys.stdin` behind the flag, and the tests monkeypatch the global —
+driving the same seam a shell does rather than an API that is not there.
+
+### F-108 [P2] fixed — a roster comment became a complaint about a person
+
+**File:** `src/reviewer/setup/roster.py`
+**Found:** 2026-09-30, by the comment-stripping test
+
+`line.strip().lstrip("#")` turned `"# the judges"` into `"the judges"`, which was
+then reported as a malformed address — so pasting a commented header file
+produced an error about a judge who does not exist. A comment is the **whole
+line**; `lstrip` is the wrong tool for a marker, not a prefix.
+
+### F-109 [P2] fixed — provisioning returned `Decimal` weights as strings
+
+**File:** `src/reviewer/setup/provisioning.py`
+**Found:** 2026-09-30, by the test asserting the weights sum to 1
+
+`Criterion.weight` is a `DecimalField`, and the default rubric was written with
+string literals `"0.40"`. `objects.create()` returns the instance **holding the
+value you passed**, not a refetched one, so the stored row was a correct Decimal
+while every caller held a `str` — and the first thing anyone does with a weight is
+add it to another one.
+
+It type-errored rather than silently mis-summing, which is the good version of
+this bug; the bad version is a float, where `0.4 + 0.35 + 0.25` is
+`0.9999999999999999` and an organizer is told their rubric is malformed when it
+is not. The constants are now `Decimal`, and **the sum is asserted at
+provisioning time** rather than only in a test — editing the tuple is the likely
+way to break it, and that check belongs beside the constants.
+
+### F-110 [P2] fixed — the "no fixture knowledge" guard tripped on its own docstring
+
+**File:** `tests/test_provisioning.py`
+**Found:** 2026-09-30, immediately, by the guard itself
+
+The guard scans `provisioning.py` for `evt_01` and friends. The module docstring
+says out loud that provisioning does not know the fixture, and therefore
+contains the token. It failed against correct code.
+
+The fix is to **strip docstrings before scanning**, so the guard is about code.
+The general point is worth more than the fix: *a guard that fails on the thing it
+is guarding is a guard that gets commented out*, and this project has now learned
+that lesson about tests twice (here and in F-84's neighbourhood) and about
+mutations four times.
+
+### F-111 [P1] fixed — the shipped image seeded the demo, so the wizard was unreachable
+
+**Files:** `docker/entrypoint.sh`, `docker-compose.yml`, `justfile`, `tools/prove_offline.py`
+**Found:** 2026-09-30, by actually starting a fresh container
+
+`load_fixtures` ran **unconditionally** on first boot, because the acceptance
+checker needs the organizers' data. So every deployment — including a real
+hackathon — began with somebody else's 41-project event already in the database.
+
+The setup wizard's authorisation is *"no event exists"*. With an event present,
+`/setup/` returned its bare 403 **forever**. The feature was built, tested,
+documented, and **completely unreachable in the shipped product** — and nothing
+inside Django could see it, because Django was behaving exactly as specified.
+
+**This is the class worth naming: a correct component defeated by a default
+outside its own boundary.** Every test in `test_setup_wizard.py` passed, because
+every one of them provisioned its own event on an empty database. The bug lived
+in a shell script, a compose file and a justfile.
+
+The fix inverts the default — `${JJ_SEED_DEMO:-0}`, so **the product is the
+default and the demo is opt-in** — and `just check` and `prove-offline` ask for
+the fixture explicitly. Both halves are pinned by `tests/test_demo_is_opt_in.py`,
+which reads the entrypoint, the compose file and the justfile rather than calling
+code, **because the code was never the problem**.
+
+**Asserting only "the image no longer seeds" would have been a fix that quietly
+broke the gate**, so that file also asserts `just check` sets the flag *before*
+`compose up`, and that `prove-offline` passes `-e JJ_SEED_DEMO=1` to its own
+`docker run` — it boots the raw image, so the compose default never reaches it.
+
+### The causal chain, now covered end to end
+
+`seed → an event exists → /setup/ refuses` is asserted as a walk, not a comment.
+And the result that matters most for anyone actually using this: **isolation holds
+on a database that was never the fixture's.** On a fresh container provisioned
+through the wizard, a signed-in judge is refused `/api/v1/export.csv` with a 403
+while their own console returns 200. The isolation layer is not fixture-dependent,
+and until this was built nobody had evidence either way.
+
+### More from the OpenAPI increment, all caught before commit
 
 - **An empty map was emitted as the quoted string `"{}"`.** Every refusal's
   `content` is exactly that, so the document stayed valid YAML, still looked

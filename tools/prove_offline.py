@@ -102,7 +102,24 @@ def main() -> int:
 
     print("\n$ docker run -d --network none " + NAME)
     started = time.perf_counter()
-    result = run(["run", "-d", "--network", "none", "--name", NAME, "judgejudy:local"])
+    result = run(
+        [
+            "run",
+            "-d",
+            "--network",
+            "none",
+            "--name",
+            NAME,
+            # The demo event, on purpose. `prove-offline` boots the raw image rather
+            # than the compose stack, and the image no longer seeds by default -- a
+            # fresh deployment starts empty so `/setup/` is reachable. This proof
+            # needs an event to publish, so it asks for the fixture explicitly, the
+            # same way `just check` does.
+            "-e",
+            "JJ_SEED_DEMO=1",
+            "judgejudy:local",
+        ]
+    )
     if result.returncode != 0:
         sys.stderr.write(result.stdout or "")
         sys.stderr.write(result.stderr or "")

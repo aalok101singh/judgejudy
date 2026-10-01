@@ -15,6 +15,72 @@ itself on first boot and prints a reconciliation of what it loaded.
 
 ---
 
+## Run your own hackathon
+
+**This is the part that makes it a tool rather than a demo.** One deployment runs
+one hackathon, and it starts from an empty database.
+
+```bash
+git clone https://github.com/aalok101singh/judgejudy.git
+cd judgejudy
+docker compose up
+```
+
+Then open <http://localhost:8080/setup/>. That page creates your hackathon: you,
+your event, your dates, your tracks, and a starting rubric. It **refuses once an
+event exists** — a bare 403 with an empty body, like every other refusal in this
+portal — so it cannot be used to quietly add a second event to a deployment.
+
+You are signed in as the organizer when it finishes. Add judges and participants
+from the admin, or paste a roster:
+
+```bash
+docker compose exec portal python src/manage.py invite judges.txt --role judge
+```
+
+Where `judges.txt` is one email per line. Each person gets an account with an
+**unusable password**, because this deployment has no mail service on purpose —
+so they set one themselves at `/login/`, or you set it for them:
+
+```bash
+docker compose exec portal python src/manage.py set_password judge@example.org
+```
+
+**Nothing here needs the organizers' data.** There is no `fixtures.json` in the
+path, no seed step, and no assumption about track names, rubric criteria, or how
+many judges you have. `just check` runs against their fixture because that is the
+acceptance gate; **nothing in the application requires it.**
+
+### The demo is opt-in
+
+A fresh `docker compose up` starts with an **empty database** and no event, which
+is what leaves `/setup/` open. That default is deliberate: if the organizers'
+demo hackathon were seeded on every boot, every deployment would already have an
+event, and the wizard — whose entire authorisation is *"no event exists"* — would
+be unreachable in the shipped product.
+
+To see the demo instead, ask for it:
+
+```bash
+JJ_SEED_DEMO=1 docker compose up
+```
+
+That loads their 41-project, 121-person fixture. **`just check` sets this for
+you**, because the acceptance checker scores exactly that data. If you have never
+run a real event, this is the interesting thing to look at.
+
+### First-run answers
+
+| Field | What it does |
+|---|---|
+| **Name, email, password** | You become the organizer, with an organizer binding. At least 12 characters. |
+| **Event name** | Also becomes the URL slug. Any hackathon. |
+| **Starts / submissions close / judging closes** | The windows every other page reads. Times are read in the server's timezone. |
+| **Tracks** | One per line, optional. Judges are assigned per track and a project is only ever compared inside its own. |
+| **Rubric** | Three criteria, weights summing to 1. Editable, and **locked** once a judge has scored — otherwise a leaderboard would move underneath the people who produced it. |
+
+---
+
 ## Running an event
 
 The lifecycle an organizer actually walks through.
@@ -162,6 +228,9 @@ and an unshareable record replicates nothing.
 
 | Route | Purpose |
 |---|---|
+| `/setup/` | **First-run wizard.** Creates your hackathon: you, the event, the dates, the tracks, a starting rubric. Refuses with a bare 403 once an event exists, so it cannot add a second one. The only write path an unauthenticated browser can reach, and CSRF-protected for exactly that reason. |
+| `/login/` | Sign in. Five wrong tries in five minutes locks that account for fifteen, per-email so one attacker cannot lock every judge out. No password reset: there is no mail service on purpose. |
+| `/logout/` | Sign out. POST-only — a GET logout is a drive-by. |
 | `/` | **The gallery.** 41 seeded projects, first page in fixture order, server-rendered, no JS. Public. |
 | `/projects/new` | Submit a project. Refused while the event is closed. |
 | `/judge/` | **The judge console.** Draft, submit, lock. |
@@ -355,7 +424,7 @@ volume: `just prove-offline` and `just mutation-test`, which **corrupts 113 thin
 on purpose and requires every one to be caught** by a named test.
 
 **Findings.** [`blueprint/context/findings.md`](blueprint/context/findings.md) is
-the full record: **103 findings**, what was wrong, what was fixed with a test, and
+the full record: **111 findings**, what was wrong, what was fixed with a test, and
 what was declined and why. Several are the same class of defect in a new medium —
 a min-cut certificate that named no judges, a leaderboard that would have been
 refused for the wrong reason, a CSV column of nothing, an acceptance criterion

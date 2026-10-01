@@ -159,7 +159,7 @@ decision, and the naming of the cut controls, is the human's.
 
 | | |
 |---|---|
-| Findings | **103** - **0 open blocking**, 0 open, 29 fixed (awaiting review), 1 unverified (F-27), **11 accepted by decision (F-91)**, 62 closed |
+| Findings | **111** - **0 open blocking**, 0 open, 37 fixed (awaiting review), 1 unverified (F-27), **11 accepted by decision (F-91)**, 62 closed |
 | Acceptance | **T1 and T2 green** — **7 of 7 checks pass**, `claimed T1, verified T1 T2`. The `verified` ceiling is arithmetic in `run.py`, not a gap: there are no T3 or T4 checks at all |
 | Suite | **721 tests** (1 skipped), **113/113** mutations, spec **75/75** |
 | Container | cold start **11.8–20 s** observed 2026-09-29 against the 60 s budget (a range, not a value — F-68); `prove-offline` passes, and it now also renders the embeddable widget **inside** the `--network none` container |

@@ -49,23 +49,34 @@ case "${1:-serve}" in
         log "collecting static files"
         $MANAGE collectstatic --noinput --clear >/dev/null
 
-        # Seeding is idempotent and prints the session cookies the checker
-        # needs. Its hash budget is deliberately tiny: only the five seeded
-        # identities get a real password hash, because hashing all 121
-        # fixture people costs about 48 seconds and the checker's timeout is
-        # 10. (F-12.)
+        # Seeding loads the ORGANIZERS' demo hackathon: 41 projects, 121 people,
+        # 126 reviews. It is what the acceptance checker scores, and it is
+        # **off by default**, because a real deployment that starts with somebody
+        # else's event already in it cannot use `/setup/` -- the wizard's guard is
+        # "no event exists", so the one thing a new user needs is the one thing
+        # they could not reach. Seeding unconditionally would have made the setup
+        # wizard unreachable in the shipped product, which is the whole class of
+        # bug this section exists to prevent.
         #
-        # `load_fixtures` does not exist yet — it lands in FEAT-03. The
-        # existence check is here rather than a bare `||` so that the
-        # pre-FEAT-03 boot is a normal line in the log instead of a Django
-        # traceback, which would train us to ignore a red log line that later
-        # means something.
-        if $MANAGE help 2>/dev/null | grep -q 'load_fixtures'; then
-            log "seeding fixtures"
-            $MANAGE load_fixtures
-        else
-            log "no load_fixtures command yet (FEAT-03); starting with an empty database"
-        fi
+        # `JJ_SEED_DEMO=1` is set by `just check`, which is the only thing that
+        # wants the fixture. Everyone else gets an empty portal and a wizard.
+        #
+        # The hash budget is deliberately tiny: only the five seeded identities
+        # get a real password hash, because hashing all 121 fixture people costs
+        # about 48 seconds and the checker's timeout is 10. (F-12.)
+        case "${JJ_SEED_DEMO:-0}" in
+            1|true|TRUE|yes|YES)
+                if $MANAGE help 2>/dev/null | grep -q 'load_fixtures'; then
+                    log "seeding the demo event (JJ_SEED_DEMO is set)"
+                    $MANAGE load_fixtures
+                else
+                    log "JJ_SEED_DEMO is set but load_fixtures is missing; starting empty"
+                fi
+                ;;
+            *)
+                log "starting with an empty database; open /setup/ to create your hackathon"
+                ;;
+        esac
 
         log "starting gunicorn on :$PORT"
         # 2 workers + 1 thread each. SQLite in WAL mode allows concurrent

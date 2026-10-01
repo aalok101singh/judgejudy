@@ -22,6 +22,7 @@ from django.contrib import admin
 from django.urls import path
 
 from judge_judy import views
+from reviewer.accounts import views as account_views
 from reviewer.ballots import views as ballot_views
 from reviewer.comments import views as comment_views
 from reviewer.projects import views as project_views
@@ -29,6 +30,7 @@ from reviewer.projects.views import current_event
 from reviewer.reviews import api as api_views
 from reviewer.reviews import console as console_views
 from reviewer.reviews import results_view as results_page_views
+from reviewer.setup import views as setup_views
 from reviewer.widget import views as widget_views
 
 
@@ -133,6 +135,16 @@ def _comments(request, project_id):
 
 
 urlpatterns = [
+    # --- Operating the portal: sign in, and set the hackathon up once.
+    #
+    # `/setup/` is the only write path an unauthenticated browser can reach, and
+    # its authorisation is a fact about the database rather than a permission: no
+    # event exists. Once one does it refuses with the portal's own bare 403, so
+    # there is no second way to create an event after the first.
+    path("setup/", setup_views.setup, name="setup"),
+    path("login/", account_views.login_view, name="login"),
+    # POST-only: a GET logout is a drive-by anyone can trigger with an <img>.
+    path("logout/", account_views.logout_view, name="logout"),
     # T1-1 and T1-2. Server-rendered, public, first page in FIXTURE ORDER --
     # `run.py` slices `projects[:3]` positionally, so the ordering is load
     # bearing and lives in `reviewer.importer.loader.gallery_queryset`.
