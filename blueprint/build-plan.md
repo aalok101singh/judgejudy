@@ -154,7 +154,7 @@
 
 ## Phase F — Public surface (FEAT-06, 9h)
 
-- [ ] **FEAT-06 Voting, comments, results hiding, ballot order, influence report** — 9h
+- [x] **FEAT-06 Voting, comments, results hiding, ballot order, influence report** — 9h
   - Voting with amplitude inside an identity budget, mandatory attributable
     abstention
   - Randomized ballot order — makes bias zero-*mean*, not zero. Do not claim more
@@ -200,7 +200,7 @@
 
 ## Phase G — T4 (FEAT-07, 13h)
 
-- [ ] **FEAT-07 Bulk IO, signed records, `results_hash`, widget, OpenAPI** — 13h
+- [x] **FEAT-07 Bulk IO, signed records, `results_hash`, widget, OpenAPI** — 13h
   - `export run` / `import run`, **byte-identical round-trip including natural
     keys** (`source_key` on every importable table — D-11)
   - Ed25519 signed records in an in-toto Statement v1 inside DSSE; keys on their
@@ -219,7 +219,7 @@
 
 ## Phase H — The proof (FEAT-08, 7h) — **PROTECTED**
 
-- [ ] **FEAT-08 Normalization engine and the proof artefact** — 7h
+- [x] **FEAT-08 Normalization engine and the proof artefact** — 7h
   - The estimator: robust median/MAD + shrinkage `k = 3`; empirical Bayes as the
     constant-free reported estimator
   - **Component 1 — predictive.** Held-out RMSE 0.6753 against a 0.7952 baseline
@@ -255,13 +255,13 @@
 
 | | |
 |---|---|
-| **Completed** | **5 of 10 features** — FEAT-01 … FEAT-05 |
+| **Completed** | **8 of 10 features** — FEAT-01 … FEAT-08. FEAT-09 is scripted and needs a human to record; FEAT-10 is in progress |
 | **Hours planned** | 69 (68 build + 1 held) |
 | **Slippage to date** | see `bible/08` §1c — first entry written at BREAK-1: A ≈4h, B ≈5h, C ~6h (**+1**) |
-| **Acceptance now** | `run.py` prints **`claimed T1, verified T1 T2`**, with **all 7 checks PASS** |
-| **Tag** | **`v-t1-verified`** (BREAK-1, 2026-09-28) |
-| **Next** | **FEAT-06** voting, comments, ballot order, influence report (9h) |
-| **Then** | BREAK-3 ☕ T3 — and BREAK-2 ☕ T2 first, which is now **earned and unclaimed** |
+| **Acceptance now** | `run.py` prints **`claimed T1 T2, verified T1 T2`**, with **all 7 checks PASS** |
+| **Tag** | **`v-t1-verified`** (BREAK-1, 2026-09-28), **`v-t2-verified`** (BREAK-2) |
+| **Next** | **FEAT-10**: clean-clone verification and the submission tag. Then FEAT-09's recording, which needs a human |
+| **Deliberately unclaimed** | T3 is built and tested; `run.py` has no T3 checks, so claiming it is `OVERCLAIM` (F-91). Not a gap in the build — an arithmetic fact about the organizers' program |
 
 > **This table was stale until FEAT-05 opened (F-66).** It read *"3 of 10
 > features"*, Phase D's checkbox was unticked, and **"Next: FEAT-04"** — on a tree
@@ -271,3 +271,12 @@
 > `findings.md` and `project-overview.md`; the **third** file carrying the same
 > defect was missed, and `verify_spec.py`'s 68 checks pass over it because a
 > machine cannot tell a stale feature count from a fresh one.
+>
+> **It went stale a second time**, in the same direction, and this one is recorded
+> because the repetition is the finding. It read *"5 of 10 — FEAT-01 … FEAT-05"*
+> and **"Next: FEAT-06"** while FEAT-06, FEAT-07 and FEAT-08 were all committed,
+> archived and green. The checkboxes for those three phases were unticked on a
+> build that had finished them. **F-57 was fixed in the two files the fix named
+> and the plan was never on the list** — the same shape as F-103, one document
+> further along, and the reason both are written down together now.
+

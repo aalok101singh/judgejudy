@@ -737,6 +737,41 @@ def check_structure(r):
              "added them up. A tally whose parts do not sum teaches the reader to "
              "skip the tally." % (itemised, claimed_total))
 
+    # --- F-103. The README is the one shipped document the tally never reached.
+    #
+    # `AGENTS.md` and `project-overview.md` have been checked against the ledger
+    # for a long time. The README states the same two numbers in prose -- "**102
+    # findings**" and "corrupts 113 things on purpose" -- and it was carrying
+    # **98** and **105** while the other two were correct. Nothing failed, because
+    # no check looked.
+    #
+    # **This is F-57's class one document further along**: a status line written
+    # once and never revisited when the thing under it changed. The two files that
+    # were already covered were covered by hand, one at a time, and the file a
+    # judge is most likely to read was not on the list. The general lesson is the
+    # one the project keeps relearning: *enforcement attaches to the files someone
+    # remembered, not to the files that need it.*
+    m = re.search(r"the full record:\s*\*\*(\d+)\s+findings\*\*", readme)
+    r.eq(g, "README findings total", total, int(m.group(1)) if m else None,
+         "Re-derive from the ledger. The README is the document a judge reads "
+         "first, and it was the one place the tally was not enforced (F-103).")
+
+    # The mutation tally is derived by PARSING the harness's own list rather than
+    # imported, because importing `mutation_test` would run its module body. The
+    # pattern requires the `(` on its own line, which is how every tuple is
+    # written, so a reformat that moves the path up beside the paren shows up as
+    # a FAILED check rather than as a silently smaller number.
+    mut_src = read("tools/mutation_test.py")
+    entries = re.findall(r'(?m)^\s*\(\n\s*"([^"]+)"', mut_src)
+    m = re.search(r"corrupts\s+(\d+)\s+things", readme)
+    r.eq(g, "README mutation-tamper count", len(entries), int(m.group(1)) if m else None,
+         "Derived by parsing mutation_test.py's MUTATIONS list. A green suite "
+         "means nothing if the tally understates how much was deliberately broken.")
+    r.check(g, "mutation harness parsed every entry", len(entries) > 0,
+            "> 0 entries", "%d entries" % len(entries),
+            "A regex that stops matching reports a small number rather than "
+            "failing, so this asserts the parse found something at all.")
+
     # question tally must be closed
     dq = read("bible/DISCORD-QUESTIONS.md")
     r.check(g, "question tally is closed", bool(re.search(r"0 open", dq, re.I)),

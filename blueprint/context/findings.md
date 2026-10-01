@@ -342,6 +342,34 @@ The test is now scoped to the `<footer>` element with a regex. Generalisation: w
 a fact is rendered more than once, the assertion must name *which* rendering, or it
 is really only asserting the first one and hoping.
 
+### F-103 [P2] fixed — the README stated two numbers no check could see
+
+**File:** `README.md`, `tools/verify_spec.py`
+**Found:** 2026-09-30, by reading a document the gates had never read
+
+`AGENTS.md` and `blueprint/context/project-overview.md` are checked against this
+ledger, so their findings tally is enforced. The README states the same total in
+prose — *"the full record: **98 findings**"* — and the mutation-tamper count as
+*"corrupts 105 things on purpose"*.
+
+Both were **stale**: 98 is really 102, and 105 is really 113. Nothing failed,
+because no check looked. Two documents were protected by hand, one at a time,
+and **the file a judge is most likely to read was not on the list.**
+
+**This is F-57's class one document further along** — a status line written once
+and never revisited when the thing under it changed — and it is now the third
+distinct instance of *a tally enforced in the places someone remembered rather
+than the places that needed it*. The generalisation is the one worth keeping:
+enforcement attaches to files, not to facts, so **a fact printed in N places needs
+N checks or it needs one check that finds all N.**
+
+Both numbers are now derived. The findings total comes from the ledger, the same
+source as the other two files. The mutation count is obtained by **parsing
+`mutation_test.py`'s own `MUTATIONS` list** rather than importing it, because
+importing the harness would run its module body; a second check asserts the parse
+found entries at all, so a regex that stops matching reports a *failure* instead
+of a smaller number.
+
 ### Three more from the widget increment, all caught before commit
 
 - **`project.track.slug = …` then `project.save()` never persisted the slug.**

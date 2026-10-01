@@ -278,6 +278,29 @@ exception, not a caveat on it.
 that we did not ship, and it is disclosed here, in the module docstring, and in the
 cut ledger rather than quietly missing.
 
+### The fifteen decisions, itemized
+
+Every one of these changes behaviour, and none is revisited in a hurry. Full
+reasoning in [`blueprint/project-plan.md`](blueprint/project-plan.md) §6.
+
+| | Decision | The one-line reason |
+|---|---|---|
+| D-01 | **Isolation in the data-access layer.** `Review.objects.for_actor(actor)` returns an already-scoped queryset. | No code path from a view to an unscoped query is possible to write by accident. |
+| D-02 | **Denial is a literal 403, never a 302.** Empty body, no `Location` header, one shared function. | `run.py` follows redirects, so a redirect returns 200 and fails the check while looking correct in a browser. |
+| D-03 | **Two enforcement layers, not three.** Permission *decides* and raises; the queryset *constrains* and cannot. | They fail in opposite directions, so neither can mask the other. |
+| D-04 | **Normalization: robust median/MAD + shrinkage `k=3`, `ε=0.5`; empirical Bayes as the constant-free estimator.** | The constants are a priori and legible, chosen without seeing outcomes. `k = 0` scores better and we do not use it. |
+| D-05 | **Detectability analysis *first*.** Is there an effect to remove? | A normalization claim that never tests for the effect it removes is a subtler overclaim than doing nothing. |
+| D-06 | **Assignment: one flow over all tracks**, min-max capacity by search, load-imbalance + seeded tiebreak, min-cut certificate. | 9 of 30 judges are dual-track, so per-track flows are simply wrong. |
+| D-07 | **Infeasibility is diagnosed, never asserted.** The min-cut names the projects, the bottleneck judges, the deficit and three remedies with arithmetic. | "Feasible" and "provably impossible" are different answers deserving different code paths. |
+| D-08 | **Audit is hash-chained**, with `omitted_since_prev` *inside* the chain. | Sampled auditing plus a chain is incoherent — a gap is indistinguishable from an edit. |
+| D-09 | **No Merkle transparency log.** Publish one chain head and replicate it into every signed judge record. | A transparency log's value is *witnessing*, and we run the container. |
+| D-10 | **Signed records: Ed25519 in an in-toto Statement v1 inside a DSSE envelope.** Keys on their own volume. | DSSE signs bytes, so no third party reimplements our canonicalisation. |
+| D-11 | **`source_key` on every importable table.** Round-trip is byte-identical *including natural keys*. | "Modulo generated IDs" is not a testable property — a dropped column passes it. |
+| D-12 | **Voting claims cost amplification inside an identity budget, not Sybil resistance.** Randomised order makes bias zero-*mean*, not zero. | A report that flags everything flags nothing, and a biased ballot nobody noticed is the real failure. |
+| D-13 | **Anti-abuse is the published influence report**, not a fancier ballot. | The brief asks for an answer to people trying to cheat it, and an *explanation* is one. |
+| D-14 | **Webhooks cut.** Models, a `501` stub and audit events still ship. | 2 h, zero points on all four criteria, and SSRF is a real bug class to write from scratch. |
+| D-15 | **No LLM scoring.** Measured and closed. | A hosted API breaks the offline guarantee, and it deletes the thing a quarter of the rubric is about. |
+
 ### What we did not build
 
 - **Webhook delivery.** Models and a `501` stub ship; delivery, retries and HMAC
@@ -328,11 +351,11 @@ portal. It is also **unmodified**, so the panel runs the identical program.
 **The gate is more than `run.py`.** `just check` runs the spec layer, a clean
 `down -v`, the build, the organizers' checker, the isolation proof, the census and
 the suite. Two more run at every verification break because each needs a clean
-volume: `just prove-offline` and `just mutation-test`, which **corrupts 105 things
+volume: `just prove-offline` and `just mutation-test`, which **corrupts 113 things
 on purpose and requires every one to be caught** by a named test.
 
 **Findings.** [`blueprint/context/findings.md`](blueprint/context/findings.md) is
-the full record: **98 findings**, what was wrong, what was fixed with a test, and
+the full record: **103 findings**, what was wrong, what was fixed with a test, and
 what was declined and why. Several are the same class of defect in a new medium —
 a min-cut certificate that named no judges, a leaderboard that would have been
 refused for the wrong reason, a CSV column of nothing, an acceptance criterion
