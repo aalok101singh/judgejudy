@@ -46,6 +46,27 @@ so they set one themselves at `/login/`, or you set it for them:
 docker compose exec portal python src/manage.py set_password judge@example.org
 ```
 
+**Load your entries.** An organizer with forty projects should not fill in forty
+forms. Export them from whatever you already used to collect them, and:
+
+```bash
+docker compose exec portal python src/manage.py import_projects entries.csv
+```
+
+```csv
+source_key,title,summary,track,team,repo_url
+ext_1,Glass Signal,A neat thing,General,Ada,https://example.org/glass
+```
+
+Only `title` and `track` are required; extra columns are **ignored rather than
+rejected**, because a Google Forms export carries a dozen of them. It is
+**idempotent** — a row with a `source_key` updates that project, so re-running
+after adding three entries does not duplicate the first thirty. Each bad row is
+**skipped and named with its line number** while the rest import, and an unknown
+track is refused rather than invented: a track with no judges bound to it is an
+event where some projects can never be judged. `--dry-run` reports without
+writing.
+
 **Nothing here needs the organizers' data.** There is no `fixtures.json` in the
 path, no seed step, and no assumption about track names, rubric criteria, or how
 many judges you have. `just check` runs against their fixture because that is the
@@ -343,9 +364,18 @@ exists to make detectable. The one exception is the restore path in the escape
 hatch, which re-verifies the chain afterwards — and that is the price of the
 exception, not a caveat on it.
 
-**Comments have no rate limit.** It is the one control our own threat model names
-that we did not ship, and it is disclosed here, in the module docstring, and in the
-cut ledger rather than quietly missing.
+**Comments are rate limited, and the anonymous version is weak.** Five per hour per
+identity, refused with the portal's bare 403. A **signed-in** poster is keyed by
+their account, so the limit follows them across browsers. An **anonymous** poster
+is keyed by a hash of their session, so **clearing cookies resets the budget** —
+IP would be the alternative, and this project refuses it everywhere else because it
+is a poor identity that gets innocent people in trouble. A limit that a private
+window resets is still a limit against the naive case, and the strong case is
+reachable by giving people accounts.
+
+This was cut for most of the build and disclosed rather than quietly missing. It
+is the control our own threat model names, and shipping it honestly — including
+the bypass, which is also a test — beat leaving it out.
 
 ### The fifteen decisions, itemized
 
@@ -420,11 +450,11 @@ portal. It is also **unmodified**, so the panel runs the identical program.
 **The gate is more than `run.py`.** `just check` runs the spec layer, a clean
 `down -v`, the build, the organizers' checker, the isolation proof, the census and
 the suite. Two more run at every verification break because each needs a clean
-volume: `just prove-offline` and `just mutation-test`, which **corrupts 113 things
+volume: `just prove-offline` and `just mutation-test`, which **corrupts 114 things
 on purpose and requires every one to be caught** by a named test.
 
 **Findings.** [`blueprint/context/findings.md`](blueprint/context/findings.md) is
-the full record: **111 findings**, what was wrong, what was fixed with a test, and
+the full record: **117 findings**, what was wrong, what was fixed with a test, and
 what was declined and why. Several are the same class of defect in a new medium —
 a min-cut certificate that named no judges, a leaderboard that would have been
 refused for the wrong reason, a CSV column of nothing, an acceptance criterion

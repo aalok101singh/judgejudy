@@ -545,6 +545,123 @@ through the wizard, a signed-in judge is refused `/api/v1/export.csv` with a 403
 while their own console returns 200. The isolation layer is not fixture-dependent,
 and until this was built nobody had evidence either way.
 
+### F-112 [P2] fixed — a stale mutation string, in a third file
+
+**Files:** `tools/mutation_test.py`, `tools/docker.py`
+**Found:** 2026-09-30, by the harness reporting SKIPPED
+
+FEAT-11 refactored `tools/docker.py` to add an environment variable and
+`ruff format` collapsed the `subprocess.run(...)` call back onto one line. The
+mutation targeting it — *"the exit code is swallowed, a wrapper that reports its
+own success"* — no longer had a pattern to corrupt, so the harness reported
+**SKIPPED** rather than passing.
+
+**This is F-98's exact lesson arriving in a third file**, and the reason the
+lesson keeps recurring is structural: *the mutation harness is a list of strings
+into source, so every reformat is a potential silent disarmament.* The only
+defence is a harness that fails loudly on a stale pattern, and this one does.
+
+Re-pointed, plus a new mutation for the `--seed-demo` path — the flag that has
+**already** failed to take effect twice (a shell `set`, then an `export` cmd.exe
+does not have) now has a corruption that removes it.
+
+### F-113 [P1] fixed — the anonymous rate limit would never have fired
+
+**File:** `src/reviewer/comments/ratelimit.py`
+**Found:** 2026-09-30, while writing the test for the *sixth* comment
+
+Django's `SessionMiddleware` saves a session only when something **modifies** it.
+An anonymous visitor who reads a thread and posts a comment modifies nothing — so
+`session_key` stays `None` forever, the hash function returned `None`, and the
+filter became the "matches nothing" fallback.
+
+**So the anonymous rate limit would not have fired once, in production.** The
+control this project had disclosed as missing for most of its life would have
+shipped as decorative, and the *tests* did not catch it because the fixtures
+happened to have sessions something else had saved.
+
+The fix is `session.create()` when an anonymous poster has no key: **an identity
+that was never minted cannot be counted.** The cost is one `django_session` row
+per anonymous commenter, created only when someone actually comments — never on a
+page view — and the limit itself is what bounds the number.
+
+**The generalisation is the interesting part.** Every earlier rate-limit decision
+in this project (the ballot's identity budget, F-13 on empty collections) argued
+about *who counts as an identity*. This one failed because the identity was never
+**created**, which is a step earlier and much easier to miss. A control that
+degrades to "cannot count" must be checked for whether it ever reaches the
+counting path at all.
+
+### F-114 [P1] fixed — every comment post 500'd
+
+**File:** `src/reviewer/comments/views.py`
+**Found:** 2026-09-30, immediately, by the first posting test
+
+The call site passed `author_session_hash=None` for a signed-in comment. The
+column is `NOT NULL` with `default=""`, and **passing `None` explicitly bypasses
+the default**, so every signed-in comment raised `IntegrityError` and the whole
+comment thread 500'd.
+
+**This is the trap the model's own comment records.** The field was changed from
+`null=True` to `default=""` precisely because null-and-blank is two ways to say
+"absent", and the call site then reached for `None` anyway. The lesson is not
+"write better comments" — it is that **a single-valued invariant must be enforced
+at the boundary too**, because a reviewer reading the model has no way to know
+which of two spellings the caller uses.
+
+### F-115 [P2] fixed — `filter(dict, ...)` instead of `filter(**dict)`
+
+**File:** `src/reviewer/comments/ratelimit.py`
+**Found:** 2026-09-30, by the first posting test
+
+`Comment.objects.filter(identity_filter(...), created_at__gte=cutoff)` passes the
+dict as the *first positional* argument, which Django rejects with
+`FieldError: Cannot parse keyword query as dict`. Every comment post 500'd.
+
+Worth one line because **both** of this and F-114 shipped in the same hour and
+both made the feature's only user-visible entry point return 500 — which is the
+shape a change to a hot path should be least likely to take, and is exactly why
+"does the thread still render" is worth a test of its own.
+
+### A test that asserted the *wrong* property, and the code was right
+
+The rate limit is **per event, not per project**, and my test asserted the
+opposite. The code was right: an organizer moderating by hand reads *one* queue
+for the whole event, so ten comments spread across two projects are still ten items
+in that single queue. A per-project budget would let somebody fill it twice over.
+
+**A test asserting the weaker property is how a stricter control gets "fixed" into
+a weaker one** — the same shape as F-66, where a stale document was corrected in
+the wrong direction. The test now asserts the stricter property and the module
+docstring says why.
+
+### F-116 [P2] fixed — every re-import restamped every project and called it an update
+
+**File:** `src/reviewer/setup/imports.py`
+**Found:** 2026-09-30, by the idempotency test
+
+`submitted_at=timezone.now()` sat in the shared ``fields`` dict, so it was
+compared and written on **every** run. A re-import of an unchanged spreadsheet
+therefore reported all forty rows as "updated" and rewrote every one.
+
+**This is F-61 at the level of a report.** The data was equivalent and the
+output said "everything changed", so the one number an organizer would read to
+decide whether to re-run was wrong in the loud direction. `submitted_at` is now
+set on creation only — when they submitted is a fact about the first submission,
+not a property of the last import.
+
+### F-117 [P2] fixed — `ImportError_` shadowed a builtin, twice
+
+**File:** `src/reviewer/setup/imports.py`
+**Found:** 2026-09-30, by lint, after I had already written the bad version
+
+The exception was first named ``ImportError`` and then, when that shadowed the
+builtin, ``ImportError_`` — which is the same problem with a cosmetic fix. It is
+now ``RowRefused`` and ``FileRefused``, which are also **two different failure
+kinds**: a file-level refusal is fatal and a row-level one is skipped and
+reported. Collapsing them is how a tool either abandons a whole spreadsheet over
+one bad line, or silently imports a malformed one.
+
 ### More from the OpenAPI increment, all caught before commit
 
 - **An empty map was emitted as the quoted string `"{}"`.** Every refusal's

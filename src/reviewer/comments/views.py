@@ -20,12 +20,21 @@ Four controls, and each is a separate promise so a failure names itself:
 3. **Length cap**, enforced here because the column is a ``TextField`` and a
    schema CHECK on length is not portable in a way the ORM would enforce for us.
    A 200k-character comment is a denial of service on the gallery.
-4. **Rate limiting — CUT, and disclosed.** ``V-8`` asks for it and it is not
-   built: it is the one control on this list that needs state we deliberately do
-   not keep (see the ``Ballot`` identity discussion -- the anti-abuse answer this
-   project ships is the **influence report**, not a gate, D-13). The ``README``
-   and the cut ledger say so in plain words rather than the page implying a
-   control that is not there.
+4. **Rate limiting — SHIPPED, and how it is weak.** ``V-8`` asks for it. It was cut
+   for most of this build and disclosed here, in the README and in the cut ledger
+   rather than quietly missing; it now lives in
+   :mod:`reviewer.comments.ratelimit`. It is **count-derived**, keyed on the
+   account when there is one and on a **hash of the session key** when there is
+   not.
+
+   **The anonymous weakness is stated, not hidden:** clearing cookies resets the
+   limit. IP was the alternative, and this project refuses it everywhere else
+   because it is a poor identity that gets innocent people in trouble. A limit a
+   private window resets is still a limit against the naive case, and the strong
+   case is reachable by giving people accounts -- which is what
+   ``manage.py invite`` is for. The refusal is a bare 403 like every other
+   denial, because a rate limit refuses a *well-formed* claim and must not look
+   like the 400 a malformed one gets (F-40).
 
 **Why comments are their own route and not a field on the gallery.** ``run.py``
 reads ``projects[:3]`` **positionally** from the gallery and checks that one of
@@ -40,6 +49,7 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 
+from reviewer.comments import ratelimit
 from reviewer.comments.models import COMMENT_HIDDEN, COMMENT_VISIBLE, Comment
 from reviewer.isolation import Actor
 from reviewer.isolation.refusal import deny
@@ -49,6 +59,7 @@ REFUSED_BY_NO_EVENT = "comments.no_event"
 REFUSED_BY_NO_PROJECT = "comments.no_project"
 REFUSED_BY_EMPTY_BODY = "comments.empty_body"
 REFUSED_BY_TOO_LONG = "comments.body_too_long"
+REFUSED_BY_RATE_LIMITED = "comments.rate_limited"
 REFUSED_BY_NOT_ORGANIZER = "comments.moderate_role"
 REFUSED_BY_UNKNOWN_ACTION = "comments.unknown_action"
 
@@ -139,6 +150,19 @@ def _thread(request, event, project_id: str) -> HttpResponse:
                 f"A comment is limited to {MAX_BODY_CHARS} characters; yours is {len(body)}."
             )
             return render(request, "comments/thread.html", context, status=400)
+
+        # **V-8's fourth control, shipped.** The check is AFTER the length cap
+        # because a cap breach is the poster's own malformed request (a 400 they
+        # can fix), while a rate limit is a refusal of a well-formed claim (a 403
+        # they cannot fix by editing). F-40: the two must not look alike.
+        #
+        # The refusal is `deny(...)`, so it is a bare 403 with an empty body and
+        # the guard in `X-Refused-By` -- the same shape as every other denial in
+        # this portal. A rendered "you are posting too fast" page would be a body
+        # a caller has to parse, and it would invite the client to retry, which is
+        # exactly what a rate limiter is meant to discourage.
+        if ratelimit.too_many_recently(request, actor):
+            return deny(REFUSED_BY_RATE_LIMITED)
         # `status` is NOT set here, on purpose: the schema default is
         # `pending`, and a comment is only visible once a human says so. Naming
         # the constant at the call site would be a second place to get it wrong
@@ -147,6 +171,19 @@ def _thread(request, event, project_id: str) -> HttpResponse:
         Comment.objects.create(
             event=event,
             project=project,
+            # **Empty string, never ``None``.** The column is `NOT NULL` with
+            # `default=""`, and passing `None` explicitly *bypasses the default* and
+            # raises IntegrityError -- so every signed-in comment 500'd. This is
+            # the exact hazard the model's own comment records: `null=True` and
+            # blank would be two ways to say "no anonymous key", so blank was
+            # chosen -- and then the call site reached for `None` anyway. The
+            # `or ""` is not defensive padding; it is the second half of the same
+            # decision.
+            author_session_hash=(
+                ""
+                if actor.is_authenticated
+                else (ratelimit.session_hash(request, create=True) or "")
+            ),
             body=body,
             author=actor.user if actor.is_authenticated else None,
             author_label=(

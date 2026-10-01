@@ -187,14 +187,45 @@ MUTATIONS: list[tuple[str, str, str, str, list[str]]] = [
     ),
     (
         "tools/docker.py",
-        "        return subprocess.run([binary, *sys.argv[1:]], cwd=os.getcwd()).returncode",
-        "        subprocess.run([binary, *sys.argv[1:]], cwd=os.getcwd())\n        return 0",
+        "        return subprocess.run([binary, *argv], cwd=os.getcwd(), env=env).returncode",
+        "        subprocess.run([binary, *argv], cwd=os.getcwd(), env=env)\n        return 0",
         "the exit code is swallowed — a wrapper that reports its own success",
         [
             sys.executable,
             "-m",
             "pytest",
             "tests/test_gates.py::TestDockerResolver::test_propagates_the_exit_code",
+            "-q",
+        ],
+    ),
+    # --- tools/docker.py, the --seed-demo path --------------------------------
+    # **F-112.** This mutation was SKIPPED, not missed, and the reason is the
+    # finding: FEAT-11 refactored the line above to add an environment variable,
+    # `ruff format` collapsed the call back onto one line, and the *pattern*
+    # above stopped existing. The harness reported SKIPPED rather than passing
+    # silently — which is F-98's exact lesson ("a stale mutation string is a
+    # stale code smell") arriving in a third file.
+    #
+    # It is worth being precise about why that class keeps recurring: the
+    # mutation harness is a list of strings into source, so **every reformat is
+    # a potential silent disarmament**, and the only defence is a harness that
+    # fails loudly on a stale pattern. This one does.
+    (
+        "tools/docker.py",
+        '        env["JJ_SEED_DEMO"] = "1"',
+        '        env["JJ_SEED_DEMO"] = "0"',
+        "`--seed-demo` stops asking for the demo, so `just check` boots a container "
+        "with an EMPTY database, the organizers' checker scores an empty portal, "
+        "and the gate reports three regressions plus an OVERCLAIM that have "
+        "nothing to do with any of the code under test. **This has already "
+        "happened twice** — once from a shell `set` that exported nothing and "
+        "once from an `export` that cmd.exe does not have — so the flag is now "
+        "set in Python and this mutation exists to keep it honest.",
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_demo_is_opt_in.py",
             "-q",
         ],
     ),

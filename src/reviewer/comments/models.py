@@ -41,6 +41,34 @@ class Comment(SourceKeyMixin, TimeStampedModel, models.Model):
         "accounts.User", on_delete=models.SET_NULL, related_name="comments", null=True, blank=True
     )
     author_label = models.CharField(max_length=120, blank=True)
+    #: **The anonymous poster's identity, for rate limiting only.**
+    #:
+    #: A comment may be posted without an account, so "who is this" has no answer
+    #: from `author`. This is a SHA-256 of the posting session key: stable enough
+    #: to count someone's comments within a window, useless for signing in.
+    #:
+    #: **Empty whenever `author` is set**, because an account is the better key
+    #: and having both would mean two answers to "who".
+    #:
+    #: `blank=True, default=""` and deliberately **not** `null=True`: null *and*
+    #: blank would be two ways for this column to say "no anonymous key", and a
+    #: filter on one would silently miss the other. This project's recurring
+    #: finding (F-13) is that two representations of "absent" are what let a
+    #: control quietly count nothing. One absent value, one thing to count.
+    #:
+    #: The rate limit counts rows rather than keeping a counter, so there is no
+    #: second store to disagree with this one -- see the migration's docstring.
+    author_session_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text=(
+            "SHA-256 of the posting session key, for rate-limiting anonymous "
+            "comments. Empty when the comment is attributed to an account. Never "
+            "the session key itself."
+        ),
+    )
     body = models.TextField()
     status = models.CharField(
         max_length=10, choices=COMMENT_STATUS_CHOICES, default=COMMENT_PENDING
