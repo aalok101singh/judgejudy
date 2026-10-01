@@ -699,6 +699,141 @@ delete it, `TestTheExportLabelFallbackStaysLoadBearing` builds a review with no
 `source_key` on purpose. **A branch that no fixture reaches is a branch no
 mutation can test.**
 
+## Resolved — found in FEAT-13, 2026-10-01 (in progress)
+
+*Seven findings from one page, `/organizer/settings/`, and **three of them were
+500s on the one route only an organizer may open** — the page was unreachable in
+practice while its guard tests all passed. The pattern is the FEAT-12 one again:
+the tests that existed were the tests that had been written to pass, and the ones
+that failed were the ones asserting a property nobody had thought to state.*
+
+### F-118 [P1] fixed — a form that omitted a date wrote `None` into it, and the Publish button was the trigger
+
+**File:** `src/reviewer/events/settings_view.py`
+**Found:** 2026-10-01, by the first run of the new page's own test file
+
+`starts_at` is `NOT NULL`, and the save path assigned `after[field] = moment` for
+every date field **whether or not the POST contained it**. Any partial submit
+nulled the column: `IntegrityError: NOT NULL constraint failed:
+events_event.starts_at`, and a 500.
+
+**The publish button is what made it reachable.** Publishing and saving shared one
+code path, and the publish form deliberately carried only the fields a
+publication needs — so the *smaller* form's omissions became the *stronger* form's
+crash. The repair is structural rather than defensive: `action=publish`
+short-circuits **before any field is parsed**, and the template's hidden inputs
+are gone, because a form that restates the settings has to restate them correctly
+or it is a second, worse way to write them.
+
+**The general rule, and it is the one worth keeping:** *two buttons on one save
+path means the weaker form's omissions are the stronger form's bugs.* Absent now
+means **unchanged** — a field is only ever written when the request actually
+carries it.
+
+### F-119 [P1] fixed — the validation path raised `KeyError`, so the validation error could never render
+
+**File:** `src/reviewer/events/settings_view.py`
+**Found:** 2026-10-01, same run
+
+The unparseable-date branch set `errors[field]` and, crucially, **skipped
+assigning `after[field]`** — and the ordering checks that follow read
+`after["submissions_close"]` unconditionally. So `POST submissions_close=not-a-date`
+was a `KeyError` instead of the intended 400.
+
+Two defects, one line: this is the same line F-118 lived on, and repairing F-118
+by restoring the previous value from the event made the `KeyError` *reachable*
+where it had been masked. **Neither the 400 nor the 500 was observable by the
+guard tests, because both live past the guard.**
+
+### F-120 [P2] fixed — a partial POST skipped every ordering check
+
+**File:** `src/reviewer/events/settings_view.py`
+**Found:** 2026-10-01, by reading the fix back rather than by a failing test
+
+The ordering rules ("submissions must close after the start", judging after
+submissions, voting after opening) validated `after` — the *submitted* values. A
+request that mentioned none of the dates therefore passed all three checks and
+saved happily. It could not be reached through the real form, which submits every
+input, but it was reachable by any hand-rolled POST, and **a validation that a
+crafted request walks past is a validation that documents an intention rather than
+enforcing it.** The checks now resolve each field as *what the event would hold
+after the save*.
+
+### F-121 [P2] fixed — a no-op save wrote audit entries, because a form cannot express sub-second precision
+
+**File:** `src/reviewer/events/settings_view.py`
+**Found:** 2026-10-01, by a test written to assert the opposite
+
+`test_a_no_op_post_writes_nothing` failed with **two** entries where zero were
+expected. The cause was not the view's logic but the **medium**: `datetime-local`
+carries whole minutes, a stored `starts_at` carries microseconds, and the two
+compare unequal — so opening the page and pressing Save without changing anything
+logged two changes to an append-only chain.
+
+`_record` now compares the values **as the form renders them**. The chain's job is
+to answer "when did judging close", and "sub-second precision was dropped by a
+date picker" is not an answer to that. The audit trail is a record of decisions,
+and a change nobody made is noise in it.
+
+### F-122 [P1] fixed — every settings save 500'd, on the `Actor`/`User` confusion
+
+**File:** `src/reviewer/events/settings_view.py`
+**Found:** 2026-10-01, first run of the page's tests
+
+`chain.append(actor=...)` takes an `accounts.User`, because `AuditEntry.actor` is a
+foreign key to it. The view passed the isolation `Actor`. That raises
+`ValueError: must be a "User" instance` — and it raised on **every save**, so the
+page was a 500 for exactly the people allowed to use it, while every test of the
+*guard* passed.
+
+**`Actor` and `User` are different types that both model "who is acting", and the
+project uses both on purpose.** The conversion point is `actor.user`, and getting
+it wrong is not a typo — it is the isolation layer refusing to be bypassed, which
+is the one property in this codebase that is never negotiable.
+
+### F-123 [P1] fixed — publishing an event with no rubric was a 500, behind a button that offered it
+
+**File:** `src/reviewer/events/settings_view.py`, `src/templates/organizer/settings.html`
+**Found:** 2026-10-01, by the publish tests failing on `ValueError`
+
+`publication.publish` raises `ValueError` when the event has no rubric. The view
+let it escape, so the only button on the page 500'd — for the organizer, the sole
+person who can see it. The button was also **rendered** on such an event, so the
+page advertised an action it could not perform.
+
+Both halves are fixed: the precondition is checked in words with a redirect, and
+`has_rubric` hides the button and says why. The check is duplicated from
+`publication.publish` deliberately — the precondition is a **product** fact (there
+is nothing to publish yet), not only an implementation detail.
+
+**And the fixture was lying.** The test fixture built no rubric, so every publish
+test was really testing the refusal, and the actual publication path — hash,
+digest, chain head — **was never executed at all**. Adding `make_rubric` to the
+fixture is what turned F-123 from a crash into a coverage hole.
+
+### F-124 [P2] fixed — `errors.__all__`, again, in the sixth template that needed it
+
+**File:** `src/templates/organizer/settings.html`
+**Found:** 2026-10-01, by lint, on a template written an hour earlier
+
+The same illegal construct as **F-106**, in a new file, in the same session that
+recorded F-106's repair. `{{ errors.__all__ }}` renders a dict key rather than a
+list of messages.
+
+**F-106's lint rule did not cover this template**, so the recurrence is also a
+finding about the rule: it fires per-template, and a template added after the rule
+was written is not covered until someone writes it. Recorded here rather than
+folded into F-106 because **the recurrence is the finding** — a rule that catches
+the sixth instance but not the first of a new file is a rule being applied by
+memory.
+
+*Seven findings. **Three were 500s reachable only by an organizer**, and all three
+were invisible to the guard tests because the guard is the *first* thing the view
+does and the bug was in everything after it. **One was a fixture that made three
+tests pass while testing nothing** (F-123), and **one was a defect in the fix for
+another** (F-119, introduced by repairing F-118). Nothing here was found by
+reading the code.*
+
 *Ten findings. **Four were found by re-running Phase 0 on a tree nobody had
 touched** (F-72…F-75), **two by the influence report's own mutation harness and by
 running the report in the real container** (F-76, F-77), and **three by the

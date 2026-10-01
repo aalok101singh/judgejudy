@@ -25,6 +25,7 @@ from judge_judy import views
 from reviewer.accounts import views as account_views
 from reviewer.ballots import views as ballot_views
 from reviewer.comments import views as comment_views
+from reviewer.events import settings_view
 from reviewer.projects import views as project_views
 from reviewer.projects.views import current_event
 from reviewer.reviews import api as api_views
@@ -162,6 +163,10 @@ urlpatterns = [
     path("judge/", _console, name="judge_console"),
     path("judge/review/<int:assignment_id>/", _review_form, name="judge_review"),
     path("organizer/assignments/", _organizer_assignments, name="organizer_assignments"),
+    # The lifecycle, in a browser. Before this, opening the submission window or
+    # publishing results meant a shell command, so a tool whose setup ended in a
+    # shell was a tool for the person who built it.
+    path("organizer/settings/", settings_view.settings_view, name="organizer_settings"),
     # The T2 surface, and the four checks that have been failing with real URLs
     # since the first commit. `judge_scores` is a plain Django view rather than a
     # DRF viewset, and `reviewer/reviews/api.py` explains why at length: DRF

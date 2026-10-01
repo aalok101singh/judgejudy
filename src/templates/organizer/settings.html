@@ -1,0 +1,143 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Event settings &middot; {{ event.name }}</title>
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+</head>
+<body>
+  <main class="wrap">
+    <p class="eyebrow">Organizer</p>
+    <h1>{{ event.name }}</h1>
+    <p class="lede">
+      Everything that gates this event. Each change is written to the audit chain
+      with its old and new value, so "when did judging close" is answerable later.
+    </p>
+
+    {% if messages %}
+      {% for message in messages %}
+        <p class="notice notice--good" role="status">{{ message }}</p>
+      {% endfor %}
+    {% endif %}
+    {% if published %}
+      <p class="notice notice--good" role="status">
+        Published. The ranking is now public, with its hash and the moment recorded.
+      </p>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <fieldset>
+        <legend>The event</legend>
+        <label for="name">Name</label>
+        <input id="name" name="name" value="{{ values.name }}" required>
+        {% if errors.name %}<p class="field-error">{{ errors.name }}</p>{% endif %}
+
+        <label for="description">Description</label>
+        <textarea id="description" name="description" rows="3">{{ values.description }}</textarea>
+      </fieldset>
+
+      <fieldset>
+        <legend>Windows</legend>
+        <p class="hint">
+          The submission window gates <code>/projects/new</code>, which is why the
+          acceptance checker's "closed event refuses submissions" is about these
+          dates and nothing else.
+        </p>
+
+        <label for="starts_at">Starts</label>
+        <input id="starts_at" name="starts_at" type="datetime-local" value="{{ values.starts_at }}">
+        {% if errors.starts_at %}<p class="field-error">{{ errors.starts_at }}</p>{% endif %}
+
+        <label for="submissions_open">Submissions open</label>
+        <input id="submissions_open" name="submissions_open" type="datetime-local"
+               value="{{ values.submissions_open }}">
+        {% if errors.submissions_open %}<p class="field-error">{{ errors.submissions_open }}</p>{% endif %}
+
+        <label for="submissions_close">Submissions close</label>
+        <input id="submissions_close" name="submissions_close" type="datetime-local"
+               value="{{ values.submissions_close }}">
+        {% if errors.submissions_close %}<p class="field-error">{{ errors.submissions_close }}</p>{% endif %}
+
+        <label for="judging_closes_at">Judging closes</label>
+        <input id="judging_closes_at" name="judging_closes_at" type="datetime-local"
+               value="{{ values.judging_closes_at }}">
+        {% if errors.judging_closes_at %}<p class="field-error">{{ errors.judging_closes_at }}</p>{% endif %}
+      </fieldset>
+
+      <fieldset>
+        <legend>Voting</legend>
+        <p class="hint">
+          <strong>Closed</strong> is the safe default, because a public vote nobody
+          can be deduplicated is the free-for-all the brief warns about.
+          <strong>Open link</strong> needs no account, which is the mode to pick
+          when you want strangers to vote.
+        </p>
+
+        <label for="voting_mode">Mode</label>
+        <select id="voting_mode" name="voting_mode">
+          {% for value, wording in voting_modes %}
+            <option value="{{ value }}" {% if values.voting_mode == value %}selected{% endif %}>{{ wording }}</option>
+          {% endfor %}
+        </select>
+        {% if errors.voting_mode %}<p class="field-error">{{ errors.voting_mode }}</p>{% endif %}
+
+        <label for="voting_opens_at">Voting opens</label>
+        <input id="voting_opens_at" name="voting_opens_at" type="datetime-local"
+               value="{{ values.voting_opens_at }}">
+
+        <label for="voting_closes_at">Voting closes</label>
+        <input id="voting_closes_at" name="voting_closes_at" type="datetime-local"
+               value="{{ values.voting_closes_at }}">
+        {% if errors.voting_closes_at %}<p class="field-error">{{ errors.voting_closes_at }}</p>{% endif %}
+      </fieldset>
+
+      <button type="submit" name="action" value="save">Save</button>
+    </form>
+
+    <fieldset>
+      <legend>Results</legend>
+      {% if published %}
+        <p class="hint">
+          Published. Publishing again writes <em>another</em> publication row rather
+          than editing this one &mdash; the history of publications is the tamper
+          evidence.
+        </p>
+      {% else %}
+        <p class="hint">
+          Hidden. The ranking is refused to everyone but an organizer, which is
+          what the brief asks for during the voting window. Publishing computes a
+          content hash and records the moment.
+        </p>
+        {% if has_rubric %}
+        <form method="post">
+          {% csrf_token %}
+          {% comment %}
+            Carries `action=publish` and nothing else. An earlier version smuggled
+            the settings through as hidden inputs, which meant this form had to
+            restate every field correctly or it nulled a NOT NULL column -- the
+            view now short-circuits on `action`, so an empty form is the honest
+            one.
+          {% endcomment %}
+          <button type="submit" name="action" value="publish">Publish results</button>
+        </form>
+        {% else %}
+          <p class="field-error">
+            There is no rubric on this event yet, so there is nothing to publish.
+            Add one and this button appears.
+          </p>
+        {% endif %}
+      {% endif %}
+    </fieldset>
+
+    <p class="hint">
+      The rubric's criteria and weights are <strong>not</strong> editable here. They
+      stop changing once a judge has scored, because a leaderboard that moves
+      underneath the people who produced it is the thing this whole project exists
+      to avoid.
+    </p>
+  </main>
+</body>
+</html>

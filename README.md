@@ -257,6 +257,7 @@ and an unshareable record replicates nothing.
 | `/judge/` | **The judge console.** Draft, submit, lock. |
 | `/judge/review/<int:assignment_id>/` | The rubric form for one assignment. |
 | `/organizer/assignments/` | The assignment plan and its min-cut certificate. |
+| `/organizer/settings/` | **The lifecycle, in a browser.** The submission window, the voting mode and its window, and publishing results. Every change is an audit entry with its old and new value. The rubric is deliberately *not* editable here — weights stop changing once a judge has scored, so a leaderboard cannot move underneath the people who produced it. |
 | `/vote/` | **The public ballot.** A per-voter order, stable across requests, rendered with its seed. Weight 1 on every project *exactly* exhausts the identity budget, so favouring one project means giving another less. |
 | `/projects/<str:project_id>/comments/` | Comments on a project. Plain text, never markup. Everything is **held for moderation**; nothing is public until a human approves it. |
 | `/results/` | The ranking, refused while hidden. Always labelled with how it was computed. |
@@ -454,7 +455,7 @@ volume: `just prove-offline` and `just mutation-test`, which **corrupts 114 thin
 on purpose and requires every one to be caught** by a named test.
 
 **Findings.** [`blueprint/context/findings.md`](blueprint/context/findings.md) is
-the full record: **117 findings**, what was wrong, what was fixed with a test, and
+the full record: **124 findings**, what was wrong, what was fixed with a test, and
 what was declined and why. Several are the same class of defect in a new medium —
 a min-cut certificate that named no judges, a leaderboard that would have been
 refused for the wrong reason, a CSV column of nothing, an acceptance criterion
