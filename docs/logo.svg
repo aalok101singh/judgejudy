@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 30 220 152" width="220" height="152"
+     role="img" aria-labelledby="jj-title jj-desc">
+  <title id="jj-title">Judge Judy</title>
+  <desc id="jj-desc">A balance scale: the beam level, both pans hanging even.</desc>
+
+  <!--
+    THE MARK. Scales, not a gavel.
+
+    A gavel says "courtroom clipart" and every hackathon submission has one. A
+    balance says the thing this project is actually about: a comparison you can
+    defend, with both pans at the same height. The beam is drawn LEVEL, which is
+    the whole argument: an unnormalized leaderboard is still an honest one
+    because we measured that there was nothing to correct.
+
+    Two colours, no gradient, no text. Text is deliberately absent: this renders
+    through an <img> on a README where the visitor's font stack is unknowable,
+    and a wordmark set in a font that might not exist is worse than no wordmark.
+    The name is set in the Markdown beside it, in the reader's own font.
+
+    Ink #16161d, brass #c9a227. Deliberately not the purple-to-blue gradient that
+    a "judging platform" reaches for by default.
+  -->
+
+  <g fill="none" stroke="#16161d" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <!-- the post and its foot -->
+    <path d="M120 62 V168"/>
+    <path d="M88 168 H152"/>
+
+    <!-- the beam. Kept SHORT relative to the pans: a long thin beam over small
+         pans reads as sparse at favicon size, which is the size that matters. -->
+    <path d="M42 72 H198"/>
+
+    <!-- hangers, straight down from each end of the beam -->
+    <path d="M50 72 L28 116 M50 72 L72 116"/>
+    <path d="M190 72 L168 116 M190 72 L212 116"/>
+  </g>
+
+  <!-- the pans, filled faintly so the brass reads as brass and not as a line -->
+  <path d="M22 116 H78 Q50 152 22 116 Z" fill="#c9a227" fill-opacity="0.22"
+        stroke="#16161d" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M162 116 H218 Q190 152 162 116 Z" fill="#c9a227" fill-opacity="0.22"
+        stroke="#16161d" stroke-width="8" stroke-linejoin="round"/>
+
+  <!-- the finial -->
+  <circle cx="120" cy="50" r="12" fill="#c9a227"/>
+</svg>
