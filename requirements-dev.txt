@@ -31,7 +31,7 @@ pytest-django==4.14.0
 #   - bound max_examples=50 and build small worlds with st.just / st.builds
 #     rather than from_model() on the big tables.
 #   - keep it in the verification suite, not the critical path.
-hypothesis==6.168.2
+hypothesis==6.168.3
 
 # --- linting -----------------------------------------------------------------
 # The lint rule that forbids `Review.objects.all()` outside the manager is a
