@@ -101,7 +101,14 @@ jobs:
   container:
     name: container gate (run.py 7/7, offline, proofs)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Generous on purpose, and the budget is worth stating rather than guessing
+    # at. A GitHub runner has no Docker layer cache to start with, so the build
+    # is cold; the suite runs twice, once on the host and once inside the image
+    # because `just check` includes it; and prove-offline boots a third
+    # container under `--network none`. 45 minutes was not enough and the job was
+    # cancelled mid-gate, which is the worst way for a gate to fail: it reports
+    # nothing about the code.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -116,13 +123,14 @@ jobs:
       - run: .venv/bin/pip install -q -r requirements-dev.txt
       - uses: extractions/setup-just@v2
 
-      # The dashboard the project publishes a cold-start number against.
-      - name: cold start
-        run: just coldstart
+      # Build once, explicitly. `just check` builds again, but by then the layer
+      # cache is warm and that build is nearly free.
+      - name: build the image
+        run: just build
 
-      # THE GATE. Clean volume, network-independent build, up, the
-      # organizers' checker (7 checks: 3x T1, 4x T2), the isolation proof, the
-      # census, the assignment certificate, and the suite inside the image.
+      # THE GATE. Clean volume, network-independent build, up, the organizers'
+      # checker (7 checks: 3x T1, 4x T2), the isolation proof, the census, the
+      # assignment certificate, and the suite inside the image.
       #
       # Note it gates on the report BODY, not on run.py's exit code: run.py
       # returns 0 even when every check FAILs, so gating on its status would
@@ -130,14 +138,10 @@ jobs:
       - name: just check
         run: just check
 
-      # The claim that the container needs no network, proved rather than
-      # asserted: the image is started with `--network none` and probed from
-      # inside the same empty netns, including rendering the embeddable widget.
-      - name: prove-offline
-        run: just prove-offline
-
-      # A committed artefact. If regenerating it changes the file, the panel
-      # would score something other than what is committed.
+      # A committed artefact, so it is regenerated here and compared. If it
+      # differs, the panel would score something other than what is committed.
+      # This runs before prove-offline, while the portal from `just check` is
+      # certainly still up.
       - name: the committed acceptance report is current
         run: |
           just report
@@ -145,6 +149,39 @@ jobs:
             echo "::error::acceptance-report.txt is stale -- run 'just report' and commit it"
             exit 1
           fi
+
+      # The claim that the container needs no network, proved rather than
+      # asserted: the image is started with `--network none` and probed from
+      # inside the same empty netns, including rendering the embeddable widget.
+      - name: prove-offline
+        run: just prove-offline
+
+  coldstart:
+    name: cold start (measurement, not a gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # **A measurement, deliberately not a required check.** It reports seconds
+    # to a serving page against a 60 s budget, and the number in the README was
+    # observed on specific hardware. A shared runner's figure is not comparable
+    # to it, and gating on it would mean a red build that says something about
+    # the runner rather than about the code -- a check that fails for a reason
+    # nobody can act on. So it runs where a human is already looking.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install --upgrade pip -q
+      - run: .venv/bin/pip install -q -r requirements-dev.txt
+      - uses: extractions/setup-just@v2
+      - name: cold start from an empty volume
+        run: just coldstart
 
   mutation:
     name: mutation harness

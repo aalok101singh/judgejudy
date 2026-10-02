@@ -15,6 +15,26 @@ updates:
       timezone: Etc/UTC
     commit-message:
       prefix: "build(deps)"
+    ignore:
+      # **No major bumps, on purpose.**
+      #
+      # Dependabot's first run against this repository opened "bump django from
+      # 5.2.17 to 6.1.1" -- which is the precise upgrade `requirements.txt`
+      # argues against at length: the organizers intend to fork this and run it
+      # for a decade, so the 5.2 LTS line is the right trade even though 6.1 is
+      # the newer release. An automated pull request that contradicts a
+      # documented decision gets declined by hand every time, and the one that
+      # eventually gets merged by accident is the day the argument is lost.
+      #
+      # Patch and minor updates still arrive automatically. A major bump is a
+      # decision, and a decision wants a person reading the changelog.
+      #
+      # Scoped to this ecosystem only: the GitHub Actions bumps below are wanted,
+      # because the runner images deprecate the Node version older actions
+      # target.
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
     groups:
       python-dependencies:
         patterns:
