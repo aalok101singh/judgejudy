@@ -132,29 +132,20 @@ jobs:
           docker compose version
           python --version
 
-      - name: bring the stack up WITHOUT --wait
-        run: python tools/docker.py --seed-demo compose -f docker-compose.yml up -d
-
-      - name: poll health for three minutes and report
+      - name: bring the stack up the way the gate does, but bounded and loud
         run: |
           set -u
-          for i in $(seq 1 18); do
-            echo "--- attempt $i ($((i*10))s) ---"
-            docker inspect --format '{{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' judgejudy-portal-1 || echo "no container"
-            status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' judgejudy-portal-1 2>/dev/null || echo missing)
-            if [ "$status" = "healthy" ]; then echo "HEALTHY after $((i*10))s"; break; fi
-            sleep 10
-          done
-
-          echo "===== compose ps ====="
-          docker compose -f docker-compose.yml ps || true
-          echo "===== health log ====="
-          docker inspect --format '{{json .State.Health}}' judgejudy-portal-1 2>/dev/null | head -c 4000 || true
-          echo
-          echo "===== healthcheck run by hand ====="
-          docker compose -f docker-compose.yml exec -T portal python /app/healthcheck.py; echo "healthcheck exit=$?"
-          echo "===== last 60 lines of the application log ====="
-          docker compose -f docker-compose.yml logs --tail=60 || true
+          # **`just check` itself, minus the rest.** This is the exact command
+          # the gate runs, with the helper's own backstop. It is here because the
+          # gate kept hanging inside `compose up` on this runner, and a
+          # line-buffered, timeout-bounded version tells us in three minutes
+          # which of the two candidate causes it is: the bring-up not returning,
+          # or the health poll not seeing a healthy container.
+          #
+          # Nothing is captured, so anything the helper prints is visible while it
+          # is happening rather than at the end.
+          python tools/wait_healthy.py --seed-demo --up-timeout 240 --timeout 120
+          echo "wait_healthy exit=$?"
 
   # ---------------------------------------------------------------------
   # The expensive gate. It needs a container, so it is split out to fail on

@@ -40,14 +40,24 @@ import time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from docker import resolve  # sibling module; the path insert above is what makes this legal
 
+# **Line buffering, or this tool says nothing while it is waiting for
+# something.** `just` runs recipes through a shell, so stdout here is a pipe
+# rather than a terminal, and Python block-buffers a pipe in 8 KB chunks. The
+# first version of this helper therefore emitted *no output at all* on a CI
+# runner -- not one line, for two hours -- because it was blocked and never
+# flushed. A tool whose whole purpose is to tell you what it is waiting for
+# cannot have its output buffered until it is done. This was found by reading a
+# log with zero lines in it and wondering why.
+sys.stdout.reconfigure(line_buffering=True)
+
 CONTAINER = "judgejudy-portal-1"
 
 
-def run(argv: list[str], env_extra: dict[str, str] | None = None):
+def run(argv: list[str], env_extra: dict[str, str] | None = None, timeout: float | None = None):
     env = os.environ.copy()
     if env_extra:
         env.update(env_extra)
-    return subprocess.run(argv, capture_output=True, text=True, env=env)
+    return subprocess.run(argv, capture_output=True, text=True, env=env, timeout=timeout)
 
 
 def compose(seed_demo: bool, compose_file: str, *args: str) -> list[str]:
@@ -118,16 +128,39 @@ def main(argv: list[str] | None = None) -> int:
         default=120.0,
         help="seconds to wait for the healthcheck (default: 120)",
     )
+    ap.add_argument(
+        "--up-timeout",
+        type=float,
+        default=180.0,
+        help="seconds to allow `compose up -d` itself (default: 180)",
+    )
     ap.add_argument("-f", "--file", default="docker-compose.yml", help="compose file")
     ap.add_argument("--container", default=CONTAINER, help="container name")
     args = ap.parse_args(argv)
 
     env = {"JJ_SEED_DEMO": "1"} if args.seed_demo else None
-    up = [*compose(args.seed_demo, args.file, "up", "-d")]
-    print("-- up -d (deliberately not --wait; see the module docstring) --")
-    proc = run(up, env_extra=env)
-    sys.stdout.write(proc.stdout)
-    sys.stderr.write(proc.stderr)
+
+    # **The bring-up inherits stdio and carries its own timeout.** Two reasons,
+    # both learned the hard way on a runner where this hung for two hours.
+    #
+    # Inheriting stdio: `capture_output=True` makes `subprocess.run` wait for EOF
+    # on the child's pipes, and Compose can hold a container's log stream open
+    # even with `-d`. The child may have finished perfectly while the parent
+    # waits forever for a pipe that will never close.
+    #
+    # A timeout: whatever Compose does, this process gets to finish and say so.
+    # **A bring-up step with no bound is the defect this whole module exists to
+    # remove** -- applying it only to the health poll, and not to the command
+    # that starts the container, would have left the original hang exactly where
+    # it was.
+    print("-- up -d (deliberately not --wait; see the module docstring) --", flush=True)
+    up_argv = [*compose(args.seed_demo, args.file, "up", "-d")]
+    try:
+        proc = subprocess.run(up_argv, env={**os.environ, **(env or {})}, timeout=args.up_timeout)
+    except subprocess.TimeoutExpired:
+        print(f"   compose up did not return within {args.up_timeout:.0f}s")
+        diagnose(args.seed_demo, args.file, args.container)
+        return 124
     if proc.returncode != 0:
         print(f"compose up exited {proc.returncode}")
         return proc.returncode
