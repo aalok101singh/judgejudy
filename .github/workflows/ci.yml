@@ -94,21 +94,28 @@ jobs:
       - run: .venv/bin/python -m pytest -q
 
   # ---------------------------------------------------------------------
-  # The expensive gates. These need a container, so they are split out to
-  # fail on the slow thing without hiding the fast results.
+  # The expensive gate. It needs a container, so it is split out to fail on
+  # the slow thing without hiding the fast results -- and it is skipped on
+  # pull requests, because the suite runs twice (host and image) and a
+  # required check nobody waits for stops being read.
   # ---------------------------------------------------------------------
 
   container:
     name: container gate (run.py 7/7, offline, proofs)
     runs-on: ubuntu-latest
-    # Generous on purpose, and the budget is worth stating rather than guessing
-    # at. A GitHub runner has no Docker layer cache to start with, so the build
-    # is cold; the suite runs twice, once on the host and once inside the image
-    # because `just check` includes it; and prove-offline boots a third
-    # container under `--network none`. 45 minutes was not enough and the job was
-    # cancelled mid-gate, which is the worst way for a gate to fail: it reports
-    # nothing about the code.
-    timeout-minutes: 75
+    # **Not on pull requests, and that is a decision rather than an omission.**
+    # `just check` runs the full suite a second time inside the image -- which is
+    # worth doing, because it is the only proof that what ships is what was
+    # tested -- and on a shared runner that is the single most expensive thing
+    # here. Measured: it consumed a 45-minute budget and then a 75-minute one.
+    #
+    # A required check nobody waits for is not a gate, it is a queue. So a
+    # contributor's PR gets the fast jobs (spec, lint, test -- about ten
+    # minutes) and the expensive gate runs on `main`, on the schedule, and on
+    # demand. This mirrors how the project already treats `just check`: a
+    # verification-break command, not a per-save one.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
