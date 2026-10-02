@@ -175,11 +175,18 @@ def main() -> int:
     print("\n-- up --")
     started = time.perf_counter()
 
-    # --wait blocks until the healthcheck passes, which is the container's own
-    # definition of ready. The page fetch after it is what stops the clock for
-    # the criterion.
-    run([*compose, "up", "-d", "--wait", "--wait-timeout", "120"])
+    # The wait is tools/wait_healthy.py, not `up -d --wait`: on Compose v2.38.2
+    # that flag blocks indefinitely while the container reports healthy, so a
+    # timing measurement taken around an unbounded wait measures nothing. The
+    # helper polls with a deadline and prints a diagnosis when it expires.
+    from wait_healthy import main as wait_healthy
+
+    started = time.perf_counter()
+    rc = wait_healthy(["--file", "docker-compose.yml", "--timeout", "120"])
     healthy_at = time.perf_counter() - started
+    if rc != 0:
+        print("   the container never became healthy; see the diagnosis above")
+        raise SystemExit(rc)
     print(f"   healthcheck green at {healthy_at:.1f}s")
 
     status, body = 0, ""

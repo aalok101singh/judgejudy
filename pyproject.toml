@@ -143,6 +143,7 @@ ignore = [
 "tools/docker.py" = ["S603", "S607"]
 "tools/coldstart.py" = ["S603", "S607"]
 "tools/prove_offline.py" = ["S603", "S607"]
+"tools/wait_healthy.py" = ["S603", "S607"]
 "tools/run_acceptance.py" = ["S603", "S607", "S310"]
 "tools/doctor.py" = ["S603", "S607"]
 

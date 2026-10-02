@@ -153,8 +153,16 @@ build:
 # and is serving 500s.
 #
 # Start the container and wait for the healthcheck.
+#
+# `tools/wait_healthy.py`, NOT `compose up -d --wait --wait-timeout 120`. On
+# Compose v2.38.2 that flag was observed to block indefinitely while the
+# container it was waiting for reported healthy -- cancelled at 45, 75 and 120
+# minutes with the container listening the whole time. An unbounded wait cannot
+# fail and cannot explain itself, so the replacement polls with a deadline and
+# prints the health log, the healthcheck's own output and the log tail when it
+# expires. `tools/coldstart.py` uses the same helper.
 up:
-    {{compose_base}} up -d --wait --wait-timeout 120
+    {{pyq}} tools/wait_healthy.py
     @echo "portal healthy: http://localhost:8080/"
 
 # `down` KEEPS the volume, which is what makes it cheap; `clean` is the one that
@@ -276,7 +284,7 @@ check:
     @echo "      asks for it. A plain `docker compose up` does not, and gets an empty"
     @echo "      portal with /setup/ open instead. The flag goes through tools/docker.py"
     @echo "      rather than a shell export because just runs recipes through cmd.exe."
-    @{{compose_base_seed}} up -d --wait --wait-timeout 120
+    @{{pyq}} tools/wait_healthy.py --seed-demo
     @echo ""
     @echo "=========================================================="
     @echo " 4/6  the organizers' checker (7 checks: 3x T1, 4x T2)"
@@ -303,7 +311,17 @@ check:
 # Regenerate acceptance-report.txt.
 # Regenerate the committed acceptance transcript.
 #
-# **No second line to print it, and that is deliberate.** It used to be
+# **Run it against a seeded, running portal** -- i.e. straight after `just check`.
+# This recipe calls `run.py` directly, so nothing gates it, and `run.py` always
+# exits 0. Against the wrong state it writes a FAIL transcript over the good
+# committed one, which is how a repository ends up shipping a report that says
+# three checks fail. I did exactly that while changing the wait helper: ran this
+# after `just prove-offline`, which leaves the stack up but unseeded, and got a
+# 4/7 report on disk. CI catches it (`just report` then
+# `git diff --exit-code acceptance-report.txt`), which is the backstop; this
+# comment is the front one.
+#
+# No second line to print it, and that is deliberate. It used to be
 # `@type acceptance-report.txt`, which is cmd.exe-only. The portable-looking
 # replacement -- `python -c "print(open(...).read())"` -- is worse: `pyq` already
 # wraps the interpreter in double quotes because this repository's path contains
