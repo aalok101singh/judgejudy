@@ -44,6 +44,29 @@ keys/
 .env
 .env.*
 
+# --- the planning layer ------------------------------------------------------
+# NOT part of the product, and deliberately not published.
+#
+# `bible/` is 400 KB of competition research (mission and win conditions,
+# requirements traceability, an hour-by-hour delivery plan). `blueprint/` is the
+# build plan, the 126-entry findings ledger and fourteen feature archives.
+# `AGENTS.md` is the operating instructions for an AI agent working in this
+# folder, and the two files at the root were scratch notes addressed to one.
+#
+# None of it is what this repository is for. A repository whose subject is a
+# judging platform should open on the judging platform. Git history keeps all of
+# it -- `git show HEAD~1:blueprint/context/findings.md` -- so nothing is lost, it
+# is only no longer the front door.
+#
+# The consequence is handled rather than ignored: `tools/verify_spec.py` and
+# `tests/test_schema_contract.py` read these files, and both now SKIP the checks
+# whose subject is absent instead of failing on a clone that has never seen it.
+AGENTS.md
+HANDOFF.md
+context.txt
+bible/
+blueprint/
+
 # --- editors and OS -----------------------------------------------------------
 .vscode/
 .idea/

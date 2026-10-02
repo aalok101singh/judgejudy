@@ -1,0 +1,50 @@
+version: 2
+updates:
+  # Dependabot's default is one pull request per dependency. On a project this
+  # small that is not a feature, it is a review-cost problem: a burst of unrelated
+  # six-line diffs is enough to stop anyone reading a pull request properly, and
+  # the security update nobody merged last month was probably in that burst. Each
+  # update below is bundled into one pull request per ecosystem instead.
+  - package-ecosystem: pip
+    directory: /
+    open-pull-requests-limit: 10
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+        # Updates arrive together, get read together, and get reverted together.
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: /
+    open-pull-requests-limit: 10
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    labels:
+      - dependencies
+      - ci
+
+  # requirements-dev.txt is read alongside requirements.txt by the pip ecosystem
+  # above: Dependabot reads every requirements file it finds in the directory,
+  # so test-only and runtime pins are grouped into the same pull request and
+  # cannot be half-applied.

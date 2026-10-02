@@ -26,7 +26,16 @@
 # `python` on PATH is 3.14.6 without Django (F-38). This is the venv, and it
 # is named explicitly everywhere rather than trusting `python` to mean the
 # right thing.
-py := justfile_directory() / ".venv" / "Scripts" / "python.exe"
+# POSIX uses `.venv/bin/python`, Windows uses `.venv\Scripts\python.exe`. A
+# hardcoded one of those is why this file could not be run by a Linux CI runner
+# at all, which meant CI would have had to re-implement the gate rather than
+# call it -- and a copied gate is a gate that proves something adjacent to the
+# thing. So the interpreter forks with the host, like the shell below does.
+py := if os_family() == "windows" {
+    justfile_directory() / ".venv" / "Scripts" / "python.exe"
+} else {
+    justfile_directory() / ".venv" / "bin" / "python"
+}
 
 # The repository path contains a space ("Judge Judy"), so every invocation is
 # quoted. Without the quotes cmd.exe parses `C:\Users\Aalok\Desktop\Judge` as
@@ -250,7 +259,10 @@ check:
     @echo " 1/6  spec layer (no Docker). The check count is not quoted here on"
     @echo "=========================================================="
     @echo "      purpose: verify_spec prints the count it actually ran -- F-72"
-    @python tools/verify_spec.py -q || (echo "SPEC GATE FAILED" & exit /b 1)
+    @echo "      No '|| exit 1' wrapper: just already aborts a recipe on the first"
+    @echo "      failing line, and the portable spelling of the old cmd.exe one was"
+    @echo "      not portable. verify_spec prints its own failures."
+    @python tools/verify_spec.py -q
     @echo ""
     @echo "=========================================================="
     @echo " 2/6  clean volume, network-independent build"
@@ -289,9 +301,18 @@ check:
 # hand-edit it: the panel runs the identical program.
 
 # Regenerate acceptance-report.txt.
+# Regenerate the committed acceptance transcript.
+#
+# **No second line to print it, and that is deliberate.** It used to be
+# `@type acceptance-report.txt`, which is cmd.exe-only. The portable-looking
+# replacement -- `python -c "print(open(...).read())"` -- is worse: `pyq` already
+# wraps the interpreter in double quotes because this repository's path contains
+# a space, and a *second* quoted region makes cmd.exe parse
+# `C:\Users\Aalok\Desktop\Judge` as the command. One quoted region is safe; two
+# are not. So the recipe writes the file and stops. `cat acceptance-report.txt`,
+# or `type` on Windows, to read it.
 report:
     @{{pyq}} run.py .dogfood.toml > acceptance-report.txt
-    @type acceptance-report.txt
 
 # --- local development --------------------------------------------------------
 

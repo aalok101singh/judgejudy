@@ -1,0 +1,91 @@
+name: Feature request
+description: The problem first. The solution is a guess until we have agreed on the problem.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Judge Judy deliberately **ships one event per deployment** and
+        **deliberately cut webhooks**. Those are design decisions, not oversights,
+        and a proposal that assumes otherwise is likely to be declined. Read
+        ["What we did not build" in the README](https://github.com/aalok101singh/judgejudy#what-we-did-not-build)
+        before writing — it names what was measured, what was refused, and why.
+
+        That is not a reason to stay quiet. The most useful request we have read
+        started with an organizer describing a thing they had to do by hand after
+        every event, and ended somewhere we did not expect.
+
+        The order of the form is deliberate: **the problem comes before the
+        proposed change.** If a solution is described second, it is easier for a
+        reader to mistake it for the requirement. Several things this project does
+        exist only because a first description of the problem turned out not to
+        need the thing we had planned.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you were trying to do, and what got in the way. Describe the situation rather than the feature — a concrete event, a real number of judges, a real thing that surprised you. This is the field that decides whether the request is worth building.
+      placeholder: |
+        I ran a 60-judge, 200-project event. Every time the chambers changed, I had
+        to tell the judges by hand, because the audit entry exists but nothing
+        surfaces it to the people affected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The change you have in mind
+      description: Optional, and it can be wrong. If the problem above is clear enough, we would rather solve it a different way. If you have already tried something, say what happened — a failed attempt is information.
+      placeholder: |
+        Maybe the Record could have a per-role view showing only the entries that
+        actor is allowed to know about.
+      render: text
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Including "a spreadsheet" and "nothing at all". If you have already worked around it, the workaround tells us how common the problem is and how much it is costing.
+      placeholder: |
+        I could export the audit chain and filter it by hand, which is what I do
+        now, and it takes about twenty minutes per change.
+      render: text
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which part of the product this touches
+      description: Pick `not sure` if that is the honest answer. It is genuinely useful information.
+      options:
+        - core judging
+        - organizer tooling
+        - public/voting
+        - integrations
+        - documentation
+        - not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: offline
+    attributes:
+      label: Can it keep the offline guarantee
+      description: |
+        Optional, but it is the question we will ask first. One deployment runs
+        with `--network none`, the container is proved to work without a network,
+        and the widget renders with no CDN, no webfont and no fetch. Anything that
+        needs a hosted API, an outbound connection or a key breaks that, and Rule V
+        says we do not do it. If your answer is "no, and here is why that is still
+        right", that is a legitimate thing to argue.
+      render: text
+
+  - type: checkboxes
+    id: checked-what-we-did-not-build
+    attributes:
+      label: Before you submit
+      options:
+        - label: I read "What we did not build" in the README, and my request is not one of the things it names.
+        - label: I understand a proposal may be declined, and that would be a decision about scope rather than about whether my problem is real.

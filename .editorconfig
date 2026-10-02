@@ -1,0 +1,41 @@
+# EditorConfig is opinionated about whitespace and silent about language.
+# https://editorconfig.org
+#
+# `.gitattributes` is the authority on line endings because a stray CR is a
+# RUNTIME error here, not a cosmetic one: the container executes
+# docker/entrypoint.sh, and a CRLF checkout fails with
+# `/app/entrypoint.sh: /bin/sh^M: bad interpreter`. That is a one-character
+# difference between a portal that boots and one that does not -- and it would
+# only ever appear on a reviewer's machine, never on the author's.
+#
+# So this file does NOT try to restate end_of_line. It cannot be trusted to
+# override .gitattributes anyway, and two files disagreeing about line endings
+# is worse than one. What follows is indentation and character set, which are
+# safe to agree on.
+
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 100
+
+[*.{md,markdown}]
+# Two trailing spaces is a hard line break in Markdown, so trimming them
+# silently changes how the document renders. This is the one file type where
+# the "helpful" default is a bug.
+trim_trailing_whitespace = false
+indent_size = 2
+
+[*.{yml,yaml,json,toml}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+[*.svg]
+insert_final_newline = true
+trim_trailing_whitespace = false

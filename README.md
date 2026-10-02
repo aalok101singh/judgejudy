@@ -508,8 +508,8 @@ bypass, which is also a test — beat leaving it out.
 
 ### The fifteen decisions, itemized
 
-Every one of these changes behaviour, and none is revisited in a hurry. Full
-reasoning in [`blueprint/project-plan.md`](blueprint/project-plan.md) §6.
+Every one of these changes behaviour, and none is revisited in a hurry. The
+reasoning behind each is in the commit that introduced it.
 
 | | Decision | The one-line reason |
 |---|---|---|
@@ -569,8 +569,7 @@ and our own gate enforces the organizers' rule `overclaim = claimed − verified
 entering T3 in the field their program parses turns the gate red with the word
 **OVERCLAIM** in it. **T3 being built is not the same as T3 being entered in the
 scoring field**, and only the first is ours to decide. Proved by running it, then
-reverted; recorded as F-91, accepted by decision, with the arithmetic in
-`blueprint/history/features/break-3-t3-claim.md`. A T4 claim is blocked the same
+reverted; recorded as F-91, accepted by decision. A T4 claim is blocked the same
 way.
 
 **`run.py` always exits 0.** It prints `FAIL` and returns 0 in every situation, by
@@ -584,32 +583,36 @@ the suite. Two more run at every verification break because each needs a clean
 volume: `just prove-offline` and `just mutation-test`, which **corrupts 116 things
 on purpose and requires every one to be caught** by a named test.
 
-**Findings.** [`blueprint/context/findings.md`](blueprint/context/findings.md) is
-the full record: **126 findings**, what was wrong, what was fixed with a test, and
-what was declined and why. Several are the same class of defect in a new medium — a
-min-cut certificate that named no judges, a leaderboard that would have been refused
-for the wrong reason, a CSV column of nothing, an acceptance criterion that passed
-with the importer writing nothing at all, and a test suite whose fixture omitted a
-precondition so three "passing" publication tests executed nothing whatsoever.
+**126 defects were found and recorded during the build** — **126 findings**, if you
+count the ones we declined — and they are the reason to trust anything above. A
+min-cut certificate that named no judges. A leaderboard that would have been refused
+for the wrong reason. A CSV column of nothing. An acceptance criterion that passed
+with the importer writing nothing at all. A test suite whose fixture omitted a
+precondition, so three "passing" publication tests executed nothing whatsoever.
+**None of them was found by reading the code** — they surfaced because a gate, a
+harness or a review refused to go along.
 
-**Every number in this file is generated, not transcribed**, and a spec gate
-re-derives the counts from the ledger and the harness — it caught three stale
-tallies within a minute of writing them, and caught this file breaching its own
-size budget. Two defects it does *not* yet check are named in the FEAT-13 archive
-rather than left for the next session to assume.
+That ledger is not shipped here, because a repository about a judging platform
+should not open on 900 KB of build process. It is in the git history: `git log --
+stat`, and the full corpus is recoverable with `git show`. **Every number in this
+file is generated, not transcribed**, and `tools/verify_spec.py` re-derives the
+counts from `fixtures.json` and `run.py` rather than believing them — it caught
+three stale tallies within a minute of writing them, and caught this file
+breaching its own size budget.
 
 | | |
 |---|---|
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | the container, boot order, layering |
 | [`DATA-MODEL.md`](DATA-MODEL.md) | the schema and the fixture it holds |
 | [`JUDGING.md`](JUDGING.md) | rubric, assignment, isolation, normalization |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | how to run the gates, and what a good PR looks like |
+| [`SECURITY.md`](SECURITY.md) | how to report a vulnerability |
 | [`docs/REAL-FIXTURE-RESULTS.md`](docs/REAL-FIXTURE-RESULTS.md) | the normalization proof, fully generated and asserted in CI |
-| `blueprint/history/features/` | one file per feature, including the ones that were wrong |
 
 **Repository layout.** `src/reviewer/` holds the domain apps; `isolation/` (the
 accessor), `importer/` (loader and census) and `io/` (the Archive) are non-app
-packages. `blueprint/` is the plan and the ledger, `bible/` is 330 KB of research to
-be read by section, never whole.
+packages. `tools/` holds the gates — the spec layer, the acceptance wrapper, the
+mutation harness, the offline proof.
 
 ---
 

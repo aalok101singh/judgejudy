@@ -1,0 +1,176 @@
+name: CI
+
+# Judge Judy proves claims rather than asserting them, so CI runs the SAME
+# commands the project proves with -- via `just`, never a reimplementation.
+#
+# That constraint is the whole design here. An earlier version of this file
+# would have been faster: it could have run `ruff` and `pytest` directly. But a
+# copied gate is a gate that proves something *adjacent* to the thing, and the
+# one defect class this project keeps re-learning is a check that passes while
+# testing nothing. If a recipe in the justfile changes, this file needs no edit
+# and cannot drift away from it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # Weekly, because the two slow gates are the two that catch the defects a
+  # fast suite cannot: a mutation nobody noticed, and a container that quietly
+  # started reaching the network.
+  schedule:
+    - cron: "17 4 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Fast gates. These three run on every push and finish in about two
+  # minutes between them, which is the point: a contributor should learn that
+  # they broke something before they have finished making coffee.
+  # ---------------------------------------------------------------------
+
+  spec:
+    name: spec layer
+    # **No install step, and that is deliberate.** verify_spec.py is stdlib
+    # only: it needs no venv, no Django and no network. A gate that cannot be
+    # broken by a dependency resolution failure is a gate that keeps working
+    # when everything else is red.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: verify the spec layer
+        run: python tools/verify_spec.py
+
+  lint:
+    name: lint + isolation rule
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install --upgrade pip -q
+      - run: .venv/bin/pip install -q -r requirements-dev.txt
+      - uses: extractions/setup-just@v2
+      # ruff, ruff format, and the JJ01 rule that forbids an unscoped
+      # `Review.objects` read. That third one is a real deliverable, not
+      # hygiene: it is what turns "remember to scope this" into "there is no
+      # code path that could leak".
+      - run: just lint
+      - name: migrations are in step with the models
+        run: just lint-migrations
+
+  test:
+    name: test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install --upgrade pip -q
+      - run: .venv/bin/pip install -q -r requirements-dev.txt
+      - run: .venv/bin/python -m pytest -q
+
+  # ---------------------------------------------------------------------
+  # The expensive gates. These need a container, so they are split out to
+  # fail on the slow thing without hiding the fast results.
+  # ---------------------------------------------------------------------
+
+  container:
+    name: container gate (run.py 7/7, offline, proofs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install --upgrade pip -q
+      - run: .venv/bin/pip install -q -r requirements-dev.txt
+      - uses: extractions/setup-just@v2
+
+      # The dashboard the project publishes a cold-start number against.
+      - name: cold start
+        run: just coldstart
+
+      # THE GATE. Clean volume, network-independent build, up, the
+      # organizers' checker (7 checks: 3x T1, 4x T2), the isolation proof, the
+      # census, the assignment certificate, and the suite inside the image.
+      #
+      # Note it gates on the report BODY, not on run.py's exit code: run.py
+      # returns 0 even when every check FAILs, so gating on its status would
+      # report a green checkpoint for a completely broken portal.
+      - name: just check
+        run: just check
+
+      # The claim that the container needs no network, proved rather than
+      # asserted: the image is started with `--network none` and probed from
+      # inside the same empty netns, including rendering the embeddable widget.
+      - name: prove-offline
+        run: just prove-offline
+
+      # A committed artefact. If regenerating it changes the file, the panel
+      # would score something other than what is committed.
+      - name: the committed acceptance report is current
+        run: |
+          just report
+          if ! git diff --exit-code -- acceptance-report.txt; then
+            echo "::error::acceptance-report.txt is stale -- run 'just report' and commit it"
+            exit 1
+          fi
+
+  mutation:
+    name: mutation harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Deliberately NOT on every pull request. Each mutation is a full sandboxed
+    # run of the gates, so this is the slowest job by an order of magnitude,
+    # and a required check that takes 40 minutes trains people to ignore red.
+    # It runs on main, on demand, and weekly -- which is where a mutation that
+    # stopped being caught actually matters.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install --upgrade pip -q
+      - run: .venv/bin/pip install -q -r requirements-dev.txt
+      - uses: extractions/setup-just@v2
+      # Corrupts every registered mutation on purpose and requires each one to
+      # be caught by a named test. A mutation this harness can no longer APPLY
+      # is reported separately from a real miss, because a silently-skipped
+      # mutation and a passing gate look identical from outside.
+      - run: just mutation-test

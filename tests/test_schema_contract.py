@@ -54,7 +54,15 @@ def project_models():
 
 
 class TestPlanCounts:
-    """The plan's numbers, checked against the app registry rather than believed."""
+    """The plan's numbers, checked against the app registry rather than believed.
+
+    Only the two checks that read ``blueprint/build-plan.md`` are skipped where
+    it is absent. The class is **not** skipped wholesale, because
+    ``test_data_model_document_matches_the_build_plan`` reads the shipped
+    ``DATA-MODEL.md`` and has no business losing a live check in a distribution
+    that does not ship the plan. A skip should cost exactly the checks that
+    genuinely need the absent file.
+    """
 
     @staticmethod
     def _plan_claims() -> dict[str, int]:
@@ -70,6 +78,10 @@ class TestPlanCounts:
         )
         return {"models": int(match.group(1)), "apps": int(match.group(2))}
 
+    @pytest.mark.skipif(
+        not BUILD_PLAN.is_file(),
+        reason="blueprint/build-plan.md is not in this distribution",
+    )
     def test_model_count_matches_the_build_plan(self):
         claimed = self._plan_claims()["models"]
         actual = len(project_models())
@@ -78,6 +90,10 @@ class TestPlanCounts:
             "One of them is a transcription. The registry is the truth; correct the plan."
         )
 
+    @pytest.mark.skipif(
+        not BUILD_PLAN.is_file(),
+        reason="blueprint/build-plan.md is not in this distribution",
+    )
     def test_app_count_matches_the_build_plan(self):
         claimed = self._plan_claims()["apps"]
         actual = len(project_app_configs())

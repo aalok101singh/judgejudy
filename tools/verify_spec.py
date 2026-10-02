@@ -77,6 +77,44 @@ def read(rel):
         return f.read()
 
 
+# --- the planning layer -------------------------------------------------------
+#
+# This gate has two jobs that used to be one. It re-derives the numbers in the
+# repository from the organizers' files, AND it holds the internal planning
+# documents to those same numbers. Only the first survives in a product-only
+# distribution: a check whose subject is `blueprint/context/findings.md` has
+# nothing to say about a clone that does not contain that file.
+#
+# So the planning checks are **conditional**, and a conditional check that
+# cannot run is reported as SKIPPED with its reason — never as a pass, and never
+# silently dropped. `Result.skip` keeps them out of the count entirely, because
+# the count this gate prints is the count it actually ran (F-72).
+#
+# The alternative was to keep shipping the planning corpus so this gate could
+# keep reading it. That is a real trade: the ledger and the feature archives are
+# genuine evidence, and they are also 900 KB of process notes in a repository
+# whose subject is a judging platform. Shipping them keeps a gate honest and
+# makes the repository about something other than what it is for.
+PLANNING_DOCS = [
+    "AGENTS.md",
+    "blueprint/context/project-overview.md",
+    "blueprint/context/findings.md",
+    "blueprint/context/current-feature.md",
+]
+
+
+def planning_shipped():
+    """True when every planning document is present in this checkout."""
+    return all(os.path.isfile(os.path.join(ROOT, rel)) for rel in PLANNING_DOCS)
+
+
+def skip_planning(r, group):
+    """Skip the planning-layer checks in ``group``, with the reason printed."""
+    r.skip(group, "planning-layer checks",
+           "these read %s, which this distribution does not ship" % ", ".join(PLANNING_DOCS))
+    return False
+
+
 def norm_int(s):
     """Pull the first integer out of a string, tolerating bold/markdown noise."""
     m = re.search(r"-?\d+", s)
@@ -87,6 +125,7 @@ class Result:
     def __init__(self):
         self.rows = []
         self.failed = 0
+        self.skips = []
 
     def check(self, group, name, ok, expected, actual, note=""):
         self.rows.append((group, name, bool(ok), expected, actual, note))
@@ -96,6 +135,18 @@ class Result:
 
     def eq(self, group, name, expected, actual, note=""):
         return self.check(group, name, expected == actual, expected, actual, note)
+
+    def skip(self, group, name, reason=""):
+        """Record a check that could not run, WITHOUT counting it.
+
+        **A skip is not a pass and must never print as one.** The count this
+        gate reports is the count it actually ran (F-72), so a skipped row is
+        kept out of ``rows`` entirely and summarised separately. Otherwise a
+        distribution that shipped fewer documents would quietly claim the same
+        number of checks and be believed.
+        """
+        self.skips.append((group, name, reason))
+        return None
 
     def report(self, quiet=False, only_failures=False):
         width = max(len(r[1]) for r in self.rows) + 2
@@ -123,6 +174,9 @@ class Result:
             print("  %d/%d checks PASSED — %d FAILED" % (passed, total, self.failed))
         else:
             print("  %d/%d checks PASSED — the spec layer agrees with the given inputs" % (passed, total))
+        if self.skips:
+            print("  %d checks SKIPPED — the planning layer is not in this distribution"
+                  % len(self.skips))
         print("=" * 72)
         return 1 if self.failed else 0
 
@@ -139,7 +193,7 @@ def check_given(r):
     r.eq(g, "fixtures.json SHA-256 matches the pin", FIXTURES_SHA256, digest,
          "A different fixture invalidates every published number. Re-download before trusting anything.")
     data = json.loads(read("fixtures.json"))
-    for name in ("spec.md", "run.py", "context.txt", "example.dogfood.toml"):
+    for name in ("spec.md", "run.py", "example.dogfood.toml"):
         r.check(g, "%s present" % name, os.path.isfile(os.path.join(ROOT, name)),
                 "present", "MISSING")
     return data
@@ -184,6 +238,8 @@ def check_runpy(r):
 
 def check_census(r, data):
     g = "3. FIXTURE CENSUS — claims in project-overview.md vs fixtures.json"
+    if not planning_shipped():
+        return skip_planning(r, g)
     ov = read("blueprint/context/project-overview.md")
 
     tracks = data["tracks"]
@@ -292,6 +348,8 @@ def check_census(r, data):
 
 def check_clock(r):
     g = "4. BUILD CLOCK — build-plan.md is the source of truth"
+    if not planning_shipped():
+        return skip_planning(r, g)
     bp = read("blueprint/build-plan.md")
     pp = read("blueprint/project-plan.md")
 
@@ -560,7 +618,15 @@ def check_no_quoted_self_count(r):
         den = m.group(2) or m.group(4)
         return int(den) - int(num) <= 2
 
-    sites = ["justfile", "AGENTS.md", "blueprint/context/project-overview.md"]
+    # Filtered rather than skipped: the justfile is in every distribution and
+    # still quotes nothing about this gate (F-72). The planning sites only
+    # exist where the planning layer does.
+    sites = [
+        "justfile",
+        "AGENTS.md",
+        "blueprint/context/project-overview.md",
+    ]
+    sites = [rel for rel in sites if os.path.isfile(os.path.join(ROOT, rel))]
     offenders = []
     for rel in sites:
         try:
@@ -589,6 +655,8 @@ def check_no_quoted_self_count(r):
 
 def check_structure(r):
     g = "5. SPEC INTEGRITY — citations, ledger, budget, question tally"
+    if not planning_shipped():
+        return skip_planning(r, g)
 
     # overview byte budget
     size = os.path.getsize(os.path.join(ROOT, "blueprint/context/project-overview.md"))
@@ -751,7 +819,14 @@ def check_structure(r):
     # judge is most likely to read was not on the list. The general lesson is the
     # one the project keeps relearning: *enforcement attaches to the files someone
     # remembered, not to the files that need it.*
-    m = re.search(r"the full record:\s*\*\*(\d+)\s+findings\*\*", readme)
+    # The pattern matches the NUMBER, not one particular sentence. It used to
+    # require the literal words "the full record:", which coupled this check to
+    # the exact phrasing of a paragraph -- so rewording the paragraph to say the
+    # ledger lives in git history rather than in the tree silently turned a real
+    # check into a guaranteed failure. **A gate that pins prose instead of a
+    # value punishes editing the prose.** The value is still required, and it is
+    # still re-derived from the ledger rather than believed.
+    m = re.search(r"\*\*(\d+)\s+findings\*\*", readme)
     r.eq(g, "README findings total", total, int(m.group(1)) if m else None,
          "Re-derive from the ledger. The README is the document a judge reads "
          "first, and it was the one place the tally was not enforced (F-103).")
@@ -926,12 +1001,16 @@ def check_env(r):
             "reported", "ambient %s vs venv 3.13" % ambient_v,
             "F-38. Expected divergence. The fix is that our own commands name the venv "
             "explicitly - asserted in group 5, not here.")
-    r.check(g, "the two pythons are pinned in the spec layer",
-            ".venv\\Scripts\\python.exe" in read("AGENTS.md")
-            and "3.14.6" in read("AGENTS.md"),
-            "AGENTS.md names the venv and the ambient trap",
-            "present" if ".venv\\Scripts\\python.exe" in read("AGENTS.md") else "absent",
-            "A trap that is not written down gets rediscovered at the worst hour.")
+    if planning_shipped():
+        r.check(g, "the two pythons are pinned in the spec layer",
+                ".venv\\Scripts\\python.exe" in read("AGENTS.md")
+                and "3.14.6" in read("AGENTS.md"),
+                "AGENTS.md names the venv and the ambient trap",
+                "present" if ".venv\\Scripts\\python.exe" in read("AGENTS.md") else "absent",
+                "A trap that is not written down gets rediscovered at the worst hour.")
+    else:
+        r.skip(g, "the two pythons are pinned in the spec layer",
+               "AGENTS.md is not in this distribution")
 
 
 def main():
