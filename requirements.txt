@@ -21,7 +21,7 @@
 # decade-long fork is the wrong trade even though it is the newer one, and 5.2
 # also settles the Python question — it supports 3.10-3.13, so we pin 3.13
 # rather than 3.14 and the local venv matches python:3.13-slim exactly.
-Django==5.2.17
+Django==6.1.1
 
 # Django REST Framework. The isolation primitive (bible/05 §6) is a queryset
 # scoping layer; DRF's declarative permission classes are the idiom it composes
