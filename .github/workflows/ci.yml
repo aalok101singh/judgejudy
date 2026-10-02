@@ -45,8 +45,8 @@ jobs:
     # when everything else is red.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: verify the spec layer
@@ -56,8 +56,8 @@ jobs:
     name: lint + isolation rule
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -67,7 +67,7 @@ jobs:
       - run: python -m venv .venv
       - run: .venv/bin/pip install --upgrade pip -q
       - run: .venv/bin/pip install -q -r requirements-dev.txt
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
       # ruff, ruff format, and the JJ01 rule that forbids an unscoped
       # `Review.objects` read. That third one is a real deliverable, not
       # hygiene: it is what turns "remember to scope this" into "there is no
@@ -80,8 +80,8 @@ jobs:
     name: test suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -110,8 +110,8 @@ jobs:
     # nothing about the code.
     timeout-minutes: 75
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -121,7 +121,7 @@ jobs:
       - run: python -m venv .venv
       - run: .venv/bin/pip install --upgrade pip -q
       - run: .venv/bin/pip install -q -r requirements-dev.txt
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
 
       # Build once, explicitly. `just check` builds again, but by then the layer
       # cache is warm and that build is nearly free.
@@ -194,8 +194,8 @@ jobs:
     # stopped being caught actually matters.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -205,7 +205,7 @@ jobs:
       - run: python -m venv .venv
       - run: .venv/bin/pip install --upgrade pip -q
       - run: .venv/bin/pip install -q -r requirements-dev.txt
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
       # Corrupts every registered mutation on purpose and requires each one to
       # be caught by a named test. A mutation this harness can no longer APPLY
       # is reported separately from a real miss, because a silently-skipped
