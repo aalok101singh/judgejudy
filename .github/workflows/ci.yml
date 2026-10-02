@@ -94,6 +94,69 @@ jobs:
       - run: .venv/bin/python -m pytest -q
 
   # ---------------------------------------------------------------------
+  # Diagnosis. Manual only, and it exists because guessing cost three
+  # two-hour cycles.
+  # ---------------------------------------------------------------------
+
+  diagnose:
+    name: why does the container gate not return?
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # **Manual only.** This is not a gate; it is the thing you run when the gate
+    # is stuck.
+    #
+    # The container job hangs inside `docker compose up -d --wait`, and it has
+    # now done so three times -- at 45, 75 and 120 minutes -- each time with the
+    # container *listening* and then complete silence. Our own healthcheck
+    # cannot be the cause: it has a 3-second deadline, catches every exception,
+    # and always exits, so it cannot hang and cannot leave a container stuck in
+    # "starting" for two hours. That leaves Compose's own wait behaviour, which
+    # depends on the runner's Compose version rather than on anything in here.
+    #
+    # So this job deliberately does NOT use `--wait`. It brings the stack up the
+    # boring way and then *reports the state*, on a bounded clock: the container
+    # status, the health log, the healthcheck's own exit code and output, and the
+    # last lines of the application log. Two minutes to a diagnosis instead of
+    # two hours to a cancelled job that says nothing.
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: extractions/setup-just@v4
+
+      - name: versions
+        run: |
+          docker --version
+          docker compose version
+          python --version
+
+      - name: bring the stack up WITHOUT --wait
+        run: python tools/docker.py --seed-demo compose -f docker-compose.yml up -d
+
+      - name: poll health for three minutes and report
+        run: |
+          set -u
+          for i in $(seq 1 18); do
+            echo "--- attempt $i ($((i*10))s) ---"
+            docker inspect --format '{{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' judgejudy-portal-1 || echo "no container"
+            status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' judgejudy-portal-1 2>/dev/null || echo missing)
+            if [ "$status" = "healthy" ]; then echo "HEALTHY after $((i*10))s"; break; fi
+            sleep 10
+          done
+
+          echo "===== compose ps ====="
+          docker compose -f docker-compose.yml ps || true
+          echo "===== health log ====="
+          docker inspect --format '{{json .State.Health}}' judgejudy-portal-1 2>/dev/null | head -c 4000 || true
+          echo
+          echo "===== healthcheck run by hand ====="
+          docker compose -f docker-compose.yml exec -T portal python /app/healthcheck.py; echo "healthcheck exit=$?"
+          echo "===== last 60 lines of the application log ====="
+          docker compose -f docker-compose.yml logs --tail=60 || true
+
+  # ---------------------------------------------------------------------
   # The expensive gate. It needs a container, so it is split out to fail on
   # the slow thing without hiding the fast results -- and it is skipped on
   # pull requests, because the suite runs twice (host and image) and a
