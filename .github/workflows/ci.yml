@@ -102,28 +102,28 @@ jobs:
     name: why does the container gate not return?
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # **Manual only.** This is not a gate; it is the thing you run when the gate
-    # is stuck.
+    # Manual only. This is not a gate; it is the thing you run when the gate is
+    # stuck, and it is an A/B experiment rather than a check.
     #
-    # The container job hangs inside `docker compose up -d --wait`, and it has
-    # now done so three times -- at 45, 75 and 120 minutes -- each time with the
-    # container *listening* and then complete silence. Our own healthcheck
-    # cannot be the cause: it has a 3-second deadline, catches every exception,
-    # and always exits, so it cannot hang and cannot leave a container stuck in
-    # "starting" for two hours. That leaves Compose's own wait behaviour, which
-    # depends on the runner's Compose version rather than on anything in here.
-    #
-    # So this job deliberately does NOT use `--wait`. It brings the stack up the
-    # boring way and then *reports the state*, on a bounded clock: the container
-    # status, the health log, the healthcheck's own exit code and output, and the
-    # last lines of the application log. Two minutes to a diagnosis instead of
-    # two hours to a cancelled job that says nothing.
+    # **The experiment:** step A runs `tools/wait_healthy.py` directly from the
+    # workflow. Step B runs `just check`, which runs the *same helper* from inside
+    # a recipe. Both were already observed to do the same thing locally, and only
+    # B hangs on the runner. So the variable under test is not the code -- it is
+    # **how the recipe is invoked** (`just` -> `sh -uc` -> a Python child on a
+    # pipe). Five minutes tells us which of the two invocation paths is at fault,
+    # which is the one thing three two-hour timeouts could not.
     if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      # `just check` resolves its interpreter as `.venv/bin/python`, so without
+      # this the recipe fails on a missing file and the experiment measures
+      # nothing.
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install --upgrade pip -q
+      - run: .venv/bin/pip install -q -r requirements-dev.txt
       - uses: extractions/setup-just@v4
 
       - name: versions
@@ -132,20 +132,53 @@ jobs:
           docker compose version
           python --version
 
-      - name: bring the stack up the way the gate does, but bounded and loud
+      - name: A. the helper, invoked DIRECTLY -- does it work at all?
         run: |
-          set -u
-          # **`just check` itself, minus the rest.** This is the exact command
-          # the gate runs, with the helper's own backstop. It is here because the
-          # gate kept hanging inside `compose up` on this runner, and a
-          # line-buffered, timeout-bounded version tells us in three minutes
-          # which of the two candidate causes it is: the bring-up not returning,
-          # or the health poll not seeing a healthy container.
-          #
-          # Nothing is captured, so anything the helper prints is visible while it
-          # is happening rather than at the end.
+          set +e
           python tools/wait_healthy.py --seed-demo --up-timeout 240 --timeout 120
-          echo "wait_healthy exit=$?"
+          echo "A. wait_healthy (direct) exited $?"
+
+      - name: B. the gate, invoked THROUGH just -- the A/B that discriminates
+        run: |
+          set +e
+          # **`PYTHONUNBUFFERED=1` is the load-bearing line.**
+          #
+          # `just` runs recipes through `sh -uc`, so a Python child's stdout is a
+          # pipe and is block-buffered. A step that hangs therefore prints
+          # *nothing* -- which is exactly what happened: the previous run's log
+          # contained zero lines from the helper for two hours, and I read that
+          # as "the helper never started" when in fact it had started and had
+          # nothing to say because it never flushed. Unbuffered, the log becomes
+          # a live trace of where the gate actually is.
+          export PYTHONUNBUFFERED=1
+
+          # Build first, OUTSIDE the clock. `just check` rebuilds, but by then
+          # the layer cache is warm. Without this, a cold image build could eat
+          # the whole five-minute budget and the experiment would expire before
+          # reaching the hang -- measuring the build, not the bug.
+          just build
+
+          # Five minutes. `just check` takes ~8 locally, but the steps reach
+          # "3/6 up, wait for health" about a second in -- the build is already
+          # warm -- so five minutes is far more than enough to reach the hang and
+          # sit in it. `--kill-after` because `just` does not forward SIGTERM to
+          # the recipe's children.
+          timeout --signal=TERM --kill-after=30s 300 just check
+          rc=$?
+          # 124 is `timeout`'s own "I expired". Any other code is the gate
+          # failing on its own terms, which is a different and better problem.
+          echo "B. just check exited ${rc} (124 = the 300s clock expired)"
+
+          # **The single most useful line in this job.** If the container is
+          # healthy while the gate is stuck, then the gate is not waiting for
+          # health -- it is stuck somewhere else, and the unbuffered trace above
+          # says where. If the container is not healthy, the gate is correctly
+          # waiting on a portal that never came up.
+          docker inspect --format 'container={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' judgejudy-portal-1 || echo "no container"
+
+          # Not a gate. It exists to answer a question, and a red X here would
+          # be a failed experiment rather than a failed build.
+          exit 0
 
   # ---------------------------------------------------------------------
   # The expensive gate. It needs a container, so it is split out to fail on
