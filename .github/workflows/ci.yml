@@ -99,19 +99,26 @@ jobs:
   # ---------------------------------------------------------------------
 
   diagnose:
-    name: why does the container gate not return?
+    name: diagnose the container bring-up (manual)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Manual only. This is not a gate; it is the thing you run when the gate is
-    # stuck, and it is an A/B experiment rather than a check.
+    # Manual only, and it is not a gate.
     #
-    # **The experiment:** step A runs `tools/wait_healthy.py` directly from the
-    # workflow. Step B runs `just check`, which runs the *same helper* from inside
-    # a recipe. Both were already observed to do the same thing locally, and only
-    # B hangs on the runner. So the variable under test is not the code -- it is
-    # **how the recipe is invoked** (`just` -> `sh -uc` -> a Python child on a
-    # pipe). Five minutes tells us which of the two invocation paths is at fault,
-    # which is the one thing three two-hour timeouts could not.
+    # It exists because this job once hung for three CI runs at 45, 75 and 120
+    # minutes and **could not say where**, because a step that hangs under `just`
+    # is silent: a Python child on a pipe block-buffers, so nothing is flushed
+    # until the process exits, and a process that hangs never exits. Three
+    # timeouts bought three cancelled jobs and no diagnosis.
+    #
+    # So it is an A/B experiment with a clock on it. Step A runs
+    # `tools/wait_healthy.py` directly from the workflow; step B runs `just
+    # check`, which runs the *same helper* from inside a recipe. Same code, two
+    # invocation paths -- which is how the real cause turned out to be neither:
+    # a prose `echo` in a recipe body whose backticks were command substitution.
+    #
+    # Worth keeping for the next time something is slow. `PYTHONUNBUFFERED=1` in
+    # step B is the load-bearing line: without it the experiment would inherit
+    # exactly the silence it exists to cure.
     if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v7
