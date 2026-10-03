@@ -261,6 +261,36 @@ accept *args:
 # What changed is that the gate no longer needs it — and an escape hatch nobody
 # has to reach for is worth more than one somebody might leave on.
 
+# --seed-demo: the checker scores the ORGANIZERS' fixture, so the gate asks for
+# it. A plain `docker compose up` does not, and gets an empty portal with
+# /setup/ open instead.
+#
+# **This note lives OUTSIDE the recipe body, and both of its first two homes
+# were wrong in ways that only CI could show.**
+#
+# It began as a third `echo` inside the body, carrying backticks around
+# `docker compose up` as markdown emphasis. `just` runs every recipe line
+# through a shell, and inside a double-quoted shell string a backtick is
+# *command substitution* -- so the shell executed that command, in the
+# foreground, streaming logs until something killed it.
+#
+# The symptom cost three cancelled CI runs at 45, 75 and 120 minutes. Each one
+# stopped on that exact line, with the container healthy throughout, and with the
+# two `echo` lines after it never printing. On Windows it *cannot* happen:
+# `cmd.exe` has no command substitution, so the backticks rendered literally, the
+# note was displayed, and the developer's machine looked perfect. **A prose
+# sentence about a command, in a shell script, runs the command** -- and the only
+# environment that disagreed was the one nobody tests on.
+#
+# Moving it into the body as a `#` comment did not work either: a `#` line inside
+# a body is also handed to the shell, and cmd.exe has no `#` comments, so it
+# answered "'#' is not recognized as an internal or external command". There is
+# nowhere inside a recipe body to put prose on this project's shells. **Just
+# comments live above the recipe, and nowhere else.**
+#
+# `tools/verify_spec.py` now enforces both halves of that, because "we fixed it
+# once" is not a gate.
+#
 # THE GATE. One command, from a clean volume, that proves a checkpoint.
 check:
     @echo "=========================================================="
@@ -280,10 +310,6 @@ check:
     @echo "=========================================================="
     @echo " 3/6  up, wait for health"
     @echo "=========================================================="
-    @echo "      --seed-demo -- the checker scores the ORGANIZERS' fixture, so the gate"
-    @echo "      asks for it. A plain `docker compose up` does not, and gets an empty"
-    @echo "      portal with /setup/ open instead. The flag goes through tools/docker.py"
-    @echo "      rather than a shell export because just runs recipes through cmd.exe."
     @{{pyq}} tools/wait_healthy.py --seed-demo
     @echo ""
     @echo "=========================================================="

@@ -1013,6 +1013,73 @@ def check_env(r):
                "AGENTS.md is not in this distribution")
 
 
+def check_recipe_bodies(r):
+    """**No shell metacharacter may hide in a recipe body.** F-127.
+
+    ``just`` runs every recipe line through a shell, so a recipe body is shell
+    source, not prose. One ``echo`` in the ``check`` recipe carried backticks
+    around a command name as markdown emphasis, and inside a double-quoted shell
+    string a backtick is *command substitution* -- so the shell executed that
+    command, in the foreground, streaming logs until it was killed.
+
+    It ran for three cancelled CI cycles at 45, 75 and 120 minutes, always
+    stopping on the same line, with the container healthy and the ``echo`` lines
+    after it never printed. **It could not happen on Windows**, where
+    ``cmd.exe`` has no command substitution, so the developer's machine rendered
+    the backticks literally and looked correct.
+
+    The repair is the recipe above this one: the prose became a comment *above*
+    the recipe. It did not work inside the body either, and the second failure is
+    the more useful one: a ``#`` line in a body is handed to the shell too, and
+    ``cmd.exe`` has no ``#`` comments, so it answered *"'#' is not recognized as
+    an internal or external command"*. **There is nowhere inside a recipe body to
+    put prose on this project's shells**, which is worth checking mechanically
+    because "we fixed it once" is not a gate.
+
+    So two shapes are refused: backticks and ``$(`` (which execute), and ``#``
+    lines (which are only comments in one of the two shells).
+    """
+    g = "5. SPEC INTEGRITY - the gate's own shell safety"
+    if not os.path.isfile(os.path.join(ROOT, "justfile")):
+        return skip_planning(r, g)
+
+    offenders = []
+    in_recipe = False
+    for number, line in enumerate(read("justfile").splitlines(), 1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # A recipe header is `name:` or `name *args:` at column 0.
+        if re.match(r"^[a-z][a-z0-9_-]*(\s+\*?[A-Za-z_ ]+)?:\s*$", line):
+            in_recipe = True
+            continue
+        # `py` / `compose_base` assignments are just-level, not recipe bodies.
+        if re.match(r"^[a-z_]+\s*:?=", line):
+            in_recipe = False
+            continue
+        # **Indentation is the whole test.** A `#` at column 0 is a comment to
+        # `just` and ends the body. A `#` that is indented sits inside a recipe
+        # and is handed to the shell, where it is a command on cmd.exe.
+        indented_hash = line.startswith((" ", "\t")) and stripped.startswith("#")
+        if not in_recipe:
+            continue
+        if stripped.startswith("#") and not indented_hash:
+            in_recipe = False
+            continue
+        if "`" in line or "$(" in line:
+            offenders.append("justfile:%d EXECUTES: %s" % (number, stripped[:60]))
+        elif indented_hash:
+            offenders.append("justfile:%d not a comment on cmd.exe: %s"
+                             % (number, stripped[:60]))
+
+    r.check(g, "no command substitution hiding in a recipe body", not offenders,
+            "none", offenders or "none",
+            "A backtick in a recipe body is not emphasis, it is a shell running "
+            "the word inside it; and an indented '#' there is a command, not a "
+            "comment, on one of the two shells this project runs. Prose goes "
+            "above the recipe.")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1045,6 +1112,7 @@ def main():
     check_census(r, data)
     check_clock(r)
     check_recipes(r)
+    check_recipe_bodies(r)
     check_no_quoted_self_count(r)
     check_structure(r)
     if args.env:
