@@ -190,19 +190,17 @@ jobs:
   container:
     name: container gate (run.py 7/7, offline, proofs)
     runs-on: ubuntu-latest
-    # **Not on pull requests, and that is a decision rather than an omission.**
-    # `just check` runs the full suite a second time inside the image -- which is
-    # worth doing, because it is the only proof that what ships is what was
-    # tested -- and on a shared runner that is the single most expensive thing
-    # here. Measured: it consumed a 45-minute budget and then a 75-minute one.
+    # **Back on pull requests**, which it was not while this job was hanging.
     #
-    # A required check nobody waits for is not a gate, it is a queue. So a
-    # contributor's PR gets the fast jobs (spec, lint, test -- about ten
-    # minutes) and the expensive gate runs on `main`, on the schedule, and on
-    # demand. This mirrors how the project already treats `just check`: a
-    # verification-break command, not a per-save one.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    timeout-minutes: 120
+    # It was skipped on PRs as a compromise: a required check nobody waits for is
+    # a queue, and this one had been cancelled at 45, 75 and 120 minutes. With
+    # the actual bug fixed it completes in **under eight minutes** end to end --
+    # build, the gate, the report check and the offline proof -- which is a wait
+    # anyone can reasonably ask a contributor to sit out.
+    #
+    # So the skip is gone, deliberately. A gate that only runs on `main` proves
+    # the main branch and nothing a pull request did to it.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
