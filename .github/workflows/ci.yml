@@ -267,8 +267,8 @@ jobs:
     # nobody can act on. So it runs where a human is already looking.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -278,7 +278,7 @@ jobs:
       - run: python -m venv .venv
       - run: .venv/bin/pip install --upgrade pip -q
       - run: .venv/bin/pip install -q -r requirements-dev.txt
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
       - name: cold start from an empty volume
         run: just coldstart
 
