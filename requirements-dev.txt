@@ -41,4 +41,4 @@ hypothesis==6.168.3
 #
 # A slow alternative would be flake8 + plugins. One fast binary, and the rule
 # that matters is a custom AST check, not a style opinion.
-ruff==0.16.9
+ruff==0.16.10

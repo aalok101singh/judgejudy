@@ -59,7 +59,7 @@ gunicorn==26.2.0 ; sys_platform != "win32"
 #   - no PyNaCl. Same primitive, heavier dependency.
 #   - no KMS/HSM client. Keys never leave the container; that is a stated
 #     deployment posture, not something to fake with a cloud SDK we cannot use.
-cryptography==50.0.1
+cryptography==50.0.2
 
 # --- EXCLUDED, WITH REASONS (do not add these without a written case) --------
 #
