@@ -21,13 +21,13 @@
 # decade-long fork is the wrong trade even though it is the newer one, and 5.2
 # also settles the Python question — it supports 3.10-3.13, so we pin 3.13
 # rather than 3.14 and the local venv matches python:3.13-slim exactly.
-Django==5.2.17
+Django==5.2.18
 
 # Django REST Framework. The isolation primitive (bible/05 §6) is a queryset
 # scoping layer; DRF's declarative permission classes are the idiom it composes
 # with, and DRF's SessionAuthentication is CSRF-exempt by design which is the
 # decision recorded in bible/03 §3.2.
-djangorestframework==3.18.1
+djangorestframework==3.18.3
 
 # drf-spectacular. The API First bonus is nearly free on this stack, and the
 # spec is generated from the same source as the implementation so it cannot
@@ -59,7 +59,7 @@ gunicorn==26.2.0 ; sys_platform != "win32"
 #   - no PyNaCl. Same primitive, heavier dependency.
 #   - no KMS/HSM client. Keys never leave the container; that is a stated
 #     deployment posture, not something to fake with a cloud SDK we cannot use.
-cryptography==50.0.1
+cryptography==50.0.2
 
 # --- EXCLUDED, WITH REASONS (do not add these without a written case) --------
 #
